@@ -1,129 +1,131 @@
 -- IRP Notebook Framework Database Schema
--- SQL Server Compatible (Also works with Azure SQL Database)
-
--- Create database if not exists (for local SQL Server)
-IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'IRP_DB')
-BEGIN
-    CREATE DATABASE IRP_DB;
-END
-GO
-
-USE IRP_DB;
-GO
+-- PostgreSQL Compatible
 
 -- Drop tables in correct order (if recreating)
-IF OBJECT_ID('dbo.irp_job', 'U') IS NOT NULL DROP TABLE dbo.irp_job;
-IF OBJECT_ID('dbo.irp_configuration', 'U') IS NOT NULL DROP TABLE dbo.irp_configuration;
-IF OBJECT_ID('dbo.irp_batch', 'U') IS NOT NULL DROP TABLE dbo.irp_batch;
-IF OBJECT_ID('dbo.irp_step_run', 'U') IS NOT NULL DROP TABLE dbo.irp_step_run;
-IF OBJECT_ID('dbo.irp_step', 'U') IS NOT NULL DROP TABLE dbo.irp_step;
-IF OBJECT_ID('dbo.irp_stage', 'U') IS NOT NULL DROP TABLE dbo.irp_stage;
-IF OBJECT_ID('dbo.irp_system_lock', 'U') IS NOT NULL DROP TABLE dbo.irp_system_lock;
-IF OBJECT_ID('dbo.irp_cycle', 'U') IS NOT NULL DROP TABLE dbo.irp_cycle;
+DROP TABLE IF EXISTS irp_job CASCADE;
+DROP TABLE IF EXISTS irp_configuration CASCADE;
+DROP TABLE IF EXISTS irp_batch CASCADE;
+DROP TABLE IF EXISTS irp_step_run CASCADE;
+DROP TABLE IF EXISTS irp_step CASCADE;
+DROP TABLE IF EXISTS irp_stage CASCADE;
+DROP TABLE IF EXISTS irp_system_lock CASCADE;
+DROP TABLE IF EXISTS irp_cycle CASCADE;
+
+-- Drop types if they exist
+DROP TYPE IF EXISTS cycle_status_enum CASCADE;
+DROP TYPE IF EXISTS step_status_enum CASCADE;
+DROP TYPE IF EXISTS batch_status_enum CASCADE;
+DROP TYPE IF EXISTS job_status_enum CASCADE;
+
+-- Create custom types
+CREATE TYPE cycle_status_enum AS ENUM ('active', 'archived', 'failed');
+CREATE TYPE step_status_enum AS ENUM ('running', 'completed', 'failed', 'skipped');
+CREATE TYPE batch_status_enum AS ENUM ('pending', 'running', 'completed', 'failed', 'cancelled');
+CREATE TYPE job_status_enum AS ENUM ('pending', 'submitted', 'queued', 'running', 'completed', 'failed', 'cancelled');
 
 -- Core Cycle Management
 CREATE TABLE irp_cycle (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    cycle_name NVARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(20) CHECK (status IN ('active', 'archived', 'failed')) DEFAULT 'active',
-    created_ts DATETIME2 DEFAULT GETUTCDATE(),
-    archived_ts DATETIME2 NULL,
-    created_by NVARCHAR(255) NULL,
-    metadata NVARCHAR(MAX) NULL -- JSON field for flexibility
+    id SERIAL PRIMARY KEY,
+    cycle_name VARCHAR(255) UNIQUE NOT NULL,
+    status cycle_status_enum DEFAULT 'active',
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    archived_ts TIMESTAMPTZ NULL,
+    created_by VARCHAR(255) NULL,
+    metadata JSONB NULL
 );
 
 -- Stage Tracking
 CREATE TABLE irp_stage (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    cycle_id INT NOT NULL,
-    stage_num INT NOT NULL,
-    stage_name NVARCHAR(255) NOT NULL,
-    created_ts DATETIME2 DEFAULT GETUTCDATE(),
-    CONSTRAINT FK_stage_cycle FOREIGN KEY (cycle_id) REFERENCES irp_cycle(id),
-    CONSTRAINT UQ_cycle_stage UNIQUE(cycle_id, stage_num)
+    id SERIAL PRIMARY KEY,
+    cycle_id INTEGER NOT NULL,
+    stage_num INTEGER NOT NULL,
+    stage_name VARCHAR(255) NOT NULL,
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_stage_cycle FOREIGN KEY (cycle_id) REFERENCES irp_cycle(id) ON DELETE CASCADE,
+    CONSTRAINT uq_cycle_stage UNIQUE(cycle_id, stage_num)
 );
 
 -- Step Tracking
 CREATE TABLE irp_step (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    stage_id INT NOT NULL,
-    step_num INT NOT NULL,
-    step_name NVARCHAR(255) NOT NULL,
-    notebook_path NVARCHAR(500) NULL,
-    is_idempotent BIT DEFAULT 0,
-    requires_batch BIT DEFAULT 0,
-    created_ts DATETIME2 DEFAULT GETUTCDATE(),
-    CONSTRAINT FK_step_stage FOREIGN KEY (stage_id) REFERENCES irp_stage(id),
-    CONSTRAINT UQ_stage_step UNIQUE(stage_id, step_num)
+    id SERIAL PRIMARY KEY,
+    stage_id INTEGER NOT NULL,
+    step_num INTEGER NOT NULL,
+    step_name VARCHAR(255) NOT NULL,
+    notebook_path VARCHAR(500) NULL,
+    is_idempotent BOOLEAN DEFAULT FALSE,
+    requires_batch BOOLEAN DEFAULT FALSE,
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_step_stage FOREIGN KEY (stage_id) REFERENCES irp_stage(id) ON DELETE CASCADE,
+    CONSTRAINT uq_stage_step UNIQUE(stage_id, step_num)
 );
 
 -- Step Run History
 CREATE TABLE irp_step_run (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    step_id INT NOT NULL,
-    run_number INT NOT NULL,
-    status VARCHAR(20) CHECK (status IN ('running', 'completed', 'failed', 'skipped')) DEFAULT 'running',
-    started_ts DATETIME2 DEFAULT GETUTCDATE(),
-    completed_ts DATETIME2 NULL,
-    started_by NVARCHAR(255) NULL,
-    error_message NVARCHAR(MAX) NULL,
-    output_data NVARCHAR(MAX) NULL, -- JSON for step results
-    CONSTRAINT FK_steprun_step FOREIGN KEY (step_id) REFERENCES irp_step(id)
+    id SERIAL PRIMARY KEY,
+    step_id INTEGER NOT NULL,
+    run_number INTEGER NOT NULL,
+    status step_status_enum DEFAULT 'running',
+    started_ts TIMESTAMPTZ DEFAULT NOW(),
+    completed_ts TIMESTAMPTZ NULL,
+    started_by VARCHAR(255) NULL,
+    error_message TEXT NULL,
+    output_data JSONB NULL,
+    CONSTRAINT fk_steprun_step FOREIGN KEY (step_id) REFERENCES irp_step(id) ON DELETE CASCADE
 );
 
 -- Batch Management (for Phase 2)
 CREATE TABLE irp_batch (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    step_id INT NOT NULL,
-    batch_name NVARCHAR(255) NOT NULL,
-    status VARCHAR(20) CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')) DEFAULT 'pending',
-    created_ts DATETIME2 DEFAULT GETUTCDATE(),
-    completed_ts DATETIME2 NULL,
-    total_jobs INT DEFAULT 0,
-    completed_jobs INT DEFAULT 0,
-    failed_jobs INT DEFAULT 0,
-    metadata NVARCHAR(MAX) NULL,
-    CONSTRAINT FK_batch_step FOREIGN KEY (step_id) REFERENCES irp_step(id),
-    CONSTRAINT UQ_step_batch UNIQUE(step_id, batch_name)
+    id SERIAL PRIMARY KEY,
+    step_id INTEGER NOT NULL,
+    batch_name VARCHAR(255) NOT NULL,
+    status batch_status_enum DEFAULT 'pending',
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    completed_ts TIMESTAMPTZ NULL,
+    total_jobs INTEGER DEFAULT 0,
+    completed_jobs INTEGER DEFAULT 0,
+    failed_jobs INTEGER DEFAULT 0,
+    metadata JSONB NULL,
+    CONSTRAINT fk_batch_step FOREIGN KEY (step_id) REFERENCES irp_step(id) ON DELETE CASCADE,
+    CONSTRAINT uq_step_batch UNIQUE(step_id, batch_name)
 );
 
 -- Configuration for Batch
 CREATE TABLE irp_configuration (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    batch_id INT NOT NULL,
-    config_name NVARCHAR(255) NOT NULL,
-    config_data NVARCHAR(MAX) NOT NULL, -- JSON
-    skip BIT DEFAULT 0,
-    created_ts DATETIME2 DEFAULT GETUTCDATE(),
-    CONSTRAINT FK_config_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id)
+    id SERIAL PRIMARY KEY,
+    batch_id INTEGER NOT NULL,
+    config_name VARCHAR(255) NOT NULL,
+    config_data JSONB NOT NULL,
+    skip BOOLEAN DEFAULT FALSE,
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_config_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id) ON DELETE CASCADE
 );
 
 -- Job Tracking
 CREATE TABLE irp_job (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    batch_id INT NOT NULL,
-    configuration_id INT NOT NULL,
-    workflow_id NVARCHAR(255) NULL, -- Moody's workflow ID
-    status VARCHAR(20) CHECK (status IN ('pending', 'submitted', 'queued', 'running', 'completed', 'failed', 'cancelled')) DEFAULT 'pending',
-    retry_count INT DEFAULT 0,
-    last_error NVARCHAR(MAX) NULL,
-    created_ts DATETIME2 DEFAULT GETUTCDATE(),
-    submitted_ts DATETIME2 NULL,
-    completed_ts DATETIME2 NULL,
-    poll_count INT DEFAULT 0,
-    last_poll_ts DATETIME2 NULL,
-    result_data NVARCHAR(MAX) NULL,
-    CONSTRAINT FK_job_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id),
-    CONSTRAINT FK_job_config FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
+    id SERIAL PRIMARY KEY,
+    batch_id INTEGER NOT NULL,
+    configuration_id INTEGER NOT NULL,
+    workflow_id VARCHAR(255) NULL,
+    status job_status_enum DEFAULT 'pending',
+    retry_count INTEGER DEFAULT 0,
+    last_error TEXT NULL,
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    submitted_ts TIMESTAMPTZ NULL,
+    completed_ts TIMESTAMPTZ NULL,
+    poll_count INTEGER DEFAULT 0,
+    last_poll_ts TIMESTAMPTZ NULL,
+    result_data JSONB NULL,
+    CONSTRAINT fk_job_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id) ON DELETE CASCADE,
+    CONSTRAINT fk_job_config FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
 );
 
 -- System Lock (ensures single active cycle)
 CREATE TABLE irp_system_lock (
-    id INT PRIMARY KEY CHECK (id = 1), -- Only one row allowed
-    active_cycle_id INT NULL,
-    locked_by NVARCHAR(255) NULL,
-    locked_at DATETIME2 NULL,
-    CONSTRAINT FK_lock_cycle FOREIGN KEY (active_cycle_id) REFERENCES irp_cycle(id)
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    active_cycle_id INTEGER NULL,
+    locked_by VARCHAR(255) NULL,
+    locked_at TIMESTAMPTZ NULL,
+    CONSTRAINT fk_lock_cycle FOREIGN KEY (active_cycle_id) REFERENCES irp_cycle(id)
 );
 
 -- Initialize system lock
@@ -131,11 +133,15 @@ INSERT INTO irp_system_lock (id, active_cycle_id, locked_by, locked_at)
 VALUES (1, NULL, NULL, NULL);
 
 -- Create indexes for performance
-CREATE INDEX IX_stage_cycle ON irp_stage(cycle_id);
-CREATE INDEX IX_step_stage ON irp_step(stage_id);
-CREATE INDEX IX_steprun_step ON irp_step_run(step_id);
-CREATE INDEX IX_batch_step ON irp_batch(step_id);
-CREATE INDEX IX_job_batch ON irp_job(batch_id);
-CREATE INDEX IX_job_status ON irp_job(status);
+CREATE INDEX idx_stage_cycle ON irp_stage(cycle_id);
+CREATE INDEX idx_step_stage ON irp_step(stage_id);
+CREATE INDEX idx_steprun_step ON irp_step_run(step_id);
+CREATE INDEX idx_batch_step ON irp_batch(step_id);
+CREATE INDEX idx_job_batch ON irp_job(batch_id);
+CREATE INDEX idx_job_status ON irp_job(status);
 
-PRINT 'IRP Database initialized successfully!';
+-- Grant permissions (adjust as needed)
+-- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO irp_user;
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO irp_user;
+
+SELECT 'IRP Database initialized successfully!' as message;

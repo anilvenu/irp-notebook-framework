@@ -9,29 +9,8 @@ RUN apt-get update && apt-get install -y \
     unixodbc-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Microsoft ODBC Driver for SQL Server
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
-    curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
-    apt-get update && \
-    ACCEPT_EULA=Y apt-get install -y msodbcsql18 && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
 USER ${NB_UID}
 
 # Install Python packages
 COPY requirements.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
-
-# Set working directory
-WORKDIR /home/jovyan/work
-
-# Create directory structure
-RUN mkdir -p /home/jovyan/work/system/helpers \
-    /home/jovyan/work/system/db \
-    /home/jovyan/work/system/config \
-    /home/jovyan/work/workflows/_Tools \
-    /home/jovyan/work/workflows/_Template \
-    /home/jovyan/work/workflows/_Archive
-
-CMD ["start-notebook.sh", "--NotebookApp.token='${JUPYTER_TOKEN}'"]

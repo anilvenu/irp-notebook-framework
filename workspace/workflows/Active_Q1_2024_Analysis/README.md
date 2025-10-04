@@ -30,41 +30,17 @@ Each step notebook should include:
 
 1. **Header cell** with title and description
 2. **Step tracker** initialization
-3. **Main logic** wrapped in try/catch
+3. **Main logic**
 4. **Completion** marking (success/failure)
 5. **Verification** section
 
-## Step Notebook Template
-
-```python
-# Step tracking
-%run /workspace/system/helpers/03_StepTracker.ipynb
-
-step = StepTracker(
-    cycle_name="{{CYCLE_NAME}}",
-    stage_num=X,
-    step_num=Y,
-    idempotent=False,
-    auto_start=True
-)
-
-if step.can_execute:
-    try:
-        # Your logic here
-        step.complete_run(output_data)
-    except Exception as e:
-        step.fail_run(str(e))
-        raise
-```
-
 ## Naming Conventions
-
+- Cycle: `Active_<CycleName>`
 - Stages: `Stage_XX_<DescriptiveName>`
 - Steps: `Step_XX_<DescriptiveName>.ipynb`
 - XX = two-digit number (01, 02, etc.)
 
 ## Notes
 
-- This template is copied when creating new cycles
-- The placeholder `{{CYCLE_NAME}}` is replaced with actual cycle name
-- Modifications here affect all future cycles
+- This template is copied from _Template when creating new cycles
+- Modifications in _Template affect all future cycles

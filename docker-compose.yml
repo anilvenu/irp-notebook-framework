@@ -2,46 +2,45 @@ services:
   jupyter:
     build:
       context: .
-      dockerfile: Dockerfile.jupyter
+      dockerfile: Dockerfile.jupyter  
     container_name: irp-notebook
     ports:
       - "8888:8888"
     environment:
       - JUPYTER_ENABLE_LAB=yes
-      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-irp2024}
-      - DB_SERVER=sqlserver
-      - DB_PORT=1433
+      - PYTHONPATH=/workspace:$PYTHONPATH
+      - DB_SERVER=postgres
+      - DB_PORT=5432
       - DB_NAME=${DB_NAME:-IRP_DB}
-      - DB_USER=${DB_USER:-sa}
-      - DB_PASSWORD=${DB_PASSWORD:-IRP_Pass2024!}
+      - DB_USER=${DB_USER:-irp_user}
+      - DB_PASSWORD=${DB_PASSWORD:-IRP_Pass2024}
     volumes:
-      - ./workspace:/home/jovyan/work
-      - jupyter-data:/home/jovyan/.local
+      - ./workspace:/workspace
     depends_on:
-      sqlserver:
+      postgres:
         condition: service_healthy
     networks:
       - irp-network
     restart: unless-stopped
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password='' --NotebookApp.notebook_dir='/workspace'    
 
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: irp-sqlserver
+  postgres:
+    image: postgres:15-alpine
+    container_name: irp-postgres
     ports:
-      - "1433:1433"
+      - "5432:5432"
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${DB_PASSWORD:-IRP_Pass2024!}
-      - MSSQL_PID=Developer
+      - POSTGRES_DB=${DB_NAME:-IRP_DB}
+      - POSTGRES_USER=${DB_USER:-irp_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-IRP_Pass2024}
     volumes:
-      - sqlserver-data:/var/opt/mssql
-      - ./workspace/system/db:/docker-entrypoint-initdb.d
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -Q "SELECT 1" -b -o /dev/null
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 3s
-      retries: 10
-      start_period: 30s
+      retries: 5
+      start_period: 10s
     networks:
       - irp-network
     restart: unless-stopped
@@ -51,5 +50,4 @@ networks:
     driver: bridge
 
 volumes:
-  jupyter-data:
-  sqlserver-data:
+  postgres-data:
