@@ -9,7 +9,7 @@ echo "=========================================="
 docker-compose down
 
 echo ""
-echo "✅ Services stopped successfully!"
+echo "Services stopped successfully!"
 echo ""
 echo "Note: Data volumes are preserved."
 echo "To remove all data, run: docker-compose down -v"

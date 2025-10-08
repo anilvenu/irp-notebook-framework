@@ -1,4 +1,10 @@
 services:
+  # Jupyuter Notebook Service
+  # This service runs the Jupyter Notebook server with Python environment
+  # and connects to the PostgreSQL database service. It mounts the local
+  # workspace directory to /workspace in the container for easy access to 
+  # notebooks, files and scripts. Dockerfile.jupyter is used to build
+  # the image with necessary dependencies and packages.
   jupyter:
     build:
       context: .
@@ -11,9 +17,9 @@ services:
       - PYTHONPATH=/workspace:$PYTHONPATH
       - DB_SERVER=postgres
       - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-IRP_DB}
+      - DB_NAME=${DB_NAME:-irp_db}
       - DB_USER=${DB_USER:-irp_user}
-      - DB_PASSWORD=${DB_PASSWORD:-IRP_Pass2024}
+      - DB_PASSWORD=${DB_PASSWORD:-irp_pass}
     volumes:
       - ./workspace:/workspace
     depends_on:
@@ -25,14 +31,18 @@ services:
     command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password='' --NotebookApp.notebook_dir='/workspace'    
 
   postgres:
+    # PostgreSQL Database Service
+    # This service runs a PostgreSQL database using the official postgres:15-alpine image.
+    # It sets up the database name, user, and password using environment variables
+    # or defaults if not provided. The database data is persisted using a Docker volume.
     image: postgres:15-alpine
     container_name: irp-postgres
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=${DB_NAME:-IRP_DB}
+      - POSTGRES_DB=${DB_NAME:-irp_db}
       - POSTGRES_USER=${DB_USER:-irp_user}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-IRP_Pass2024}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-irp_pass}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

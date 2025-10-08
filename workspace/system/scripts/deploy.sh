@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 echo "============================================"
 echo " "
 echo "     _                                  _   "
@@ -9,17 +11,31 @@ echo "  / ___ \\\\__ \\__ \\ |_| | | | (_| | | | | |_ "
 echo " /_/   \_\___/___/\__,_|_|  \__,_|_| |_|\__|"
 echo " "
 echo "   IRP Notebook Framework"
-echo "   Starting Services..."
+echo "   Installing Containers from GitHub..."
 echo "============================================"
 
-# Check if .env file exists
-if [ ! -f .env ]; then
-    echo ".env file missing from the root directory."
-    exit 1
-fi
+GIT_REPO="https://oauth2:$GITHUB_TOKEN@github.com/<project>/<repo>.git"
+BRANCH="<branch>"
+PROJECT_ROOT_PATH="<path>"
+CODE_FOLDER="<repo>"
+CODE_ROOT="$PROJECT_ROOT_PATH/$CODE_FOLDER"
 
-# Start Docker containers
-docker-compose up -d
+sudo docker compose -f "$CODE_ROOT/docker-compose.yaml" down | true
+
+if [ -d $CODE_ROOT ]; then
+	  echo "Cleanup"
+	  sudo rm -rf "$CODE_ROOT"
+fi
+sudo mkdir $CODE_ROOT
+
+echo "Cloning the repo..."
+sudo git clone -b $BRANCH $GIT_REPO $CODE_ROOT
+
+echo "Copy env file..."
+sudo cp "$PROJECT_ROOT_PATH/.env" "$CODE_ROOT/.env"
+
+echo "Start containers"
+sudo -E docker compose -f "$CODE_ROOT/docker-compose.yaml" up --build -d
 
 # Wait for services to be ready
 echo ""
@@ -42,3 +58,5 @@ else
     echo "Failed to start services. Check docker-compose logs."
     exit 1
 fi
+
+echo "Done"
