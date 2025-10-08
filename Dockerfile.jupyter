@@ -10,3 +10,5 @@ USER ${NB_UID}
 # Install Python packages
 COPY requirements.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip install jupyterlab-spreadsheet-editor
+RUN pip install jupyter_scheduler
