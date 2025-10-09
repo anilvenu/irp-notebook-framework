@@ -1,5 +1,5 @@
 from .client import Client
-import boto3, base64, requests, json
+import boto3, base64, requests, json, os
 
 class MRIImportManager:
     def __init__(self, client: Client):
@@ -81,3 +81,21 @@ class MRIImportManager:
         
         response = self.client.execute_workflow('POST', '/riskmodeler/v1/imports', json=data)
         return response.json()
+    
+    def get_file_size_kb(self, file_path: str):
+        """
+        Returns the size of a file in kilobytes.
+
+        Args:
+            file_path (str): The path to the file.
+
+        Returns:
+            float: The file size in kilobytes, or -1 if the file does not exist.
+        """
+        if not os.path.exists(file_path):
+            print(f"Error: File not found at '{file_path}'")
+            return -1
+
+        file_size_bytes = os.path.getsize(file_path)
+        file_size_kb = int(file_size_bytes / 1024)  # Convert bytes to kilobytes
+        return file_size_kb

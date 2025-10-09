@@ -64,11 +64,16 @@ class AnalysisManager:
         response = self.client.execute_workflow('POST', f"/riskmodeler/v2/portfolios/{portfolio_id}/process", json=data)
         return response.json()
     
-    def execute_analysis(self, edm_name: str, portfolio_id: int, model_profile_name: str, output_profile_name: str, event_rate_scheme_name: str) -> dict:
-        model_profile_response = self.get_model_profiles_by_name([model_profile_name])
+    def execute_analysis(self, job_name: str, edm_name: str, portfolio_id: int, analysis_profile_name: str, output_profile_name: str, event_rate_scheme_name: str) -> dict:
+        model_profile_response = self.get_model_profiles_by_name([analysis_profile_name])
         output_profile_response = self.get_output_profile_by_name(output_profile_name)
         event_rate_scheme_response = self.get_event_rate_scheme_by_name(event_rate_scheme_name)
         if model_profile_response['count'] > 0 and len(output_profile_response) > 0 and event_rate_scheme_response['count'] > 0:
-            return self.analyze_portfolio("basic_job", edm_name, portfolio_id, model_profile_response['items'][0]['id'], output_profile_response[0]['id'], event_rate_scheme_response['items'][0]['id'])
+            return self.analyze_portfolio(job_name, 
+                                          edm_name, 
+                                          portfolio_id, 
+                                          model_profile_response['items'][0]['id'], 
+                                          output_profile_response[0]['id'], 
+                                          event_rate_scheme_response['items'][0]['eventRateSchemeId'])
         return {}
         
