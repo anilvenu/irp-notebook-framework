@@ -2,7 +2,7 @@ services:
   # Jupyuter Notebook Service
   # This service runs the Jupyter Notebook server with Python environment
   # and connects to the PostgreSQL database service. It mounts the local
-  # workspace directory to /workspace in the container for easy access to 
+  # workspace directory to /home/jovyan in the container for easy access to 
   # notebooks, files and scripts. Dockerfile.jupyter is used to build
   # the image with necessary dependencies and packages.
   jupyter:
@@ -14,7 +14,7 @@ services:
       - "8888:8888"
     environment:
       - JUPYTER_ENABLE_LAB=yes
-      - PYTHONPATH=/workspace:$PYTHONPATH
+      - PYTHONPATH=/home/jovyan/workspace
       - DB_SERVER=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-irp_db}
@@ -23,14 +23,14 @@ services:
       - RISK_MODELER_BASE_URL=${RISK_MODELER_BASE_URL:-https://api-euw1.rms-ppe.com}
       - RISK_MODELER_API_KEY=${RISK_MODELER_API_KEY:-your_api_key}
     volumes:
-      - ./workspace:/workspace
+      - ./workspace:/home/jovyan/workspace
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - irp-network
     restart: unless-stopped
-    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password='' --NotebookApp.notebook_dir='/workspace'    
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password='' --NotebookApp.notebook_dir='/home/jovyan'   
 
   postgres:
     # PostgreSQL Database Service
@@ -63,3 +63,4 @@ networks:
 
 volumes:
   postgres-data:
+  job-files:

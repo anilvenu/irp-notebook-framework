@@ -9,6 +9,13 @@ ENV/
 env/
 .venv
 
+# Jupyterlab files
+.ipython/
+.jupyter/
+.local/
+.npm/
+/workspace/jobs
+
 # IDE
 .vscode/
 .idea/

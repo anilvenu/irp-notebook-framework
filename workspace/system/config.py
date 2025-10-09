@@ -9,7 +9,7 @@ from pathlib import Path
 # PATH CONFIGURATION
 # ============================================================================
 
-BASE_PATH = Path('/workspace')
+BASE_PATH = Path('/home/jovyan/workspace')
 SYSTEM_PATH = BASE_PATH / 'system'
 WORKFLOWS_PATH = BASE_PATH / 'workflows'
 TEMPLATE_PATH = WORKFLOWS_PATH / '_Template'
