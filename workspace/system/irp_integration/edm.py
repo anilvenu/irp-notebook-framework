@@ -40,7 +40,7 @@ class EDMManager:
         for portfolio in portfolios_response['searchItems']:
             portfolio_ids.append(portfolio['id'])
 
-        data = data = {
+        data = {
             "createnew": True,
             "exportType": "EDM",
             "sourceDatasource": source_edm_name,

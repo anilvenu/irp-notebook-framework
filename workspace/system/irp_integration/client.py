@@ -10,6 +10,8 @@ class Client:
     def __init__(self):
         self.base_url = os.environ.get('RISK_MODELER_BASE_URL', 'https://api-euw1.rms-ppe.com')
         self.api_key = os.environ.get('RISK_MODELER_API_KEY', 'your_api_key')
+        print(self.base_url)
+        print(self.api_key)
         self.headers = {'Authorization': self.api_key}
         self.timeout = 200
 

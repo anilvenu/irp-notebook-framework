@@ -12,7 +12,7 @@ class PortfolioManager:
             "description": "This is a test portfolio created from a notebook",
         }
         response = self.client.request('POST', '/riskmodeler/v2/portfolios', params=params, json=data)
-        return response.json()
+        return {'id': response.headers['location']}
 
     def get_portfolios_by_edm_name(self, edm_name: str) -> dict:
         params = {"datasource": edm_name}
