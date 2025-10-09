@@ -1,5 +1,5 @@
 from .client import Client
-import boto3, base64, requests
+import boto3, base64, requests, json
 
 class MRIImportManager:
     def __init__(self, client: Client):
@@ -38,10 +38,46 @@ class MRIImportManager:
         )
         s3 = session.client("s3")
 
-        with open(file_path, 'rb') as file:
-            s3.put_object(
-                Bucket=credentials['s3_path'].split('/')[0],
-                Key=credentials['s3_path'].split('/', 1)[1] + f"/{credentials['file_id']}-{credentials['filename']}",
-                Body=file,
-                ContentType='text/csv'
-            )
+        try:
+            with open(file_path, 'rb') as file:
+                s3.put_object(
+                    Bucket=credentials['s3_path'].split('/')[0],
+                    Key=credentials['s3_path'].split('/', 1)[1] + f"/{credentials['file_id']}-{credentials['filename']}",
+                    Body=file,
+                    ContentType='text/csv'
+                )
+        except FileNotFoundError:
+            print(f"Error: The file '{file_path}' was not found.")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+
+    def upload_mapping_file(self, file_path: str, bucket_id: str) -> requests.Response:
+        try:
+            with open(file_path, 'r') as file:
+                data = json.load(file)
+        except FileNotFoundError:
+            print(f"Error: The file '{file_path}' was not found.")
+        except json.JSONDecodeError:
+            print(f"Error: Could not decode JSON from '{file_path}'. Ensure it's a valid JSON format.")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+
+        return self.client.request('POST', f"/riskmodeler/v1/imports/createmapping/{bucket_id}", json=data)    
+    
+    def execute_mri_import(self, edm_name: str, portfolio_id: int, bucket_id: int, accounts_file_id: int, locations_file_id: int, mapping_file_id: int):
+        data = {
+            "importType": "MRI",
+            "bucketId": bucket_id,
+            "dataSourceName": edm_name,
+            "accountsFileId": accounts_file_id,
+            "locationsFileId": locations_file_id,
+            "mappingFileId": mapping_file_id,
+            "delimiter": "COMMA",
+            "skipLines": 1,
+            "currency": "USD",
+            "portfolioId": portfolio_id,
+            "appendLocations": False
+        }
+        
+        response = self.client.execute_workflow('POST', '/riskmodeler/v1/imports', json=data)
+        return response.json()
