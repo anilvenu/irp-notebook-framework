@@ -20,6 +20,8 @@ services:
       - DB_NAME=${DB_NAME:-irp_db}
       - DB_USER=${DB_USER:-irp_user}
       - DB_PASSWORD=${DB_PASSWORD:-irp_pass}
+      - RISK_MODELER_BASE_URL=${RISK_MODELER_BASE_URL:-https://api-euw1.rms-ppe.com}
+      - RISK_MODELER_API_KEY=${RISK_MODELER_API_KEY:-your_api_key}
     volumes:
       - ./workspace:/workspace
     depends_on:
