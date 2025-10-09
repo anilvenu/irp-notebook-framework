@@ -23,3 +23,6 @@ pathlib==1.0.1
 # API calls (for Phase 2)
 requests==2.31.0
 httpx==0.26.0
+
+# AWS Integration
+boto3==1.40.46

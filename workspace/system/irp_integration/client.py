@@ -1,13 +1,13 @@
-import requests, time, configparser, os
+import requests, time, os
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
-class RequestHandler:
+class Client:
 
     WORKFLOW_COMPLETED = ['FINISHED', 'FAILED', 'CANCELLED'] # https://developer.rms.com/risk-modeler/docs/workflow-engine#polling-workflow-job-and-operation-statuses
     WORKFLOW_IN_PROGRESS = ['QUEUED', 'PENDING', 'RUNNING', 'CANCEL_REQUESTED', 'CANCELLING']
 
-    def __init__(self, config_file):
+    def __init__(self):
         self.base_url = os.environ.get('RISK_MODELER_BASE_URL', 'https://api-euw1.rms-ppe.com')
         self.api_key = os.environ.get('RISK_MODELER_API_KEY', 'your_api_key')
         self.headers = {'Authorization': self.api_key}
