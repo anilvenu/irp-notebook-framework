@@ -92,7 +92,6 @@ class WorkContext:
         path_str = str(self.notebook_path)
         
         # Extract cycle name from path
-        # Expected: /workspace/workflows/Active_<cycle_name>/notebooks/Stage_XX_<name>/Step_YY_<name>.ipynb
         
         if 'Active_' not in path_str:
             raise WorkContextError(
