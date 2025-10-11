@@ -140,14 +140,10 @@ Each step notebook includes automatic tracking:
 step = StepTracker(
     cycle_name="{{CYCLE_NAME}}",
     stage_num=1,
-    step_num=1,
-    idempotent=False,  # Can this step be re-run?
-    auto_start=True
+    step_num=1
 )
 ```
 
-- Non-idempotent steps can only run once
-- Idempotent steps can be re-run safely
 - All executions are logged
 
 ### Monitoring Progress

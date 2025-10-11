@@ -4,7 +4,7 @@ IRP Notebook Framework - Step Execution Tracker
 
 from typing import Optional, Dict, Any
 from datetime import datetime
-from .work_context import WorkContext
+from .context import WorkContext
 from . import database as db
 from .config import StepStatus, SYSTEM_USER
 
@@ -23,11 +23,11 @@ class Step:
         context = WorkContext()
         
         # Initialize step
-        step = Step(context, idempotent=False, auto_start=True)
+        step = Step(context)
         
-        # Check if can execute
-        if not step.can_execute:
-            raise Exception("Cannot execute step")
+        # Check if previously executed
+        if step.executed:
+            raise Exception(step.status_message)
         
         # During execution
         step.log("Processing data...")
@@ -42,42 +42,37 @@ class Step:
     
     def __init__(
         self,
-        context: WorkContext,
-        idempotent: bool = False,
-        auto_start: bool = True
+        context: WorkContext
     ):
         """
         Initialize step tracker.
         
         Args:
             context: WorkContext object with cycle/stage/step info
-            idempotent: Whether step can be re-run if already completed
-            auto_start: Automatically start step run on initialization
         """
         
         self.context = context
         self.step_id = context.step_id
-        self.idempotent = idempotent
         
         # Get step info
         self.step_info = db.get_step_info(self.step_id)
         
         # Check execution eligibility
-        self.can_execute = False
+        self.executed = False
         self.status_message = ""
-        self._check_can_execute()
+        self._executed()
         
         # Initialize run tracking
         self.run_id = None
         self.run_number = None
         self.logs = []
         
-        # Auto-start if requested and can execute
-        if auto_start and self.can_execute:
+        # Auto-start if not executed
+        if not self.executed:
             self.start()
     
     
-    def _check_can_execute(self):
+    def _executed(self):
         """Check if step can be executed based on current state"""
         
         # Get last run
@@ -85,49 +80,24 @@ class Step:
         
         if not last_run:
             # Never run before - OK to execute
-            self.can_execute = True
+            self.executed = False
             self.status_message = "Step has not been run yet"
             return
         
         status = last_run['status']
         
-        # If step is currently running, cannot execute
-        if status == StepStatus.RUNNING:
-            self.can_execute = False
-            self.status_message = "Step is currently running"
-            return
-        
-        # If step is in terminal state
-        if status in StepStatus.terminal():
-            
-            if status == StepStatus.COMPLETED:
-                if self.idempotent:
-                    self.can_execute = True
-                    self.status_message = f"Step completed (run #{last_run['run_number']}), re-running (idempotent)"
-                else:
-                    self.can_execute = False
-                    self.status_message = f"Step already completed (run #{last_run['run_number']}), cannot re-run (non-idempotent)"
-            
-            elif status == StepStatus.FAILED:
-                self.can_execute = True
-                self.status_message = f"Step previously failed (run #{last_run['run_number']}), can retry"
-            
-            elif status == StepStatus.SKIPPED:
-                self.can_execute = True
-                self.status_message = f"Step was skipped (run #{last_run['run_number']}), can run now"
-            
-            return
-        
-        # Unknown status
-        self.can_execute = False
-        self.status_message = f"Step in unknown status: {status}"
+        self.executed = True
+        self.status_message = f"Step already run, in status: {status}"
     
     
-    def start(self):
+    def start(self, force: bool = False):
         """Start a new step run"""
         
-        if not self.can_execute:
-            raise StepError(f"Cannot execute step: {self.status_message}")
+        if self.executed:
+            if force:
+                print("Warning: Forcing re-execution of already executed step")
+            else:
+                raise StepError(f"Cannot execute step: {self.status_message}")
         
         try:
             # Create new step run

@@ -9,9 +9,9 @@ from pathlib import Path
 # PATH CONFIGURATION
 # ============================================================================
 
-BASE_PATH = Path('/home/jovyan/workspace')
-SYSTEM_PATH = BASE_PATH / 'system'
-WORKFLOWS_PATH = BASE_PATH / 'workflows'
+WORKSPACE_PATH = Path(f'{os.getenv("NOTEBOOK_HOME_DIR", "/home/jovyan")}/workspace')
+SYSTEM_PATH = WORKSPACE_PATH / 'system'
+WORKFLOWS_PATH = WORKSPACE_PATH / 'workflows'
 TEMPLATE_PATH = WORKFLOWS_PATH / '_Template'
 TOOLS_PATH = WORKFLOWS_PATH / '_Tools'
 ARCHIVE_PATH = WORKFLOWS_PATH / '_Archive'
