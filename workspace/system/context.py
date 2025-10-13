@@ -52,38 +52,29 @@ class WorkContext:
     
     def _get_current_notebook_path(self) -> str:
         """
-        Get the path of the currently executing notebook.
-        Uses IPython magic to detect notebook path.
+        Get the full path of the currently running Jupyter notebook (.ipynb).
+        Works by inspecting IPython's user namespace (__session__ variable).
         """
         try:
             from IPython import get_ipython
-            ipython = get_ipython()
-            
-            if ipython is None:
-                raise WorkContextError("Not running in IPython/Jupyter environment")
-            
-            # Try to get notebook name from IPython
-            notebook_name = ipython.user_ns.get('__vsc_ipynb_file__', None)
-            
-            if notebook_name:
-                return notebook_name
-            
-            # Fallback: try to get from working directory context
             import os
-            cwd = os.getcwd()
-            
-            # Look for .ipynb files in current directory
-            ipynb_files = list(Path(cwd).glob("*.ipynb"))
-            
-            if len(ipynb_files) == 1:
-                return str(ipynb_files[0])
-            
-            raise WorkContextError(
-                "Cannot auto-detect notebook path. Please provide notebook_path explicitly."
-            )
-            
+
+            ipython = get_ipython()
+            if ipython is None:
+                raise RuntimeError("Not running inside an IPython/Jupyter environment")
+
+            # The __session__ variable usually contains the full notebook path
+            nb_path = ipython.user_ns.get("__session__")
+            if not nb_path:
+                raise RuntimeError("Notebook path not found in IPython user_ns")
+
+            # Normalize path (e.g., ensure it’s absolute)
+            nb_path = os.path.abspath(nb_path)
+            return nb_path
+
         except Exception as e:
-            raise WorkContextError(f"Failed to detect notebook path: {str(e)}")
+            raise RuntimeError(f"Failed to detect notebook path: {e}")
+
     
     
     def _parse_path(self):
@@ -212,7 +203,7 @@ class WorkContext:
 # CONVENIENCE FUNCTION
 # ============================================================================
 
-def get_work_context(notebook_path: str = None) -> WorkContext:
+def get_context(notebook_path: str = None) -> WorkContext:
     """
     Convenience function to create WorkContext.
     
@@ -223,7 +214,7 @@ def get_work_context(notebook_path: str = None) -> WorkContext:
         WorkContext object
     
     Example:
-        context = get_work_context()
+        context = get_context()
         print(context.cycle_name)
     """
     return WorkContext(notebook_path)

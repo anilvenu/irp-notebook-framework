@@ -8,7 +8,6 @@ DROP TABLE IF EXISTS irp_batch CASCADE;
 DROP TABLE IF EXISTS irp_step_run CASCADE;
 DROP TABLE IF EXISTS irp_step CASCADE;
 DROP TABLE IF EXISTS irp_stage CASCADE;
-DROP TABLE IF EXISTS irp_system_lock CASCADE;
 DROP TABLE IF EXISTS irp_cycle CASCADE;
 
 -- Drop types if they exist
@@ -119,19 +118,6 @@ CREATE TABLE irp_job (
     CONSTRAINT fk_job_config FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
 );
 
--- System Lock (ensures single active cycle)
-CREATE TABLE irp_system_lock (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    active_cycle_id INTEGER NULL,
-    locked_by VARCHAR(255) NULL,
-    locked_at TIMESTAMPTZ NULL,
-    CONSTRAINT fk_lock_cycle FOREIGN KEY (active_cycle_id) REFERENCES irp_cycle(id)
-);
-
--- Initialize system lock
-INSERT INTO irp_system_lock (id, active_cycle_id, locked_by, locked_at) 
-VALUES (1, NULL, NULL, NULL);
-
 -- Create indexes for performance
 CREATE INDEX idx_stage_cycle ON irp_stage(cycle_id);
 CREATE INDEX idx_step_stage ON irp_step(stage_id);
@@ -144,4 +130,4 @@ CREATE INDEX idx_job_status ON irp_job(status);
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO irp_user;
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO irp_user;
 
-SELECT 'IRP Database initialized successfully!' as message;
+SELECT 'Analyst Workflow Database Components Initialized Successfully!' as message;

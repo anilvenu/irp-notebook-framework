@@ -14,7 +14,7 @@ services:
       - "8888:8888"
     environment:
       - JUPYTER_ENABLE_LAB=yes
-      - PYTHONPATH=/home/jovyan/workspace
+      - PYTHONPATH=${NOTEBOOK_HOME_DIR:-/home/jovyan}/workspace
       - DB_SERVER=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-irp_db}
@@ -23,14 +23,18 @@ services:
       - RISK_MODELER_BASE_URL=${RISK_MODELER_BASE_URL:-https://api-euw1.rms-ppe.com}
       - RISK_MODELER_API_KEY=${RISK_MODELER_API_KEY:-your_api_key}
     volumes:
-      - ./workspace:/home/jovyan/workspace
+      - ./workspace:${NOTEBOOK_HOME_DIR:-/home/jovyan}/workspace
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - irp-network
     restart: unless-stopped
-    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password='' --NotebookApp.notebook_dir='/home/jovyan'   
+    command: >
+      start-notebook.sh 
+      --NotebookApp.token='' 
+      --NotebookApp.password='' 
+      --NotebookApp.notebook_dir='${NOTEBOOK_HOME_DIR:-/home/jovyan}'   
 
   postgres:
     # PostgreSQL Database Service
@@ -63,4 +67,3 @@ networks:
 
 volumes:
   postgres-data:
-  job-files:
