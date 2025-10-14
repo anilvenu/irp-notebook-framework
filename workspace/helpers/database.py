@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 import pandas as pd
 from typing import Optional, List, Dict, Any, Tuple
-from .config import DB_CONFIG
+from helpers.constants import DB_CONFIG, CycleStatus, StepStatus
 
 
 class DatabaseError(Exception):
@@ -194,7 +194,8 @@ def get_active_cycle() -> Optional[Dict[str, Any]]:
     query = """
         SELECT id, cycle_name, status, created_ts, created_by, metadata
         FROM irp_cycle
-        WHERE status = 'active'
+        WHERE status = 'ACTIVE'
+        ORDER BY created_ts DESC
         LIMIT 1
     """
     df = execute_query(query)
@@ -216,20 +217,20 @@ def create_cycle(cycle_name: str, created_by: str, metadata: Dict = None) -> int
     """Create new cycle"""
     query = """
         INSERT INTO irp_cycle (cycle_name, status, created_by, metadata)
-        VALUES (%s, 'active', %s, %s)
+        VALUES (%s, %s, %s, %s)
     """
     import json
-    return execute_insert(query, (cycle_name, created_by, json.dumps(metadata) if metadata else None))
+    return execute_insert(query, (cycle_name, CycleStatus.ACTIVE, created_by, json.dumps(metadata) if metadata else None))
 
 
 def archive_cycle(cycle_id: int) -> bool:
     """Archive a cycle"""
     query = """
         UPDATE irp_cycle
-        SET status = 'archived', archived_ts = NOW()
+        SET status = %s, archived_ts = NOW()
         WHERE id = %s
     """
-    rows = execute_command(query, (cycle_id,))
+    rows = execute_command(query, (CycleStatus.ARCHIVED, cycle_id))
     return rows > 0
 
 # ============================================================================
@@ -262,7 +263,6 @@ def get_or_create_step(
     step_num: int,
     step_name: str,
     notebook_path: str = None,
-    is_idempotent: bool = False
 ) -> int:
     """Get existing step or create new one"""
     
@@ -275,17 +275,17 @@ def get_or_create_step(
     
     # Create new
     query = """
-        INSERT INTO irp_step (stage_id, step_num, step_name, notebook_path, is_idempotent)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO irp_step (stage_id, step_num, step_name, notebook_path)
+        VALUES (%s, %s, %s, %s)
     """
-    return execute_insert(query, (stage_id, step_num, step_name, notebook_path, is_idempotent))
+    return execute_insert(query, (stage_id, step_num, step_name, notebook_path))
 
 
 def get_step_info(step_id: int) -> Optional[Dict[str, Any]]:
     """Get step information"""
     query = """
         SELECT 
-            st.id, st.step_num, st.step_name, st.notebook_path, st.is_idempotent,
+            st.id, st.step_num, st.step_name, st.notebook_path,
             sg.stage_num, sg.stage_name,
             c.cycle_name, c.id as cycle_id
         FROM irp_step st
@@ -328,7 +328,7 @@ def create_step_run(step_id: int, started_by: str) -> Tuple[int, int]:
     # Create run
     query = """
         INSERT INTO irp_step_run (step_id, run_number, status, started_by)
-        VALUES (%s, %s, 'running', %s)
+        VALUES (%s, %s, 'RUNNING', %s)
     """
     run_id = execute_insert(query, (step_id, run_number, started_by))
     
@@ -347,7 +347,7 @@ def update_step_run(
     query = """
         UPDATE irp_step_run
         SET status = %s,
-            completed_ts = CASE WHEN %s IN ('completed', 'failed', 'skipped') THEN NOW() ELSE completed_ts END,
+            completed_ts = CASE WHEN %s IN ('COMPLETED', 'FAILED', 'SKIPPED') THEN NOW() ELSE completed_ts END,
             error_message = %s,
             output_data = %s
         WHERE id = %s
@@ -375,7 +375,6 @@ def get_cycle_progress(cycle_name: str) -> pd.DataFrame:
             sg.stage_name,
             st.step_num,
             st.step_name,
-            st.is_idempotent,
             sr.status as last_status,
             sr.run_number as last_run,
             sr.completed_ts as last_completed

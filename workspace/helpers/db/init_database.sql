@@ -17,16 +17,16 @@ DROP TYPE IF EXISTS batch_status_enum CASCADE;
 DROP TYPE IF EXISTS job_status_enum CASCADE;
 
 -- Create custom types
-CREATE TYPE cycle_status_enum AS ENUM ('active', 'archived', 'failed');
-CREATE TYPE step_status_enum AS ENUM ('running', 'completed', 'failed', 'skipped');
-CREATE TYPE batch_status_enum AS ENUM ('pending', 'running', 'completed', 'failed', 'cancelled');
-CREATE TYPE job_status_enum AS ENUM ('pending', 'submitted', 'queued', 'running', 'completed', 'failed', 'cancelled');
+CREATE TYPE cycle_status_enum AS ENUM ('ACTIVE', 'ARCHIVED');
+CREATE TYPE step_status_enum AS ENUM ('RUNNING', 'COMPLETED', 'FAILED', 'SKIPPED');
+CREATE TYPE batch_status_enum AS ENUM ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED');
+CREATE TYPE job_status_enum AS ENUM ('PREPARED', 'SUBMITTED', 'PENDING', 'QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLING', 'CANCELLED', 'FORCED_OK');
 
 -- Core Cycle Management
 CREATE TABLE irp_cycle (
     id SERIAL PRIMARY KEY,
     cycle_name VARCHAR(255) UNIQUE NOT NULL,
-    status cycle_status_enum DEFAULT 'active',
+    status cycle_status_enum DEFAULT 'ACTIVE',
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     archived_ts TIMESTAMPTZ NULL,
     created_by VARCHAR(255) NULL,
@@ -50,8 +50,7 @@ CREATE TABLE irp_step (
     stage_id INTEGER NOT NULL,
     step_num INTEGER NOT NULL,
     step_name VARCHAR(255) NOT NULL,
-    notebook_path VARCHAR(500) NULL,
-    is_idempotent BOOLEAN DEFAULT FALSE,
+    notebook_path VARCHAR(1000) NULL,
     requires_batch BOOLEAN DEFAULT FALSE,
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT fk_step_stage FOREIGN KEY (stage_id) REFERENCES irp_stage(id) ON DELETE CASCADE,
@@ -63,7 +62,7 @@ CREATE TABLE irp_step_run (
     id SERIAL PRIMARY KEY,
     step_id INTEGER NOT NULL,
     run_number INTEGER NOT NULL,
-    status step_status_enum DEFAULT 'running',
+    status step_status_enum DEFAULT 'RUNNING',
     started_ts TIMESTAMPTZ DEFAULT NOW(),
     completed_ts TIMESTAMPTZ NULL,
     started_by VARCHAR(255) NULL,
@@ -77,7 +76,7 @@ CREATE TABLE irp_batch (
     id SERIAL PRIMARY KEY,
     step_id INTEGER NOT NULL,
     batch_name VARCHAR(255) NOT NULL,
-    status batch_status_enum DEFAULT 'pending',
+    status batch_status_enum DEFAULT 'PENDING',
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     completed_ts TIMESTAMPTZ NULL,
     total_jobs INTEGER DEFAULT 0,
@@ -88,7 +87,7 @@ CREATE TABLE irp_batch (
     CONSTRAINT uq_step_batch UNIQUE(step_id, batch_name)
 );
 
--- Configuration for Batch
+-- Configuration for Cycle
 CREATE TABLE irp_configuration (
     id SERIAL PRIMARY KEY,
     batch_id INTEGER NOT NULL,
@@ -105,7 +104,7 @@ CREATE TABLE irp_job (
     batch_id INTEGER NOT NULL,
     configuration_id INTEGER NOT NULL,
     workflow_id VARCHAR(255) NULL,
-    status job_status_enum DEFAULT 'pending',
+    status job_status_enum DEFAULT 'PENDING',
     retry_count INTEGER DEFAULT 0,
     last_error TEXT NULL,
     created_ts TIMESTAMPTZ DEFAULT NOW(),

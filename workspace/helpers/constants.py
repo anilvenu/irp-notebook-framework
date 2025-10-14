@@ -10,7 +10,7 @@ from pathlib import Path
 # ============================================================================
 
 WORKSPACE_PATH = Path(f'{os.getenv("NOTEBOOK_HOME_DIR", "/home/jovyan")}/workspace')
-SYSTEM_PATH = WORKSPACE_PATH / 'system'
+HELPERS_PATH = WORKSPACE_PATH / 'helpers'
 WORKFLOWS_PATH = WORKSPACE_PATH / 'workflows'
 TEMPLATE_PATH = WORKFLOWS_PATH / '_Template'
 TOOLS_PATH = WORKFLOWS_PATH / '_Tools'
@@ -40,20 +40,19 @@ LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 # ============================================================================
 
 class CycleStatus:
-    ACTIVE = 'active'
-    ARCHIVED = 'archived'
-    FAILED = 'failed'
+    ACTIVE = 'ACTIVE'
+    ARCHIVED = 'ARCHIVED'
     
     @classmethod
     def all(cls):
-        return [cls.ACTIVE, cls.ARCHIVED, cls.FAILED]
+        return [cls.ACTIVE, cls.ARCHIVED]
 
 
 class StepStatus:
-    RUNNING = 'running'
-    COMPLETED = 'completed'
-    FAILED = 'failed'
-    SKIPPED = 'skipped'
+    RUNNING = 'RUNNING'
+    COMPLETED = 'COMPLETED'
+    FAILED = 'FAILED'
+    SKIPPED = 'SKIPPED'
     
     @classmethod
     def all(cls):
@@ -66,11 +65,11 @@ class StepStatus:
 
 
 class BatchStatus:
-    PENDING = 'pending'
-    RUNNING = 'running'
-    COMPLETED = 'completed'
-    FAILED = 'failed'
-    CANCELLED = 'cancelled'
+    PENDING = 'PENDING'
+    RUNNING = 'RUNNING'
+    COMPLETED = 'FINISHED'
+    FAILED = 'FAILED'
+    CANCELLED = 'CANCELLED'
     
     @classmethod
     def all(cls):
@@ -78,18 +77,43 @@ class BatchStatus:
 
 
 class JobStatus:
-    PENDING = 'pending'
-    SUBMITTED = 'submitted'
-    QUEUED = 'queued'
-    RUNNING = 'running'
-    COMPLETED = 'completed'
-    FAILED = 'failed'
-    CANCELLED = 'cancelled'
+    PREPARED = 'PREPARED'
+    SUBMITTED = 'SUBMITTED'
+    QUEUED = 'QUEUED'
+    PENDING = 'PENDING'
+    RUNNING = 'RUNNING'
+    FINISHED = 'FINISHED'
+    FAILED = 'FAILED'
+    CANCEL_REQUESTED = 'CANCEL_REQUESTED'
+    CANCELLING = 'CANCELLING'
+    CANCELLED = 'CANCELLED'
+    FORCED_OK = 'FORCED_OK'
+
     
     @classmethod
     def all(cls):
-        return [cls.PENDING, cls.SUBMITTED, cls.QUEUED, cls.RUNNING, 
-                cls.COMPLETED, cls.FAILED, cls.CANCELLED]
+        return [
+            cls.PREPARED, cls.SUBMITTED, cls.QUEUED, cls.PENDING,
+            cls.RUNNING, cls.FINISHED, cls.FAILED, cls.CANCEL_REQUESTED,
+            cls.CANCELLING, cls.CANCELLED, cls.FORCED_OK
+        ]
+    @classmethod
+    def terminal(cls):
+        """Terminal statuses - job cannot continue from these"""
+        return [cls.FINISHED, cls.FAILED, cls.CANCELLED, cls.FORCED_OK]
+    
+    @classmethod
+    def active(cls):
+        """Active statuses - job is still in progress"""
+        return [cls.PENDING, cls.RUNNING, cls.CANCEL_REQUESTED, cls.CANCELLING]
+    
+    @classmethod
+    def completed(cls):
+        """Completed statuses - job has finished one way or another"""
+        return [cls.FINISHED, cls.FORCED_OK]
+    
+    def __str__(self):
+        return self.value
 
 # ============================================================================
 # DISPLAY SETTINGS
@@ -119,5 +143,7 @@ CYCLE_NAME_RULES = {
     'min_length': 3,
     'max_length': 100,
     'allowed_chars': r'^[a-zA-Z0-9_\-]+$',
-    'forbidden_prefixes': ['Active_', 'Archive_', '_']
+    'valid_pattern': r'^Analysis-20\d{2}-Q[1-4](-[\w-]+)?$',
+    'example': 'Analysis-2025-Q4 OR Analysis-2025-Q4-v1',
+    'forbidden_prefixes': ['Active_']
 }
