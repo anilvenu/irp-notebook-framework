@@ -8,6 +8,8 @@ venv/
 ENV/
 env/
 .venv
+_Archive/
+workspace/workflows/Active_*
 
 # Jupyterlab files
 .ipython/

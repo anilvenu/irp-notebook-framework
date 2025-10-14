@@ -4,7 +4,7 @@ IRP Notebook Framework - Display Utilities
 
 import pandas as pd
 from typing import List, Dict, Any
-from .config import DISPLAY_CONFIG
+from helpers.constants import DISPLAY_CONFIG
 
 class NotebookCanceled(Exception):
     """Raised when user clicks Cancel in a blocking prompt."""

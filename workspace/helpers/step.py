@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from .context import WorkContext
 from . import database as db
-from .config import StepStatus, SYSTEM_USER
+from .constants import StepStatus, SYSTEM_USER
 
 
 class StepError(Exception):

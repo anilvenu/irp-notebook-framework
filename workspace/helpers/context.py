@@ -6,8 +6,8 @@ Automatically detects and manages workflow context from notebook path
 import re
 from pathlib import Path
 from typing import Optional
-from . import database as db
-from .config import NOTEBOOK_PATTERN, STAGE_PATTERN, SYSTEM_USER
+from helpers import database as db
+from helpers.constants import NOTEBOOK_PATTERN, STAGE_PATTERN, SYSTEM_USER, CycleStatus
 
 
 class WorkContextError(Exception):
@@ -149,7 +149,7 @@ class WorkContext:
                 self.cycle_id = cycle['id']
                 
                 # Verify cycle is active
-                if cycle['status'] != 'active':
+                if cycle['status'] != CycleStatus.ACTIVE:
                     raise WorkContextError(
                         f"Cycle '{self.cycle_name}' is {cycle['status']}, not active"
                     )

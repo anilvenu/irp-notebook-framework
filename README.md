@@ -45,8 +45,6 @@ irp-notebook-framework/
 └── workspace/                # Mounted workspace
     ├── system/              # System components
     │   ├── db/             # Database scripts
-    │   ├── helpers/        # Helper notebooks
-    │   └── config/         # Configuration
     └── workflows/          # Workflow management
         ├── _Template/      # Master template
         ├── _Tools/         # Management tools

@@ -6,10 +6,10 @@ import re
 import shutil
 from pathlib import Path
 from typing import Tuple, Optional, Dict, Any
-from . import database as db
-from .config import (
+from helpers import database as db
+from .constants import (
     WORKFLOWS_PATH, TEMPLATE_PATH, ARCHIVE_PATH, SYSTEM_USER,
-    CYCLE_NAME_RULES, NOTEBOOK_PATTERN, STAGE_PATTERN
+    CYCLE_NAME_RULES, NOTEBOOK_PATTERN, STAGE_PATTERN, CycleStatus, StepStatus
 )
 
 
@@ -17,8 +17,21 @@ class CycleError(Exception):
     """Custom exception for cycle management errors"""
     pass
 
+def delete_archived_cycles() -> int:
+    """
+    Delete all cycles in ARCHIVED status
+    """
+    query = """
+        DELETE 
+        FROM irp_cycle
+        WHERE status = 'ARCHIVED'
+    """
+    
+    return db.execute_command(query)
 
-def validate_cycle_name(cycle_name: str) -> Tuple[bool, str]:
+
+
+def validate_cycle_name(cycle_name: str) -> bool:
     """
     Validate cycle name against rules.
     
@@ -26,19 +39,22 @@ def validate_cycle_name(cycle_name: str) -> Tuple[bool, str]:
         cycle_name: Proposed cycle name
     
     Returns:
-        Tuple of (is_valid, message)
+        bool of is_valid
     """
     
     # Check length
     if len(cycle_name) < CYCLE_NAME_RULES['min_length']:
-        return False, f"Name too short (min {CYCLE_NAME_RULES['min_length']} chars)"
+        print(f"Name too short (min {CYCLE_NAME_RULES['min_length']} chars)")
+        return False
     
     if len(cycle_name) > CYCLE_NAME_RULES['max_length']:
-        return False, f"Name too long (max {CYCLE_NAME_RULES['max_length']} chars)"
+        print(f"Name too long (max {CYCLE_NAME_RULES['max_length']} chars)")
+        return False
     
-    # Check allowed characters
-    if not re.match(CYCLE_NAME_RULES['allowed_chars'], cycle_name):
-        return False, "Name can only contain letters, numbers, underscores, and hyphens"
+    # Check allowed pattern
+    if re.fullmatch(CYCLE_NAME_RULES['valid_pattern'], cycle_name) is None:
+        print(f"Name must match pattern: {CYCLE_NAME_RULES['example']}")
+        return False
     
     # Check forbidden prefixes
     for prefix in CYCLE_NAME_RULES['forbidden_prefixes']:
@@ -60,7 +76,7 @@ def validate_cycle_name(cycle_name: str) -> Tuple[bool, str]:
     if archive_dir.exists():
         return False, f"Cycle '{cycle_name}' exists in archive"
     
-    return True, "Valid"
+    return True
 
 
 def create_cycle(cycle_name: str, created_by: str = None) -> bool:
@@ -86,18 +102,15 @@ def create_cycle(cycle_name: str, created_by: str = None) -> bool:
     
     try:
         # Validate name
-        valid, message = validate_cycle_name(cycle_name)
+        valid = validate_cycle_name(cycle_name)
         if not valid:
-            raise CycleError(message)
+            raise CycleError('Cycle name validation failed')
         
         # Check for existing active cycle
         active_cycle = db.get_active_cycle()
         
         if active_cycle:
             print(f"Archiving current cycle: {active_cycle['cycle_name']}")
-            
-            # Archive in database
-            db.archive_cycle(active_cycle['id'])
             
             # Move directory to archive
             old_dir = WORKFLOWS_PATH / f"Active_{active_cycle['cycle_name']}"
@@ -107,10 +120,12 @@ def create_cycle(cycle_name: str, created_by: str = None) -> bool:
                 ARCHIVE_PATH.mkdir(exist_ok=True)
                 shutil.move(str(old_dir), str(new_dir))
                 print(f"   Moved to archive: {new_dir.name}")
+            
+            # Archive in database
+            db.archive_cycle(active_cycle['id'])
         
         # Create new cycle in database
         print(f"\nCreating cycle: {cycle_name}")
-        cycle_id = db.create_cycle(cycle_name, created_by)
         
         # Create directory from template
         new_dir = WORKFLOWS_PATH / f"Active_{cycle_name}"
@@ -120,9 +135,16 @@ def create_cycle(cycle_name: str, created_by: str = None) -> bool:
         
         shutil.copytree(TEMPLATE_PATH, new_dir)
         print(f"Created directory: {new_dir}")
+
+        # Dry run the stage and step registration
+        _register_stages_and_steps(0, new_dir, apply=False)
+
+
+        cycle_id = db.create_cycle(cycle_name, created_by)
         
         # Register stages and steps
-        registered_count = _register_stages_and_steps(cycle_id, new_dir)
+        print('Registering stages and steps...')
+        registered_count = _register_stages_and_steps(cycle_id, new_dir, apply=True)
         print(f"Registered {registered_count} stages with steps")
         
         print(f"\nCycle '{cycle_name}' created successfully")
@@ -133,7 +155,7 @@ def create_cycle(cycle_name: str, created_by: str = None) -> bool:
         return False
 
 
-def _register_stages_and_steps(cycle_id: int, cycle_dir: Path) -> int:
+def _register_stages_and_steps(cycle_id: int, cycle_dir: Path, apply=False) -> int:
     """
     Register stages and steps from directory structure.
     
@@ -165,7 +187,10 @@ def _register_stages_and_steps(cycle_id: int, cycle_dir: Path) -> int:
         stage_name = match.group(2)
         
         # Create stage
-        stage_id = db.get_or_create_stage(cycle_id, stage_num, stage_name)
+        if apply:
+            stage_id = db.get_or_create_stage(cycle_id, stage_num, stage_name)
+        else:
+            print(f"Stage: {stage_num} - {stage_name}")
         
         # Find all step notebooks
         step_files = sorted([f for f in stage_dir.iterdir() if f.is_file() and re.match(NOTEBOOK_PATTERN, f.name)])
@@ -175,18 +200,19 @@ def _register_stages_and_steps(cycle_id: int, cycle_dir: Path) -> int:
             match = re.match(NOTEBOOK_PATTERN, step_file.name)
             if not match:
                 continue
-            
             step_num = int(match.group(1))
             step_name = match.group(2)
             
             # Create step
-            db.get_or_create_step(
-                stage_id,
-                step_num,
-                step_name,
-                str(step_file),
-                is_idempotent=False
-            )
+            if apply:
+                db.get_or_create_step(
+                    stage_id,
+                    step_num,
+                    step_name,
+                    str(step_file)
+                )
+            else:
+                print(f"Step: {step_num} - {step_name}")
         
         stage_count += 1
     
@@ -207,8 +233,8 @@ def get_cycle_status() -> Any:
         FROM irp_cycle
         ORDER BY 
             CASE status 
-                WHEN 'active' THEN 1
-                WHEN 'archived' THEN 2
+                WHEN 'ACTIVE' THEN 1
+                WHEN 'ARCHIVED' THEN 2
                 ELSE 3
             END,
             created_ts DESC
@@ -235,7 +261,7 @@ def archive_cycle_by_name(cycle_name: str) -> bool:
             print(f"Cycle '{cycle_name}' not found")
             return False
         
-        if cycle['status'] == 'archived':
+        if cycle['status'] == CycleStatus.ARCHIVED:
             print(f"Cycle '{cycle_name}' is already archived")
             return True
         

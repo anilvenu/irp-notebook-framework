@@ -1,4 +1,4 @@
-from system.irp_integration import IRPClient
+from helpers.irp_integration import IRPClient
 import json, os
 
 def get_file_size_kb(file_path: str):
