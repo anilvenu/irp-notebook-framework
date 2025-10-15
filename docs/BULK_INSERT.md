@@ -110,45 +110,7 @@ params_list = [
 ids = bulk_insert(query, params_list, jsonb_columns=[4])
 ```
 
-### Bulk Insert Configurations
-
-```python
-from helpers.database import bulk_insert
-
-# Assume you have batch_id from a previous query
-batch_id = 10
-
-query = """
-    INSERT INTO irp_configuration (batch_id, config_name, config_data, skip)
-    VALUES (%s, %s, %s, %s)
-"""
-
-params_list = [
-    (batch_id, 'portfolio_A_config', {
-        'portfolio': 'Portfolio_A',
-        'start_date': '2024-01-01',
-        'end_date': '2024-12-31',
-        'parameters': {
-            'risk_threshold': 0.95,
-            'confidence_level': 0.99
-        }
-    }, False),
-    (batch_id, 'portfolio_B_config', {
-        'portfolio': 'Portfolio_B',
-        'start_date': '2024-01-01',
-        'end_date': '2024-12-31',
-        'parameters': {
-            'risk_threshold': 0.85,
-            'confidence_level': 0.95
-        }
-    }, False),
-]
-
-# Column 2 (3rd parameter) contains config_data JSONB
-ids = bulk_insert(query, params_list, jsonb_columns=[2])
-```
-
-## Multiple JSONB Columns
+## JSONB Columns
 
 If you have multiple JSONB columns, specify all their indices:
 
@@ -229,82 +191,6 @@ def safe_bulk_insert(query, params_list, **kwargs):
 
 # Usage
 ids = safe_bulk_insert(query, params_list, jsonb_columns=[2])
-```
-
-## Performance Benefits
-
-Bulk insert is significantly faster than individual inserts:
-
-```python
-import time
-from helpers.database import bulk_insert, execute_insert
-
-# Prepare 100 records
-records = [(f'cycle_{i}', 'ACTIVE', 'user') for i in range(100)]
-
-# Method 1: Individual inserts
-start = time.time()
-for cycle_name, status, user in records:
-    execute_insert(
-        "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)",
-        (cycle_name, status, user)
-    )
-individual_time = time.time() - start
-
-# Method 2: Bulk insert
-start = time.time()
-ids = bulk_insert(
-    "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)",
-    records
-)
-bulk_time = time.time() - start
-
-print(f"Individual: {individual_time:.2f}s")
-print(f"Bulk:       {bulk_time:.2f}s")
-print(f"Speedup:    {individual_time/bulk_time:.1f}x faster")
-
-# Typical output:
-# Individual: 2.45s
-# Bulk:       0.12s
-# Speedup:    20.4x faster
-```
-
-## Complete Example: Creating a Batch with Configurations
-
-```python
-from helpers.database import bulk_insert, execute_insert
-
-# Create batch
-batch_id = execute_insert(
-    "INSERT INTO irp_batch (step_id, batch_name, status) VALUES (%s, %s, %s)",
-    (step_id, 'Q1_2025_Analysis', 'PENDING')
-)
-
-# Bulk insert configurations
-config_query = """
-    INSERT INTO irp_configuration (batch_id, config_name, config_data, skip)
-    VALUES (%s, %s, %s, %s)
-"""
-
-portfolios = ['Portfolio_A', 'Portfolio_B', 'Portfolio_C', 'Portfolio_D']
-configs = []
-
-for portfolio in portfolios:
-    config_data = {
-        'portfolio': portfolio,
-        'start_date': '2025-01-01',
-        'end_date': '2025-03-31',
-        'parameters': {
-            'risk_threshold': 0.95,
-            'analysis_type': 'quarterly'
-        }
-    }
-    configs.append((batch_id, f'{portfolio}_Q1_2025', config_data, False))
-
-# Insert all configurations at once
-config_ids = bulk_insert(config_query, configs, jsonb_columns=[2])
-
-print(f"Created batch {batch_id} with {len(config_ids)} configurations")
 ```
 
 ## Best Practices

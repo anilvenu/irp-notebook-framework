@@ -65,7 +65,7 @@ class StepStatus:
 
 
 class BatchStatus:
-    PENDING = 'PENDING'
+    INITIATED = 'INITIATED'
     RUNNING = 'RUNNING'
     COMPLETED = 'FINISHED'
     FAILED = 'FAILED'
@@ -73,11 +73,22 @@ class BatchStatus:
     
     @classmethod
     def all(cls):
-        return [cls.PENDING, cls.RUNNING, cls.COMPLETED, cls.FAILED, cls.CANCELLED]
+        return [cls.INITIATED, cls.RUNNING, cls.COMPLETED, cls.FAILED, cls.CANCELLED]
+
+
+class ConfigurationStatus:
+    NEW = 'NEW'
+    VALID = 'VALID'
+    ACTIVE = 'ACTIVE'
+    ERROR = 'ERROR'
+
+    @classmethod
+    def all(cls):
+        return [cls.NEW, cls.VALID, cls.ACTIVE, cls.ERROR]
 
 
 class JobStatus:
-    PREPARED = 'PREPARED'
+    INITIATED = 'INITIATED'
     SUBMITTED = 'SUBMITTED'
     QUEUED = 'QUEUED'
     PENDING = 'PENDING'
@@ -89,11 +100,11 @@ class JobStatus:
     CANCELLED = 'CANCELLED'
     FORCED_OK = 'FORCED_OK'
 
-    
+
     @classmethod
     def all(cls):
         return [
-            cls.PREPARED, cls.SUBMITTED, cls.QUEUED, cls.PENDING,
+            cls.INITIATED, cls.SUBMITTED, cls.QUEUED, cls.PENDING,
             cls.RUNNING, cls.FINISHED, cls.FAILED, cls.CANCEL_REQUESTED,
             cls.CANCELLING, cls.CANCELLED, cls.FORCED_OK
         ]
@@ -101,17 +112,17 @@ class JobStatus:
     def terminal(cls):
         """Terminal statuses - job cannot continue from these"""
         return [cls.FINISHED, cls.FAILED, cls.CANCELLED, cls.FORCED_OK]
-    
+
     @classmethod
     def active(cls):
         """Active statuses - job is still in progress"""
         return [cls.PENDING, cls.RUNNING, cls.CANCEL_REQUESTED, cls.CANCELLING]
-    
+
     @classmethod
     def completed(cls):
         """Completed statuses - job has finished one way or another"""
         return [cls.FINISHED, cls.FORCED_OK]
-    
+
     def __str__(self):
         return self.value
 
@@ -146,4 +157,17 @@ CYCLE_NAME_RULES = {
     'valid_pattern': r'^Analysis-20\d{2}-Q[1-4](-[\w-]+)?$',
     'example': 'Analysis-2025-Q4 OR Analysis-2025-Q4-v1',
     'forbidden_prefixes': ['Active_']
+}
+
+# ============================================================================
+# CONFIGURATION VALIDATION
+# ============================================================================
+
+# List of required tabs in configuration Excel file
+CONFIGURATION_TAB_LIST = ['TAB-A', 'TAB-B']
+
+# Required columns for each configuration tab
+CONFIGURATION_COLUMNS = {
+    'TAB-A': ['A-1', 'A-2', 'A-3'],
+    'TAB-B': ['B-1', 'B-2']
 }

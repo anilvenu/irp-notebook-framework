@@ -5,11 +5,11 @@ IRP Notebook Framework - Cycle Management
 import re
 import shutil
 from pathlib import Path
-from typing import Tuple, Optional, Dict, Any
+from typing import List, Any
 from helpers import database as db
 from .constants import (
     WORKFLOWS_PATH, TEMPLATE_PATH, ARCHIVE_PATH, SYSTEM_USER,
-    CYCLE_NAME_RULES, NOTEBOOK_PATTERN, STAGE_PATTERN, CycleStatus, StepStatus
+    CYCLE_NAME_RULES, NOTEBOOK_PATTERN, STAGE_PATTERN, CycleStatus
 )
 
 
@@ -28,7 +28,6 @@ def delete_archived_cycles() -> int:
     """
     
     return db.execute_command(query)
-
 
 
 def validate_cycle_name(cycle_name: str) -> bool:
@@ -154,6 +153,55 @@ def create_cycle(cycle_name: str, created_by: str = None) -> bool:
         print(f"\nFailed to create cycle: {str(e)}")
         return False
 
+def get_stages_and_steps() -> List[dict]:
+    """
+    Gets stages and steps from Template directory structure.
+        
+    Returns:
+        List of stages and steps
+    """
+    
+    notebooks_dir = TEMPLATE_PATH / "notebooks"
+    
+    if not notebooks_dir.exists():
+        raise Exception(f"Template notebooks directory {notebooks_dir} missing")
+    
+    # Find all stage directories
+    stage_dirs = sorted([d for d in notebooks_dir.iterdir() if d.is_dir() and re.match(STAGE_PATTERN, d.name)])
+
+    results = []    
+    for stage_dir in stage_dirs:
+        # Parse stage info
+        match = re.match(STAGE_PATTERN, stage_dir.name)
+        if not match:
+            continue
+        
+        stage_num = int(match.group(1))
+        stage_name = match.group(2)
+        
+        # Find all step notebooks
+        step_files = sorted([f for f in stage_dir.iterdir() if f.is_file() and re.match(NOTEBOOK_PATTERN, f.name)])
+        
+        for step_file in step_files:
+            # Parse step info
+            match = re.match(NOTEBOOK_PATTERN, step_file.name)
+            if not match:
+                continue
+            step_num = int(match.group(1))
+            step_name = match.group(2)
+            
+            results.append(
+                {
+                    "stage_id": stage_num, 
+                    "stage_name": stage_name, 
+                    "step_id": step_num, 
+                    "step_name": step_name,
+                    "notebook": notebooks_dir / stage_dir.name / step_file.name 
+                    }
+                    )
+        
+    return results
+
 
 def _register_stages_and_steps(cycle_id: int, cycle_dir: Path, apply=False) -> int:
     """
@@ -219,11 +267,25 @@ def _register_stages_and_steps(cycle_id: int, cycle_dir: Path, apply=False) -> i
     return stage_count
 
 
+def get_active_cycle_id(schema: str = 'public') -> int:
+    """
+    Get the ID of the currently active cycle
+
+    Args:
+        schema: Database schema to use (default: 'public')
+
+    Returns:
+        Cycle ID of active cycle, or None if no active cycle
+    """
+    active_cycle = db.get_active_cycle(schema=schema)
+    return active_cycle['id'] if active_cycle else None
+
+
 def get_cycle_status() -> Any:
     """Get status of all cycles"""
-    
+
     query = """
-        SELECT 
+        SELECT
             id,
             cycle_name,
             status,
@@ -231,15 +293,15 @@ def get_cycle_status() -> Any:
             archived_ts,
             created_by
         FROM irp_cycle
-        ORDER BY 
-            CASE status 
+        ORDER BY
+            CASE status
                 WHEN 'ACTIVE' THEN 1
                 WHEN 'ARCHIVED' THEN 2
                 ELSE 3
             END,
             created_ts DESC
     """
-    
+
     return db.execute_query(query)
 
 

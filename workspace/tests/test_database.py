@@ -12,6 +12,7 @@ Run this test:
     python workspace/tests/test_database.py
 """
 
+from datetime import datetime
 import sys
 import time
 from pathlib import Path
@@ -434,36 +435,36 @@ def test_batch_configuration_jsonb():
 
         batch_id = execute_insert(
             "INSERT INTO irp_batch (step_id, batch_name, status) VALUES (%s, %s, %s)",
-            (step_id, 'config_batch', 'PENDING'),
+            (step_id, 'config_batch', 'INITIATED'),
             schema=TEST_SCHEMA
         )
         print(f"  Created batch ID: {batch_id}")
 
         # Bulk insert configurations
         query = """
-            INSERT INTO irp_configuration (batch_id, config_name, config_data, skip)
+            INSERT INTO irp_configuration (cycle_id, configuration_file_name, configuration_data, file_last_updated_ts)
             VALUES (%s, %s, %s, %s)
         """
 
         params_list = [
-            (batch_id, 'config_portfolio_A', {
+            (cycle_id, 'file-A.xlsx', {
                 'portfolio': 'Portfolio_A',
                 'start_date': '2024-01-01',
                 'end_date': '2024-12-31',
                 'parameters': {'risk_level': 'high', 'threshold': 0.95}
-            }, False),
-            (batch_id, 'config_portfolio_B', {
+            },  datetime.now()),
+            (cycle_id, 'file-B.xlsx', {
                 'portfolio': 'Portfolio_B',
                 'start_date': '2024-01-01',
                 'end_date': '2024-12-31',
                 'parameters': {'risk_level': 'medium', 'threshold': 0.85}
-            }, False),
-            (batch_id, 'config_portfolio_C', {
+            }, datetime.now()),
+            (cycle_id, 'file-C.xlsx', {
                 'portfolio': 'Portfolio_C',
                 'start_date': '2024-01-01',
                 'end_date': '2024-12-31',
                 'parameters': {'risk_level': 'low', 'threshold': 0.75}
-            }, True),  # This one is skipped
+            }, datetime.now()),  
         ]
 
         print(f"\nInserting {len(params_list)} configurations with JSONB config_data...")
@@ -477,16 +478,15 @@ def test_batch_configuration_jsonb():
 
         # Verify inserts
         df = execute_query(
-            "SELECT * FROM irp_configuration WHERE batch_id = %s ORDER BY id",
-            (batch_id,),
+            "SELECT * FROM irp_configuration WHERE cycle_id = %s ORDER BY id",
+            (cycle_id,),
             schema=TEST_SCHEMA
         )
         print(f"✓ Verified {len(df)} configurations in database")
         print("\nInserted configurations:")
         for _, row in df.iterrows():
-            skip_status = "SKIPPED" if row['skip'] else "ACTIVE"
-            print(f"  ID {row['id']}: {row['config_name']} ({skip_status})")
-            print(f"    Config Data: {row['config_data']}")
+            print(f"  ID {row['id']}: {row['configuration_file_name']}")
+            print(f"    Config Data: {row['configuration_data']}")
 
         return True
     except Exception as e:
@@ -552,7 +552,7 @@ def run_all_tests():
     print(f"\n{passed}/{total} tests passed")
 
     if passed == total:
-        print("\n🎉 All tests passed!")
+        print("\nAll tests passed!")
     else:
         print(f"\n⚠️  {total - passed} test(s) failed")
 

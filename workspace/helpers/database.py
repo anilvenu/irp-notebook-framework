@@ -322,8 +322,16 @@ def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sq
 # CYCLE OPERATIONS
 # ============================================================================
 
-def get_active_cycle() -> Optional[Dict[str, Any]]:
-    """Get the currently active cycle"""
+def get_active_cycle(schema: str = 'public') -> Optional[Dict[str, Any]]:
+    """
+    Get the currently active cycle
+
+    Args:
+        schema: Database schema to use (default: 'public')
+
+    Returns:
+        Dictionary with cycle information or None if no active cycle
+    """
     query = """
         SELECT id, cycle_name, status, created_ts, created_by, metadata
         FROM irp_cycle
@@ -331,7 +339,7 @@ def get_active_cycle() -> Optional[Dict[str, Any]]:
         ORDER BY created_ts DESC
         LIMIT 1
     """
-    df = execute_query(query)
+    df = execute_query(query, schema=schema)
     return df.iloc[0].to_dict() if not df.empty else None
 
 

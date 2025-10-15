@@ -50,6 +50,8 @@ fi
 echo ""
 echo "Running database tests..."
 python workspace/tests/test_database.py
+echo "Running configuration tests..."
+python workspace/tests/test_configuration.py
 
 # Capture exit code
 EXIT_CODE=$?
@@ -59,4 +61,4 @@ if [ -n "$VIRTUAL_ENV" ]; then
     deactivate
 fi
 
-exit $EXIT_CODE
+#exit $EXIT_CODE

@@ -1,13 +1,14 @@
 -- IRP Notebook Framework Database Schema
--- PostgreSQL Compatible
+-- PostgreSQL
 
 -- Drop tables in correct order (if recreating)
 DROP TABLE IF EXISTS irp_job CASCADE;
-DROP TABLE IF EXISTS irp_configuration CASCADE;
+DROP TABLE IF EXISTS irp_job_configuration CASCADE;
 DROP TABLE IF EXISTS irp_batch CASCADE;
 DROP TABLE IF EXISTS irp_step_run CASCADE;
 DROP TABLE IF EXISTS irp_step CASCADE;
 DROP TABLE IF EXISTS irp_stage CASCADE;
+DROP TABLE IF EXISTS irp_configuration CASCADE;
 DROP TABLE IF EXISTS irp_cycle CASCADE;
 
 -- Drop types if they exist
@@ -19,8 +20,9 @@ DROP TYPE IF EXISTS job_status_enum CASCADE;
 -- Create custom types
 CREATE TYPE cycle_status_enum AS ENUM ('ACTIVE', 'ARCHIVED');
 CREATE TYPE step_status_enum AS ENUM ('RUNNING', 'COMPLETED', 'FAILED', 'SKIPPED');
-CREATE TYPE batch_status_enum AS ENUM ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED');
-CREATE TYPE job_status_enum AS ENUM ('PREPARED', 'SUBMITTED', 'PENDING', 'QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLING', 'CANCELLED', 'FORCED_OK');
+CREATE TYPE configuration_status_enum AS ENUM ('NEW', 'VALID', 'ACTIVE', 'ERROR');
+CREATE TYPE batch_status_enum AS ENUM ('INITIATED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED');
+CREATE TYPE job_status_enum AS ENUM ('INITIATED', 'SUBMITTED', 'PENDING', 'QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLING', 'CANCELLED', 'FORCED_OK');
 
 -- Core Cycle Management
 CREATE TABLE irp_cycle (
@@ -31,6 +33,19 @@ CREATE TABLE irp_cycle (
     archived_ts TIMESTAMPTZ NULL,
     created_by VARCHAR(255) NULL,
     metadata JSONB NULL
+);
+
+-- Configuration for Cycle
+CREATE TABLE irp_configuration (
+    id SERIAL PRIMARY KEY,
+    cycle_id INTEGER NOT NULL,
+    configuration_file_name VARCHAR(2000) NOT NULL,
+    configuration_data JSONB NOT NULL,
+    status configuration_status_enum DEFAULT 'NEW',
+    file_last_updated_ts  TIMESTAMPTZ NOT NULL,
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    updated_ts TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_configuration_cycle FOREIGN KEY (cycle_id) REFERENCES irp_cycle(id) ON DELETE CASCADE
 );
 
 -- Stage Tracking
@@ -71,12 +86,12 @@ CREATE TABLE irp_step_run (
     CONSTRAINT fk_steprun_step FOREIGN KEY (step_id) REFERENCES irp_step(id) ON DELETE CASCADE
 );
 
--- Batch Management (for Phase 2)
+-- Batch Management
 CREATE TABLE irp_batch (
     id SERIAL PRIMARY KEY,
     step_id INTEGER NOT NULL,
     batch_name VARCHAR(255) NOT NULL,
-    status batch_status_enum DEFAULT 'PENDING',
+    status batch_status_enum DEFAULT 'INITIATED',
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     completed_ts TIMESTAMPTZ NULL,
     total_jobs INTEGER DEFAULT 0,
@@ -87,24 +102,26 @@ CREATE TABLE irp_batch (
     CONSTRAINT uq_step_batch UNIQUE(step_id, batch_name)
 );
 
--- Configuration for Cycle
-CREATE TABLE irp_configuration (
+
+-- Configuration for Job
+CREATE TABLE irp_job_configuration (
     id SERIAL PRIMARY KEY,
     batch_id INTEGER NOT NULL,
-    config_name VARCHAR(255) NOT NULL,
-    config_data JSONB NOT NULL,
-    skip BOOLEAN DEFAULT FALSE,
+    configuration_id INTEGER NOT NULL,
+    job_configuration_data JSONB NOT NULL,
     created_ts TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT fk_config_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id) ON DELETE CASCADE
+    updated_ts TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_job_configuration_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id) ON DELETE CASCADE,
+    CONSTRAINT fk_job_configuration_configuration FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id) ON DELETE CASCADE
 );
 
 -- Job Tracking
 CREATE TABLE irp_job (
     id SERIAL PRIMARY KEY,
     batch_id INTEGER NOT NULL,
-    configuration_id INTEGER NOT NULL,
+    job_configuration_id INTEGER NOT NULL,
     workflow_id VARCHAR(255) NULL,
-    status job_status_enum DEFAULT 'PENDING',
+    status job_status_enum DEFAULT 'INITIATED',
     retry_count INTEGER DEFAULT 0,
     last_error TEXT NULL,
     created_ts TIMESTAMPTZ DEFAULT NOW(),
@@ -114,7 +131,7 @@ CREATE TABLE irp_job (
     last_poll_ts TIMESTAMPTZ NULL,
     result_data JSONB NULL,
     CONSTRAINT fk_job_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id) ON DELETE CASCADE,
-    CONSTRAINT fk_job_config FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
+    CONSTRAINT fk_job_configuration FOREIGN KEY (job_configuration_id) REFERENCES irp_job_configuration(id)
 );
 
 -- Create indexes for performance
