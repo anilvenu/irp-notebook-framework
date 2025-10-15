@@ -140,6 +140,26 @@ def transform_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [config.copy()]
 
 
+
+@ConfigurationTransformer.register('multi_job')
+def transform_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Multi-job transformer - creates multiple job configurations from a list.
+
+    Expects config to have a 'jobs' key with a list of job configurations.
+    If 'jobs' key doesn't exist, falls back to single job.
+
+    Args:
+        config: Configuration dictionary with optional 'jobs' key
+
+    Returns:
+        List of job configurations
+    """
+    if 'jobs' in config and isinstance(config['jobs'], list):
+        return config['jobs']
+    return [config.copy()]
+
+
 def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]:
     """
     Read configuration by ID

@@ -41,9 +41,6 @@ from helpers.constants import ConfigurationStatus
 TEST_SCHEMA = 'test'
 TEST_EXCEL_PATH = str(Path(__file__).parent / 'test_configuration.xlsx')
 
-TEST_SCHEMA = 'test'
-
-
 def setup_test_schema():
     """Initialize test schema with database tables"""
     print("\n" + "="*80)
@@ -529,7 +526,7 @@ def test_configuration_transformer_multi_job():
     try:
         # Test with jobs list
         config_with_jobs = {
-            'batch_name': 'test_batch',
+            'batch_type': 'test_batch',
             'jobs': [
                 {'job_id': 1, 'param': 'A'},
                 {'job_id': 2, 'param': 'B'},

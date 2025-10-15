@@ -67,10 +67,10 @@ class StepStatus:
 class BatchStatus:
     INITIATED = 'INITIATED'
     ACTIVE = 'ACTIVE'
-    COMPLETED = 'FINISHED'
+    COMPLETED = 'COMPLETED'
     FAILED = 'FAILED'
     CANCELLED = 'CANCELLED'
-    
+
     @classmethod
     def all(cls):
         return [cls.INITIATED, cls.ACTIVE, cls.COMPLETED, cls.FAILED, cls.CANCELLED]
