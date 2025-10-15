@@ -251,8 +251,11 @@ def test_create_batch_default():
             step_id=step_id,
             schema=TEST_SCHEMA
         )
-
         print(f"✓ Batch created successfully: {batch_id}")
+
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
+        print(f"✓ Batch submiited successfully: {batch_id}")
 
         # Verify batch
         batch = read_batch(batch_id, schema=TEST_SCHEMA)
@@ -332,8 +335,11 @@ def test_create_batch_multi_job():
             step_id=step_id,
             schema=TEST_SCHEMA
         )
-
         print(f"✓ Batch created successfully: {batch_id}")
+
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
+        print(f"✓ Batch submiited successfully: {batch_id}")
 
         # Verify jobs were created
         jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)
@@ -430,6 +436,8 @@ def test_recon_batch_all_completed():
 
         # Create batch with jobs
         batch_id = create_batch('default', config_id, step_id, schema=TEST_SCHEMA)
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
 
         # Get jobs and mark them as FINISHED
         jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)
@@ -469,6 +477,7 @@ def test_recon_batch_with_failures():
         cycle_id, stage_id, step_id, config_id = create_test_hierarchy('test_recon_failed')
 
         batch_id = create_batch('default', config_id, step_id, schema=TEST_SCHEMA)
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
 
         # Get jobs and mark some as FAILED
         jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)
@@ -503,6 +512,7 @@ def test_recon_batch_all_cancelled():
         cycle_id, stage_id, step_id, config_id = create_test_hierarchy('test_recon_cancelled')
 
         batch_id = create_batch('default', config_id, step_id, schema=TEST_SCHEMA)
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
 
         # Get jobs and mark them as CANCELLED
         jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)

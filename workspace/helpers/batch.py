@@ -324,9 +324,6 @@ def create_batch(
                 schema=schema
             )
 
-        # Submit batch
-        submit_batch(batch_id, schema=schema)
-
         return batch_id
 
     except Exception as e:

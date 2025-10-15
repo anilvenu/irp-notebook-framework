@@ -151,7 +151,7 @@ def test_end_to_end_batch_workflow():
         print("Setting up test data...")
         cycle_id, stage_id, step_id, config_id = create_test_hierarchy('test_e2e')
 
-        # Step 1: Create batch (automatically submits)
+        # Step 1: Create batch (and submit)
         print("\nStep 1: Creating batch...")
         batch_id = create_batch(
             batch_type='default',
@@ -159,6 +159,8 @@ def test_end_to_end_batch_workflow():
             step_id=step_id,
             schema=TEST_SCHEMA
         )
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
         print(f"✓ Batch created and submitted: {batch_id}")
 
         # Step 2: Verify batch is ACTIVE
@@ -248,6 +250,9 @@ def test_multi_job_batch_workflow():
             schema=TEST_SCHEMA
         )
         print(f"✓ Batch created: {batch_id}")
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
+        print(f"✓ Batch submitted: {batch_id}")
 
         # Verify 5 jobs created
         jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)
@@ -289,6 +294,9 @@ def test_job_resubmission_workflow():
 
         # Create batch
         batch_id = create_batch('default', config_id, step_id, schema=TEST_SCHEMA)
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
+        
         original_jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)
         original_job_id = original_jobs[0]['id']
 
@@ -352,6 +360,9 @@ def test_configuration_override_workflow():
 
         # Create batch
         batch_id = create_batch('default', config_id, step_id, schema=TEST_SCHEMA)
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
+
         original_jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)
         original_job_id = original_jobs[0]['id']
 
@@ -424,6 +435,9 @@ def test_mixed_job_states_recon():
 
         # Create batch
         batch_id = create_batch('multi_job', config_id, step_id, schema=TEST_SCHEMA)
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
+
         jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)
 
         # Set jobs to different states
@@ -489,6 +503,9 @@ def test_parent_child_job_chain():
 
         # Create batch
         batch_id = create_batch('default', config_id, step_id, schema=TEST_SCHEMA)
+        # Submit batch
+        submit_batch(batch_id, schema=TEST_SCHEMA)        
+
         jobs = get_batch_jobs(batch_id, schema=TEST_SCHEMA)
         original_job_id = jobs[0]['id']
 
