@@ -479,7 +479,7 @@ def create_step_run(step_id: int, started_by: str) -> Tuple[int, int]:
     # Create run
     query = """
         INSERT INTO irp_step_run (step_id, run_number, status, started_by)
-        VALUES (%s, %s, 'RUNNING', %s)
+        VALUES (%s, %s, 'ACTIVE', %s)
     """
     run_id = execute_insert(query, (step_id, run_number, started_by))
     

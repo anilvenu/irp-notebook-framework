@@ -19,9 +19,9 @@ DROP TYPE IF EXISTS job_status_enum CASCADE;
 
 -- Create custom types
 CREATE TYPE cycle_status_enum AS ENUM ('ACTIVE', 'ARCHIVED');
-CREATE TYPE step_status_enum AS ENUM ('RUNNING', 'COMPLETED', 'FAILED', 'SKIPPED');
+CREATE TYPE step_status_enum AS ENUM ('ACTIVE', 'COMPLETED', 'FAILED', 'SKIPPED');
 CREATE TYPE configuration_status_enum AS ENUM ('NEW', 'VALID', 'ACTIVE', 'ERROR');
-CREATE TYPE batch_status_enum AS ENUM ('INITIATED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED');
+CREATE TYPE batch_status_enum AS ENUM ('INITIATED', 'ACTIVE', 'COMPLETED', 'FAILED', 'CANCELLED');
 CREATE TYPE job_status_enum AS ENUM ('INITIATED', 'SUBMITTED', 'PENDING', 'QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLING', 'CANCELLED', 'FORCED_OK');
 
 -- Core Cycle Management
@@ -77,7 +77,7 @@ CREATE TABLE irp_step_run (
     id SERIAL PRIMARY KEY,
     step_id INTEGER NOT NULL,
     run_number INTEGER NOT NULL,
-    status step_status_enum DEFAULT 'RUNNING',
+    status step_status_enum DEFAULT 'ACTIVE',
     started_ts TIMESTAMPTZ DEFAULT NOW(),
     completed_ts TIMESTAMPTZ NULL,
     started_by VARCHAR(255) NULL,
@@ -98,7 +98,7 @@ CREATE TABLE irp_batch (
     completed_jobs INTEGER DEFAULT 0,
     failed_jobs INTEGER DEFAULT 0,
     metadata JSONB NULL,
-    CONSTRAINT fk_batch_step FOREIGN KEY (step_id) REFERENCES irp_step(id) ON DELETE CASCADE,
+    CONSTRAINT fk_batch_step FOREIGN KEY (step_id) REFERENCES irp_step(id),
     CONSTRAINT uq_step_batch UNIQUE(step_id, batch_name)
 );
 
@@ -111,8 +111,8 @@ CREATE TABLE irp_job_configuration (
     job_configuration_data JSONB NOT NULL,
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     updated_ts TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT fk_job_configuration_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id) ON DELETE CASCADE,
-    CONSTRAINT fk_job_configuration_configuration FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id) ON DELETE CASCADE
+    CONSTRAINT fk_job_configuration_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id),
+    CONSTRAINT fk_job_configuration_configuration FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
 );
 
 -- Job Tracking
