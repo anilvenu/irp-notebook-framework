@@ -15,10 +15,29 @@ class DatabaseError(Exception):
 
 
 # Create SQLAlchemy engine
-def get_engine():
-    """Get SQLAlchemy engine"""
+def get_engine(schema: str = 'public'):
+    """
+    Get SQLAlchemy engine
+
+    Args:
+        schema: Database schema to use (default: 'public')
+
+    Returns:
+        SQLAlchemy engine
+    """
     db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
-    return create_engine(db_url, poolclass=NullPool)
+    engine = create_engine(db_url, poolclass=NullPool)
+
+    # Note: We set search_path per connection, not here
+    return engine
+
+
+def _set_schema(conn, schema: str):
+    """Helper to set schema for a connection"""
+    if schema and schema != 'public':
+        conn.execute(text(f"SET search_path TO {schema}, public"))
+    else:
+        conn.execute(text("SET search_path TO public"))
 
 
 def _convert_query_params(query: str, params: tuple = None):
@@ -32,9 +51,10 @@ def _convert_query_params(query: str, params: tuple = None):
     
     # Find all %s placeholders
     placeholders = list(re.finditer(r'%s', query))
-    
+
     # Replace each %s with :param0, :param1, etc. (in reverse to maintain positions)
     for i, match in enumerate(reversed(placeholders)):
+
         param_name = f'param{len(placeholders) - i - 1}'
         param_dict[param_name] = params[len(placeholders) - i - 1]
         modified_query = modified_query[:match.start()] + f':{param_name}' + modified_query[match.end():]
@@ -42,57 +62,70 @@ def _convert_query_params(query: str, params: tuple = None):
     return modified_query, param_dict
 
 
-def test_connection() -> bool:
-    """Test database connectivity"""
+def test_connection(schema: str = 'public') -> bool:
+    """
+    Test database connectivity
+
+    Args:
+        schema: Database schema to test (default: 'public')
+
+    Returns:
+        True if connection successful
+    """
     try:
         engine = get_engine()
         with engine.connect() as conn:
+            _set_schema(conn, schema)
             conn.execute(text("SELECT 1"))
         return True
     except:
         return False
 
 
-def execute_query(query: str, params: tuple = None) -> pd.DataFrame:
+def execute_query(query: str, params: tuple = None, schema: str = 'public') -> pd.DataFrame:
     """
     Execute SELECT query and return results as DataFrame
-    
+
     Args:
         query: SQL query string
         params: Query parameters (optional)
-    
+        schema: Database schema to use (default: 'public')
+
     Returns:
         DataFrame with query results
     """
     try:
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
-        
+
         engine = get_engine()
         with engine.connect() as conn:
+            _set_schema(conn, schema)
             df = pd.read_sql_query(text(converted_query), conn, params=param_dict)
         return df
     except Exception as e:
         raise DatabaseError(f"Query failed: {str(e)}")
 
 
-def execute_scalar(query: str, params: tuple = None) -> Any:
+def execute_scalar(query: str, params: tuple = None, schema: str = 'public') -> Any:
     """
     Execute query and return single scalar value
-    
+
     Args:
         query: SQL query string
         params: Query parameters (optional)
-    
+        schema: Database schema to use (default: 'public')
+
     Returns:
         Single value from query
     """
     try:
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
-        
+
         engine = get_engine()
         with engine.connect() as conn:
+            _set_schema(conn, schema)
             result = conn.execute(text(converted_query), param_dict)
             row = result.fetchone()
             return row[0] if row else None
@@ -100,23 +133,25 @@ def execute_scalar(query: str, params: tuple = None) -> Any:
         raise DatabaseError(f"Scalar query failed: {str(e)}")
 
 
-def execute_command(query: str, params: tuple = None) -> int:
+def execute_command(query: str, params: tuple = None, schema: str = 'public') -> int:
     """
     Execute INSERT/UPDATE/DELETE and return rows affected
-    
+
     Args:
         query: SQL query string
         params: Query parameters (optional)
-    
+        schema: Database schema to use (default: 'public')
+
     Returns:
         Number of rows affected
     """
     try:
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
-        
+
         engine = get_engine()
         with engine.connect() as conn:
+            _set_schema(conn, schema)
             result = conn.execute(text(converted_query), param_dict)
             conn.commit()
             return result.rowcount
@@ -124,14 +159,15 @@ def execute_command(query: str, params: tuple = None) -> int:
         raise DatabaseError(f"Command failed: {str(e)}")
 
 
-def execute_insert(query: str, params: tuple = None) -> int:
+def execute_insert(query: str, params: tuple = None, schema: str = 'public') -> int:
     """
     Execute INSERT and return new record ID
-    
+
     Args:
         query: SQL INSERT query string
         params: Query parameters (optional)
-    
+        schema: Database schema to use (default: 'public')
+
     Returns:
         ID of newly inserted record
     """
@@ -139,12 +175,13 @@ def execute_insert(query: str, params: tuple = None) -> int:
         # Add RETURNING id if not present
         if "RETURNING" not in query.upper():
             query = query + " RETURNING id"
-        
+
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
-        
+
         engine = get_engine()
         with engine.connect() as conn:
+            _set_schema(conn, schema)
             result = conn.execute(text(converted_query), param_dict)
             conn.commit()
             row = result.fetchone()
@@ -153,34 +190,130 @@ def execute_insert(query: str, params: tuple = None) -> int:
         raise DatabaseError(f"Insert failed: {str(e)}")
 
 
-def init_database() -> bool:
+def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] = None, schema: str = 'public') -> List[int]:
+    """
+    Execute bulk INSERT and return list of new record IDs
+
+    This function efficiently inserts multiple records in a single transaction.
+    If any insert fails, the entire operation is rolled back.
+
+    Args:
+        query: SQL INSERT query string with placeholders (%s)
+        params_list: List of tuples, each containing parameters for one insert
+        jsonb_columns: Optional list of column indices (0-based) that contain JSONB data.
+                      Dicts at these positions will be automatically converted to JSON strings.
+        schema: Database schema to use (default: 'public')
+
+    Returns:
+        List of IDs for newly inserted records (in order)
+
+    Example:
+        # Basic insert
+        query = "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)"
+        params = [
+            ('cycle1', 'ACTIVE', 'user1'),
+            ('cycle2', 'ACTIVE', 'user2')
+        ]
+        ids = bulk_insert(query, params)
+
+        # Insert with JSONB
+        query = "INSERT INTO irp_cycle (cycle_name, status, metadata) VALUES (%s, %s, %s)"
+        params = [
+            ('cycle1', 'ACTIVE', {'key': 'value1'}),
+            ('cycle2', 'ACTIVE', {'key': 'value2'})
+        ]
+        ids = bulk_insert(query, params, jsonb_columns=[2])
+
+        # Test insert (using test schema)
+        ids = bulk_insert(query, params, schema='test')
+    """
+    import json
+
+    if not params_list:
+        return []
+
+    try:
+        # Add RETURNING id if not present
+        if "RETURNING" not in query.upper():
+            query = query + " RETURNING id"
+
+        # Process JSONB columns if specified
+        processed_params = []
+        for params in params_list:
+            if jsonb_columns:
+                # Convert to list for modification
+                params_list_item = list(params)
+                for col_idx in jsonb_columns:
+                    if col_idx < len(params_list_item) and params_list_item[col_idx] is not None:
+                        # Convert dict to JSON string if needed
+                        if isinstance(params_list_item[col_idx], dict):
+                            params_list_item[col_idx] = json.dumps(params_list_item[col_idx])
+                processed_params.append(tuple(params_list_item))
+            else:
+                processed_params.append(params)
+
+        engine = get_engine()
+        inserted_ids = []
+
+        with engine.connect() as conn:
+            _set_schema(conn, schema)
+
+            # Execute all inserts in a single transaction
+            for params in processed_params:
+                # Convert query params for each insert
+                converted_query, param_dict = _convert_query_params(query, params)
+                result = conn.execute(text(converted_query), param_dict)
+                row = result.fetchone()
+                if row:
+                    inserted_ids.append(row[0])
+
+            # Commit all inserts at once
+            conn.commit()
+
+        return inserted_ids
+
+    except Exception as e:
+        raise DatabaseError(f"Bulk insert failed: {str(e)}")
+
+
+def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sql') -> bool:
     """
     Initialize database by running SQL script
-    
+
+    Args:
+        schema: Database schema to use (default: 'public')
+        sql_file_name: Name of SQL initialization file (default: 'init_database.sql')
+
     Returns:
         True if successful
     """
     try:
         from pathlib import Path
-        
+
         # Read SQL initialization script
-        sql_file = Path(__file__).parent / 'db' / 'init_database.sql'
-        
+        sql_file = Path(__file__).parent / 'db' / sql_file_name
+
         if not sql_file.exists():
             raise DatabaseError(f"SQL file not found: {sql_file}")
-        
+
         with open(sql_file, 'r') as f:
             sql_script = f.read()
-        
+
         # Execute script
         engine = get_engine()
         with engine.connect() as conn:
+            # Create schema if not public
+            if schema != 'public':
+                conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+                _set_schema(conn, schema)
+
+            # Execute the SQL script
             conn.execute(text(sql_script))
             conn.commit()
-        
-        print("Database initialized successfully")
+
+        print(f"Database initialized successfully (schema: {schema})")
         return True
-        
+
     except Exception as e:
         print(f"Database initialization failed: {str(e)}")
         return False
@@ -232,6 +365,16 @@ def archive_cycle(cycle_id: int) -> bool:
     """
     rows = execute_command(query, (CycleStatus.ARCHIVED, cycle_id))
     return rows > 0
+
+def delete_cycle(cycle_id: int) -> bool:
+    """Hard delete a cycle"""
+    query = """
+        DELETE FROM irp_cycle
+        WHERE id = %s
+    """
+    rows = execute_command(query, (cycle_id))
+    return rows > 0
+
 
 # ============================================================================
 # STAGE OPERATIONS
