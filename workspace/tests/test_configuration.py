@@ -33,7 +33,8 @@ from helpers.configuration import (
     read_configuration,
     update_configuration_status,
     load_configuration_file,
-    ConfigurationError
+    ConfigurationError,
+    ConfigurationTransformer
 )
 from helpers.constants import ConfigurationStatus
 
@@ -452,6 +453,223 @@ def test_load_configuration_duplicate_active():
         return False
 
 
+def test_configuration_transformer_default():
+    """Test 7: ConfigurationTransformer - default type"""
+    print("\n" + "="*80)
+    print("TEST 7: ConfigurationTransformer - Default Type")
+    print("="*80)
+
+    try:
+        config = {
+            'param1': 'value1',
+            'param2': 100,
+            'nested': {'key': 'value'}
+        }
+
+        print("Testing default transformer...")
+        result = ConfigurationTransformer.get_job_configurations('default', config)
+
+        print(f"✓ Transformation successful")
+        print(f"  Input config: {config}")
+        print(f"  Output jobs: {len(result)}")
+        print(f"  Job config: {result[0]}")
+
+        # Verify results
+        assert len(result) == 1, "Should return single job config"
+        assert result[0] == config, "Should copy config as-is"
+        assert result[0] is not config, "Should be a copy, not the same object"
+
+        print("✓ All assertions passed")
+        return True
+
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_configuration_transformer_passthrough():
+    """Test 8: ConfigurationTransformer - passthrough type"""
+    print("\n" + "="*80)
+    print("TEST 8: ConfigurationTransformer - Passthrough Type")
+    print("="*80)
+
+    try:
+        config = {'data': 'test', 'count': 5}
+
+        print("Testing passthrough transformer...")
+        result = ConfigurationTransformer.get_job_configurations('passthrough', config)
+
+        print(f"✓ Transformation successful")
+        print(f"  Input config: {config}")
+        print(f"  Output jobs: {len(result)}")
+
+        # Verify results
+        assert len(result) == 1, "Should return single job config"
+        assert result[0] == config, "Should return same config"
+        assert result[0] is config, "Should be the same object (not a copy)"
+
+        print("✓ All assertions passed")
+        return True
+
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_configuration_transformer_multi_job():
+    """Test 9: ConfigurationTransformer - multi_job type"""
+    print("\n" + "="*80)
+    print("TEST 9: ConfigurationTransformer - Multi Job Type")
+    print("="*80)
+
+    try:
+        # Test with jobs list
+        config_with_jobs = {
+            'batch_name': 'test_batch',
+            'jobs': [
+                {'job_id': 1, 'param': 'A'},
+                {'job_id': 2, 'param': 'B'},
+                {'job_id': 3, 'param': 'C'}
+            ]
+        }
+
+        print("Testing multi_job transformer with jobs list...")
+        result = ConfigurationTransformer.get_job_configurations('multi_job', config_with_jobs)
+
+        print(f"✓ Transformation successful")
+        print(f"  Input config with {len(config_with_jobs['jobs'])} jobs")
+        print(f"  Output jobs: {len(result)}")
+
+        assert len(result) == 3, "Should return 3 job configs"
+        assert result[0] == {'job_id': 1, 'param': 'A'}
+        assert result[1] == {'job_id': 2, 'param': 'B'}
+        assert result[2] == {'job_id': 3, 'param': 'C'}
+
+        print("✓ Jobs list test passed")
+
+        # Test without jobs list (fallback)
+        config_no_jobs = {'single_job': 'data'}
+
+        print("\nTesting multi_job transformer without jobs list (fallback)...")
+        result = ConfigurationTransformer.get_job_configurations('multi_job', config_no_jobs)
+
+        print(f"  Output jobs: {len(result)}")
+
+        assert len(result) == 1, "Should return single job config"
+        assert result[0] == config_no_jobs
+
+        print("✓ Fallback test passed")
+        return True
+
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_configuration_transformer_unknown_type():
+    """Test 10: ConfigurationTransformer - unknown type error"""
+    print("\n" + "="*80)
+    print("TEST 10: ConfigurationTransformer - Unknown Type Error")
+    print("="*80)
+
+    try:
+        config = {'data': 'test'}
+
+        print("Testing transformer with unknown type...")
+        try:
+            result = ConfigurationTransformer.get_job_configurations('nonexistent_type', config)
+            print(f"✗ Expected error but got success: {result}")
+            return False
+        except ConfigurationError as e:
+            print(f"✓ Correctly caught error: {e}")
+            assert 'nonexistent_type' in str(e)
+            assert 'Available types' in str(e)
+
+        print("✓ Error handling test passed")
+        return True
+
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_configuration_transformer_list_types():
+    """Test 11: ConfigurationTransformer - list registered types"""
+    print("\n" + "="*80)
+    print("TEST 11: ConfigurationTransformer - List Registered Types")
+    print("="*80)
+
+    try:
+        print("Getting list of registered transformer types...")
+        types = ConfigurationTransformer.list_types()
+
+        print(f"✓ Found {len(types)} registered types:")
+        for t in types:
+            print(f"  - {t}")
+
+        # Verify expected types are registered
+        assert 'default' in types, "Should have 'default' type"
+        assert 'passthrough' in types, "Should have 'passthrough' type"
+        assert 'multi_job' in types, "Should have 'multi_job' type"
+
+        print("✓ All expected types are registered")
+        return True
+
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_configuration_transformer_custom_registration():
+    """Test 12: ConfigurationTransformer - custom registration"""
+    print("\n" + "="*80)
+    print("TEST 12: ConfigurationTransformer - Custom Registration")
+    print("="*80)
+
+    try:
+        # Register a custom transformer for testing
+        @ConfigurationTransformer.register('test_custom')
+        def transform_custom(config):
+            """Custom transformer that doubles values"""
+            return [
+                {'value': config.get('value', 0) * 2},
+                {'value': config.get('value', 0) * 3}
+            ]
+
+        print("Registered custom transformer 'test_custom'")
+
+        # Test the custom transformer
+        config = {'value': 10}
+        result = ConfigurationTransformer.get_job_configurations('test_custom', config)
+
+        print(f"✓ Custom transformation successful")
+        print(f"  Input: {config}")
+        print(f"  Output: {result}")
+
+        assert len(result) == 2, "Should return 2 job configs"
+        assert result[0] == {'value': 20}, "First job should have doubled value"
+        assert result[1] == {'value': 30}, "Second job should have tripled value"
+
+        print("✓ Custom transformer works correctly")
+        return True
+
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def run_all_tests():
     """Run all tests and report results"""
     print("\n" + "="*80)
@@ -478,6 +696,12 @@ def run_all_tests():
         ("Validation Errors", test_load_configuration_file_validation_errors),
         ("Active Cycle Validation", test_load_configuration_active_cycle_check),
         ("Prevent Duplicate ACTIVE", test_load_configuration_duplicate_active),
+        ("Transformer - Default Type", test_configuration_transformer_default),
+        ("Transformer - Passthrough Type", test_configuration_transformer_passthrough),
+        ("Transformer - Multi Job Type", test_configuration_transformer_multi_job),
+        ("Transformer - Unknown Type Error", test_configuration_transformer_unknown_type),
+        ("Transformer - List Types", test_configuration_transformer_list_types),
+        ("Transformer - Custom Registration", test_configuration_transformer_custom_registration),
     ]
 
 

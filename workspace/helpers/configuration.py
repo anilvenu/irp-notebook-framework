@@ -5,7 +5,7 @@ IRP Notebook Framework - Configuration Management
 import json
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 import pandas as pd
 
@@ -17,6 +17,127 @@ from helpers.cycle import get_active_cycle_id
 class ConfigurationError(Exception):
     """Custom exception for configuration errors"""
     pass
+
+
+class ConfigurationTransformer:
+    """
+    Transform configuration data into job configurations based on batch type.
+
+    Uses a registry pattern to map batch types to transformation functions.
+    Each transformation function takes a configuration dict and returns a list
+    of job configuration dicts.
+    """
+
+    # Registry mapping batch type to transformation function
+    _transformers = {}
+
+    @classmethod
+    def register(cls, batch_type: str):
+        """
+        Decorator to register a transformation function for a batch type.
+
+        Usage:
+            @ConfigurationTransformer.register('my_batch_type')
+            def transform_my_type(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+                # Transform logic here
+                return [job_config1, job_config2, ...]
+
+        Args:
+            batch_type: The batch type identifier
+        """
+        def decorator(func):
+            cls._transformers[batch_type] = func
+            return func
+        return decorator
+
+    @classmethod
+    def get_job_configurations(
+        cls,
+        batch_type: str,
+        configuration: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Transform configuration into job configurations based on batch type.
+
+        Args:
+            batch_type: The type of batch (e.g., 'default', 'portfolio', etc.)
+            configuration: The configuration dictionary to transform
+
+        Returns:
+            List of job configuration dictionaries
+
+        Raises:
+            ConfigurationError: If batch type is not registered
+        """
+        if batch_type not in cls._transformers:
+            raise ConfigurationError(
+                f"No transformer registered for batch type '{batch_type}'. "
+                f"Available types: {list(cls._transformers.keys())}"
+            )
+
+        transformer_func = cls._transformers[batch_type]
+        return transformer_func(configuration)
+
+    @classmethod
+    def list_types(cls) -> List[str]:
+        """
+        Get list of registered batch types.
+
+        Returns:
+            List of registered batch type names
+        """
+        return list(cls._transformers.keys())
+
+
+# ============================================================================
+# DEFAULT TRANSFORMERS
+# ============================================================================
+
+@ConfigurationTransformer.register('default')
+def transform_default(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Default transformer - creates a single job configuration by copying config as-is.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List containing a single job configuration
+    """
+    return [config.copy()]
+
+
+@ConfigurationTransformer.register('passthrough')
+def transform_passthrough(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Passthrough transformer - returns config unchanged (no copy).
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List containing the original configuration
+    """
+    return [config]
+
+
+@ConfigurationTransformer.register('multi_job')
+def transform_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Multi-job transformer - creates multiple job configurations from a list.
+
+    Expects config to have a 'jobs' key with a list of job configurations.
+    If 'jobs' key doesn't exist, falls back to single job.
+
+    Args:
+        config: Configuration dictionary with optional 'jobs' key
+
+    Returns:
+        List of job configurations
+    """
+    if 'jobs' in config and isinstance(config['jobs'], list):
+        return config['jobs']
+    return [config.copy()]
 
 
 def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]:
