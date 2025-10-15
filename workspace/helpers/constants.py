@@ -49,14 +49,14 @@ class CycleStatus:
 
 
 class StepStatus:
-    RUNNING = 'RUNNING'
+    ACTIVE = 'ACTIVE'
     COMPLETED = 'COMPLETED'
     FAILED = 'FAILED'
     SKIPPED = 'SKIPPED'
     
     @classmethod
     def all(cls):
-        return [cls.RUNNING, cls.COMPLETED, cls.FAILED, cls.SKIPPED]
+        return [cls.ACTIVE, cls.COMPLETED, cls.FAILED, cls.SKIPPED]
     
     @classmethod
     def terminal(cls):
@@ -66,14 +66,14 @@ class StepStatus:
 
 class BatchStatus:
     INITIATED = 'INITIATED'
-    RUNNING = 'RUNNING'
+    ACTIVE = 'ACTIVE'
     COMPLETED = 'FINISHED'
     FAILED = 'FAILED'
     CANCELLED = 'CANCELLED'
     
     @classmethod
     def all(cls):
-        return [cls.INITIATED, cls.RUNNING, cls.COMPLETED, cls.FAILED, cls.CANCELLED]
+        return [cls.INITIATED, cls.ACTIVE, cls.COMPLETED, cls.FAILED, cls.CANCELLED]
 
 
 class ConfigurationStatus:

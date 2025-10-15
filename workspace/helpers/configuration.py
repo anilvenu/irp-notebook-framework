@@ -90,7 +90,7 @@ class ConfigurationTransformer:
 
 
 # ============================================================================
-# DEFAULT TRANSFORMERS
+# TRANSFORMERS
 # ============================================================================
 
 @ConfigurationTransformer.register('default')
