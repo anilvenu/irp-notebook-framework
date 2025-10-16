@@ -50,8 +50,22 @@ fi
 echo ""
 echo "Running database tests..."
 python workspace/tests/test_database.py
+
+echo ""
 echo "Running configuration tests..."
 python workspace/tests/test_configuration.py
+
+echo ""
+echo "Running batch management tests..."
+python workspace/tests/test_batch.py
+
+echo ""
+echo "Running job management tests..."
+python workspace/tests/test_job.py
+
+echo ""
+echo "Running batch/job integration tests..."
+python workspace/tests/test_batch_job_integration.py
 
 # Capture exit code
 EXIT_CODE=$?

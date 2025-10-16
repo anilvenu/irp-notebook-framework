@@ -140,6 +140,7 @@ def transform_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [config.copy()]
 
 
+
 def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]:
     """
     Read configuration by ID

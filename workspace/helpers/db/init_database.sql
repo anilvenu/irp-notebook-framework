@@ -2,6 +2,8 @@
 -- PostgreSQL
 
 -- Drop tables in correct order (if recreating)
+DROP TABLE IF EXISTS irp_job_tracking_log CASCADE;
+DROP TABLE IF EXISTS irp_batch_recon_log CASCADE;
 DROP TABLE IF EXISTS irp_job CASCADE;
 DROP TABLE IF EXISTS irp_job_configuration CASCADE;
 DROP TABLE IF EXISTS irp_batch CASCADE;
@@ -16,13 +18,14 @@ DROP TYPE IF EXISTS cycle_status_enum CASCADE;
 DROP TYPE IF EXISTS step_status_enum CASCADE;
 DROP TYPE IF EXISTS batch_status_enum CASCADE;
 DROP TYPE IF EXISTS job_status_enum CASCADE;
+DROP TYPE IF EXISTS configuration_status_enum CASCADE;
 
 -- Create custom types
 CREATE TYPE cycle_status_enum AS ENUM ('ACTIVE', 'ARCHIVED');
 CREATE TYPE step_status_enum AS ENUM ('ACTIVE', 'COMPLETED', 'FAILED', 'SKIPPED');
 CREATE TYPE configuration_status_enum AS ENUM ('NEW', 'VALID', 'ACTIVE', 'ERROR');
 CREATE TYPE batch_status_enum AS ENUM ('INITIATED', 'ACTIVE', 'COMPLETED', 'FAILED', 'CANCELLED');
-CREATE TYPE job_status_enum AS ENUM ('INITIATED', 'SUBMITTED', 'PENDING', 'QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLING', 'CANCELLED', 'FORCED_OK');
+CREATE TYPE job_status_enum AS ENUM ('INITIATED', 'SUBMITTED', 'PENDING', 'QUEUED', 'RUNNING', 'FINISHED', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLING', 'CANCELLED', 'FORCED_OK');
 
 -- Core Cycle Management
 CREATE TABLE irp_cycle (
@@ -90,25 +93,35 @@ CREATE TABLE irp_step_run (
 CREATE TABLE irp_batch (
     id SERIAL PRIMARY KEY,
     step_id INTEGER NOT NULL,
-    batch_name VARCHAR(255) NOT NULL,
+    configuration_id INTEGER NOT NULL,
+    batch_type VARCHAR(255) NOT NULL,
     status batch_status_enum DEFAULT 'INITIATED',
-    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    submitted_ts TIMESTAMPTZ NULL,
     completed_ts TIMESTAMPTZ NULL,
     total_jobs INTEGER DEFAULT 0,
     completed_jobs INTEGER DEFAULT 0,
     failed_jobs INTEGER DEFAULT 0,
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    updated_ts TIMESTAMPTZ DEFAULT NOW(),
     metadata JSONB NULL,
     CONSTRAINT fk_batch_step FOREIGN KEY (step_id) REFERENCES irp_step(id),
+<<<<<<< HEAD
     CONSTRAINT uq_step_batch UNIQUE(step_id, batch_name)
+=======
+    CONSTRAINT fk_batch_configuration FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
+>>>>>>> main
 );
 
 
 -- Configuration for Job
 CREATE TABLE irp_job_configuration (
-    id SERIAL PRIMARY KEY,
+    id SERIAL PRIMARY KEY,    
     batch_id INTEGER NOT NULL,
     configuration_id INTEGER NOT NULL,
     job_configuration_data JSONB NOT NULL,
+    skipped BOOLEAN DEFAULT False,
+    overridden BOOLEAN DEFAULT False,
+    override_reason_txt VARCHAR(1000),
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     updated_ts TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT fk_job_configuration_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id),
@@ -120,18 +133,41 @@ CREATE TABLE irp_job (
     id SERIAL PRIMARY KEY,
     batch_id INTEGER NOT NULL,
     job_configuration_id INTEGER NOT NULL,
-    workflow_id VARCHAR(255) NULL,
+    moodys_workflow_id VARCHAR(50) NULL,
     status job_status_enum DEFAULT 'INITIATED',
-    retry_count INTEGER DEFAULT 0,
+    skipped BOOLEAN DEFAULT False,
     last_error TEXT NULL,
-    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    parent_job_id INTEGER,
     submitted_ts TIMESTAMPTZ NULL,
     completed_ts TIMESTAMPTZ NULL,
-    poll_count INTEGER DEFAULT 0,
     last_poll_ts TIMESTAMPTZ NULL,
-    result_data JSONB NULL,
+    created_ts TIMESTAMPTZ DEFAULT NOW(),
+    updated_ts TIMESTAMPTZ DEFAULT NOW(),
+    submission_request JSONB NULL,
+    submission_response JSONB NULL,
     CONSTRAINT fk_job_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id) ON DELETE CASCADE,
     CONSTRAINT fk_job_configuration FOREIGN KEY (job_configuration_id) REFERENCES irp_job_configuration(id)
+);
+
+-- Batch Reconciliation Log
+CREATE TABLE irp_batch_recon_log (
+    id SERIAL PRIMARY KEY,
+    batch_id INTEGER NOT NULL,
+    recon_ts TIMESTAMPTZ DEFAULT NOW(),
+    recon_result batch_status_enum NOT NULL,
+    recon_summary JSONB NOT NULL,
+    CONSTRAINT fk_recon_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id) ON DELETE CASCADE
+);
+
+-- Job Tracking Log
+CREATE TABLE irp_job_tracking_log (
+    id SERIAL PRIMARY KEY,
+    job_id INTEGER NOT NULL,
+    tracked_ts TIMESTAMPTZ DEFAULT NOW(),
+    moodys_workflow_id VARCHAR(50) NOT NULL,
+    job_status job_status_enum NOT NULL,
+    response_data JSONB NULL,
+    CONSTRAINT fk_tracking_job FOREIGN KEY (job_id) REFERENCES irp_job(id) ON DELETE CASCADE
 );
 
 -- Create indexes for performance
@@ -139,8 +175,16 @@ CREATE INDEX idx_stage_cycle ON irp_stage(cycle_id);
 CREATE INDEX idx_step_stage ON irp_step(stage_id);
 CREATE INDEX idx_steprun_step ON irp_step_run(step_id);
 CREATE INDEX idx_batch_step ON irp_batch(step_id);
+CREATE INDEX idx_batch_configuration ON irp_batch(configuration_id);
+CREATE INDEX idx_batch_status ON irp_batch(status);
+CREATE INDEX idx_batch_type ON irp_batch(batch_type);
 CREATE INDEX idx_job_batch ON irp_job(batch_id);
 CREATE INDEX idx_job_status ON irp_job(status);
+CREATE INDEX idx_job_configuration ON irp_job(job_configuration_id);
+CREATE INDEX idx_recon_batch ON irp_batch_recon_log(batch_id);
+CREATE INDEX idx_recon_ts ON irp_batch_recon_log(recon_ts DESC);
+CREATE INDEX idx_tracking_job ON irp_job_tracking_log(job_id);
+CREATE INDEX idx_tracking_ts ON irp_job_tracking_log(tracked_ts DESC);
 
 -- Grant permissions (adjust as needed)
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO irp_user;
