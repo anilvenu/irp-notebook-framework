@@ -433,12 +433,12 @@ def test_batch_configuration_jsonb():
             schema=TEST_SCHEMA
         )
 
-        batch_id = execute_insert(
-            "INSERT INTO irp_batch (step_id, batch_name, status) VALUES (%s, %s, %s)",
-            (step_id, 'config_batch', 'INITIATED'),
-            schema=TEST_SCHEMA
-        )
-        print(f"  Created batch ID: {batch_id}")
+        # batch_id = execute_insert(
+        #     "INSERT INTO irp_batch (step_id, batch_type, configuration_id, status) VALUES (%s, %s, %s, %s)",
+        #     (step_id, 'config_batch', 1, 'INITIATED'),
+        #     schema=TEST_SCHEMA
+        # )
+        # print(f"  Created batch ID: {batch_id}")
 
         # Bulk insert configurations
         query = """

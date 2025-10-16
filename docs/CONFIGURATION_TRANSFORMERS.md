@@ -121,7 +121,7 @@ Creates multiple job configurations from a list, or falls back to a single job.
 **Input with jobs list:**
 ```python
 config = {
-    'batch_name': 'portfolio_batch',
+    'batch_type': 'portfolio_batch',
     'jobs': [
         {'portfolio': 'A', 'param': 'x'},
         {'portfolio': 'B', 'param': 'y'},
@@ -478,9 +478,9 @@ batch_metadata = {
 
 batch_id = execute_insert(
     """INSERT INTO irp_batch
-       (step_id, batch_name, status, metadata)
+       (step_id, batch_type, status, metadata)
        VALUES (%s, %s, %s, %s)""",
-    (step_id, 'Jan_2024_Portfolios', 'INITIATED', json.dumps(batch_metadata))
+    (step_id, 'edmcreation', 'INITIATED', json.dumps(batch_metadata))
 )
 
 # Later, retrieve and use the batch type
