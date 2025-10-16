@@ -5,11 +5,11 @@ IRP Notebook Framework - Cycle Management
 import re
 import shutil
 from pathlib import Path
-from typing import List, Any
+from typing import List, Any, Optional
 from helpers import database as db
 from .constants import (
     WORKFLOWS_PATH, TEMPLATE_PATH, ARCHIVE_PATH, SYSTEM_USER,
-    CYCLE_NAME_RULES, NOTEBOOK_PATTERN, STAGE_PATTERN, CycleStatus
+    CYCLE_NAME_RULES, NOTEBOOK_PATTERN, STAGE_PATTERN, CycleStatus, DB_CONFIG
 )
 
 
@@ -17,17 +17,20 @@ class CycleError(Exception):
     """Custom exception for cycle management errors"""
     pass
 
-def delete_archived_cycles() -> int:
+def delete_archived_cycles(schema: Optional[str] = None) -> int:
     """
     Delete all cycles in ARCHIVED status
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     query = """
-        DELETE 
+        DELETE
         FROM irp_cycle
         WHERE status = 'ARCHIVED'
     """
-    
-    return db.execute_command(query)
+
+    return db.execute_command(query, schema=schema)
 
 
 def validate_cycle_name(cycle_name: str) -> bool:
@@ -267,22 +270,27 @@ def _register_stages_and_steps(cycle_id: int, cycle_dir: Path, apply=False) -> i
     return stage_count
 
 
-def get_active_cycle_id(schema: str = 'public') -> int:
+def get_active_cycle_id(schema: Optional[str] = None) -> int:
     """
     Get the ID of the currently active cycle
 
     Args:
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use
 
     Returns:
         Cycle ID of active cycle, or None if no active cycle
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     active_cycle = db.get_active_cycle(schema=schema)
     return active_cycle['id'] if active_cycle else None
 
 
-def get_cycle_status() -> Any:
+def get_cycle_status(schema: Optional[str] = None) -> Any:
     """Get status of all cycles"""
+    if schema is None:
+        schema = DB_CONFIG['schema']
 
     query = """
         SELECT
@@ -302,7 +310,7 @@ def get_cycle_status() -> Any:
             created_ts DESC
     """
 
-    return db.execute_query(query)
+    return db.execute_query(query, schema=schema)
 
 
 def archive_cycle_by_name(cycle_name: str) -> bool:

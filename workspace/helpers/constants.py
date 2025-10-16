@@ -24,8 +24,9 @@ DB_CONFIG = {
     'host': os.getenv('DB_SERVER', 'postgres'),
     'port': int(os.getenv('DB_PORT', '5432')),
     'database': os.getenv('DB_NAME', 'irp_db'),
-    'user': os.getenv('DB_USER', 'irp_user'),
-    'password': os.getenv('DB_PASSWORD', 'irp_pass')
+    'user': os.getenv('DB_USER', 'irp_live'),
+    'password': os.getenv('DB_PASSWORD', 'irp_g0_live'),
+    'schema': os.getenv('DB_SCHEMA', 'live')
 }
 
 # ============================================================================

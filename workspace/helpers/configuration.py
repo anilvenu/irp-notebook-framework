@@ -10,7 +10,7 @@ from datetime import datetime
 import pandas as pd
 
 from helpers.database import execute_query, execute_command, execute_insert, DatabaseError
-from helpers.constants import ConfigurationStatus, CONFIGURATION_TAB_LIST, CONFIGURATION_COLUMNS
+from helpers.constants import ConfigurationStatus, CONFIGURATION_TAB_LIST, CONFIGURATION_COLUMNS, DB_CONFIG
 from helpers.cycle import get_active_cycle_id
 
 
@@ -141,13 +141,13 @@ def transform_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 
-def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]:
+def read_configuration(config_id: int, schema: Optional[str] = None) -> Dict[str, Any]:
     """
     Read configuration by ID
 
     Args:
         config_id: Configuration ID
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use
 
     Returns:
         Dictionary containing configuration details
@@ -155,6 +155,9 @@ def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]
     Raises:
         ConfigurationError: If configuration not found
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     query = """
         SELECT id, cycle_id, configuration_file_name, configuration_data,
                status, file_last_updated_ts, created_ts, updated_ts
@@ -176,14 +179,14 @@ def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]
     return config
 
 
-def update_configuration_status(config_id: int, status: str, schema: str = 'public') -> bool:
+def update_configuration_status(config_id: int, status: str, schema: Optional[str] = None) -> bool:
     """
     Update configuration status
 
     Args:
         config_id: Configuration ID
         status: New status (NEW, VALID, ACTIVE, ERROR)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use
 
     Returns:
         True if status was updated, False otherwise
@@ -191,6 +194,9 @@ def update_configuration_status(config_id: int, status: str, schema: str = 'publ
     Raises:
         ConfigurationError: If configuration not found or invalid status
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     # Validate status
     if status not in ConfigurationStatus.all():
         raise ConfigurationError(f"Invalid status: {status}. Must be one of {ConfigurationStatus.all()}")
@@ -232,7 +238,7 @@ def load_configuration_file(
     cycle_id: int,
     excel_config_path: str,
     register: bool = False,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Load configuration from Excel file
@@ -241,7 +247,7 @@ def load_configuration_file(
         cycle_id: Cycle ID to associate with this configuration
         excel_config_path: Path to Excel configuration file
         register: If True, delete existing configurations and register this as NEW
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use
 
     Returns:
         Configuration ID
@@ -249,6 +255,9 @@ def load_configuration_file(
     Raises:
         ConfigurationError: If validation fails or file issues
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     # Validate that the provided cycle_id matches the active cycle
     active_cycle_id = get_active_cycle_id(schema=schema)
     if active_cycle_id != cycle_id:

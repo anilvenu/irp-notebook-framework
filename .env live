@@ -1,0 +1,11 @@
+# Database Configuration
+DB_NAME=irp_db
+DB_USER=irp_live
+DB_PASSWORD=irp_g0_live
+DB_SCHEMA=live
+DB_SERVER=postgres
+DB_PORT=5432
+
+# System Configuration
+SYSTEM_USER=notebook_user
+LOG_LEVEL=INFO

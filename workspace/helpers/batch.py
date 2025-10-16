@@ -25,7 +25,7 @@ from datetime import datetime
 from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
-from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus
+from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, DB_CONFIG
 from helpers.configuration import read_configuration, update_configuration_status, ConfigurationTransformer
 from helpers.cycle import get_active_cycle_id
 
@@ -43,7 +43,7 @@ def _create_batch(
     batch_type: str,
     configuration_id: int,
     step_id: int,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Create a batch record in database (used by create_batch).
@@ -60,6 +60,9 @@ def _create_batch(
     Raises:
         BatchError: If creation fails
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     try:
         query = """
             INSERT INTO irp_batch (step_id, configuration_id, batch_type, status)
@@ -79,7 +82,7 @@ def _insert_recon_log(
     batch_id: int,
     recon_result: str,
     recon_summary: Dict[str, Any],
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Insert batch reconciliation log entry.
@@ -93,6 +96,9 @@ def _insert_recon_log(
     Returns:
         Recon log ID
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     try:
         query = """
             INSERT INTO irp_batch_recon_log (batch_id, recon_result, recon_summary)
@@ -107,7 +113,7 @@ def _insert_recon_log(
         raise BatchError(f"Failed to insert recon log: {str(e)}")
 
 
-def _lookup_step_id(configuration_id: int, schema: str = 'public') -> Optional[int]:
+def _lookup_step_id(configuration_id: int, schema: Optional[str] = None) -> Optional[int]:
     """
     Lookup step_id for a configuration (placeholder - returns None for now).
 
@@ -121,6 +127,9 @@ def _lookup_step_id(configuration_id: int, schema: str = 'public') -> Optional[i
     Returns:
         Step ID or None
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     # TODO: Implement step lookup logic based on configuration context
     # For now, return None to require explicit step_id
     return None
@@ -130,7 +139,7 @@ def _lookup_step_id(configuration_id: int, schema: str = 'public') -> Optional[i
 # CORE CRUD OPERATIONS
 # ============================================================================
 
-def read_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
+def read_batch(batch_id: int, schema: Optional[str] = None) -> Dict[str, Any]:
     """
     Read batch by ID.
 
@@ -146,6 +155,9 @@ def read_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     """
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise BatchError(f"Invalid batch_id: {batch_id}. Must be a positive integer.")
+
+    if schema is None:
+        schema = DB_CONFIG['schema']
 
     query = """
         SELECT id, step_id, configuration_id, batch_type, status,
@@ -172,7 +184,7 @@ def read_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
 def update_batch_status(
     batch_id: int,
     status: str,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> bool:
     """
     Update batch status with validation.
@@ -197,6 +209,9 @@ def update_batch_status(
         raise BatchError(
             f"Invalid status: {status}. Must be one of {BatchStatus.all()}"
         )
+
+    if schema is None:
+        schema = DB_CONFIG['schema']
 
     # Read current batch
     current_batch = read_batch(batch_id, schema=schema)
@@ -231,7 +246,7 @@ def create_batch(
     batch_type: str,
     configuration_id: int,
     step_id: Optional[int] = None,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Create a new batch with job configurations.
@@ -275,6 +290,9 @@ def create_batch(
             f"Unknown batch_type '{batch_type}'. "
             f"Registered types: {ConfigurationTransformer.list_types()}"
         )
+
+    if schema is None:
+        schema = DB_CONFIG['schema']
 
     # Read and validate configuration
     config = read_configuration(configuration_id, schema=schema)
@@ -330,7 +348,7 @@ def create_batch(
         raise BatchError(f"Failed to create batch: {str(e)}")
 
 
-def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
+def submit_batch(batch_id: int, schema: Optional[str] = None) -> Dict[str, Any]:
     """
     Submit all eligible jobs in batch to Moody's.
 
@@ -366,6 +384,9 @@ def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     # Validate batch_id
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise BatchError(f"Invalid batch_id: {batch_id}")
+
+    if schema is None:
+        schema = DB_CONFIG['schema']
 
     # Read and validate batch
     batch = read_batch(batch_id, schema=schema)
@@ -444,7 +465,7 @@ def create_and_submit_batch(
     batch_type: str,
     configuration_id: int,
     step_id: Optional[int] = None,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Convenience function to create and submit batch in one call.
@@ -460,6 +481,10 @@ def create_and_submit_batch(
     Returns:
         Batch ID
     """
+
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     return create_batch(batch_type, configuration_id, step_id, schema=schema)
 
 
@@ -471,7 +496,7 @@ def get_batch_jobs(
     batch_id: int,
     skipped: Optional[bool] = None,
     status: Optional[str] = None,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Get all jobs for a batch with optional filters.
@@ -490,6 +515,9 @@ def get_batch_jobs(
     """
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise BatchError(f"Invalid batch_id: {batch_id}")
+
+    if schema is None:
+        schema = DB_CONFIG['schema']
 
     # Build query with optional filters
     query = """
@@ -534,7 +562,7 @@ def get_batch_jobs(
 def get_batch_job_configurations(
     batch_id: int,
     skipped: Optional[bool] = None,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Get all job configurations for a batch with optional filters.
@@ -552,6 +580,9 @@ def get_batch_job_configurations(
     """
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise BatchError(f"Invalid batch_id: {batch_id}")
+
+    if schema is None:
+        schema = DB_CONFIG['schema']
 
     query = """
         SELECT id, batch_id, configuration_id, job_configuration_data,
@@ -588,7 +619,7 @@ def get_batch_job_configurations(
 # BATCH RECONCILIATION
 # ============================================================================
 
-def recon_batch(batch_id: int, schema: str = 'public') -> str:
+def recon_batch(batch_id: int, schema: Optional[str] = None) -> str:
     """
     Reconcile batch status based on job and configuration states.
 
@@ -615,6 +646,9 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
     """
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise BatchError(f"Invalid batch_id: {batch_id}")
+
+    if schema is None:
+        schema = DB_CONFIG['schema']
 
     # Read batch to verify it exists
     batch = read_batch(batch_id, schema=schema)

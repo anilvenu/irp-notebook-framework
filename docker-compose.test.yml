@@ -1,0 +1,23 @@
+# Docker Compose Override for Testing
+# This file provides test-specific configuration to isolate test data
+# from production data using separate database users and schemas.
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.test.yml up
+#
+# Security:
+# - Uses irp_test user (access only to test schema)
+# - Sets DB_SCHEMA=test to ensure test isolation
+# - Prevents accidental production data access
+
+services:
+  jupyter:
+    environment:
+      # Override with test database credentials
+      - DB_USER=irp_test
+      - DB_PASSWORD=g0test
+      - DB_SCHEMA=test
+
+  postgres:
+    # Keep same postgres service, but tests will use irp_test user
+    # No changes needed here

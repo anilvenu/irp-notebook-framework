@@ -15,16 +15,19 @@ class DatabaseError(Exception):
 
 
 # Create SQLAlchemy engine
-def get_engine(schema: str = 'public'):
+def get_engine(schema: Optional[str] = None):
     """
     Get SQLAlchemy engine
 
     Args:
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (default: None, uses DB_CONFIG['schema'])
 
     Returns:
         SQLAlchemy engine
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
     engine = create_engine(db_url, poolclass=NullPool)
 
@@ -32,12 +35,13 @@ def get_engine(schema: str = 'public'):
     return engine
 
 
-def _set_schema(conn, schema: str):
+def _set_schema(conn, schema: Optional[str]):
     """Helper to set schema for a connection"""
-    if schema and schema != 'public':
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
+    if schema:
         conn.execute(text(f"SET search_path TO {schema}, public"))
-    else:
-        conn.execute(text("SET search_path TO public"))
 
 
 def _convert_query_params(query: str, params: tuple = None):
@@ -62,12 +66,12 @@ def _convert_query_params(query: str, params: tuple = None):
     return modified_query, param_dict
 
 
-def test_connection(schema: str = 'public') -> bool:
+def test_connection(schema: Optional[str] = None) -> bool:
     """
     Test database connectivity
 
     Args:
-        schema: Database schema to test (default: 'public')
+        schema: Database schema to test (default: DB_CONFIG['schema'])
 
     Returns:
         True if connection successful
@@ -82,14 +86,14 @@ def test_connection(schema: str = 'public') -> bool:
         return False
 
 
-def execute_query(query: str, params: tuple = None, schema: str = 'public') -> pd.DataFrame:
+def execute_query(query: str, params: tuple = None, schema: Optional[str] = None) -> pd.DataFrame:
     """
     Execute SELECT query and return results as DataFrame
 
     Args:
         query: SQL query string
         params: Query parameters (optional)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (default: DB_CONFIG['schema'])
 
     Returns:
         DataFrame with query results
@@ -107,14 +111,14 @@ def execute_query(query: str, params: tuple = None, schema: str = 'public') -> p
         raise DatabaseError(f"Query failed: {str(e)}")
 
 
-def execute_scalar(query: str, params: tuple = None, schema: str = 'public') -> Any:
+def execute_scalar(query: str, params: tuple = None, schema: Optional[str] = None) -> Any:
     """
     Execute query and return single scalar value
 
     Args:
         query: SQL query string
         params: Query parameters (optional)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (default: DB_CONFIG['schema'])
 
     Returns:
         Single value from query
@@ -133,14 +137,14 @@ def execute_scalar(query: str, params: tuple = None, schema: str = 'public') -> 
         raise DatabaseError(f"Scalar query failed: {str(e)}")
 
 
-def execute_command(query: str, params: tuple = None, schema: str = 'public') -> int:
+def execute_command(query: str, params: tuple = None, schema: Optional[str] = None) -> int:
     """
     Execute INSERT/UPDATE/DELETE and return rows affected
 
     Args:
         query: SQL query string
         params: Query parameters (optional)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (default: DB_CONFIG['schema'])
 
     Returns:
         Number of rows affected
@@ -159,14 +163,14 @@ def execute_command(query: str, params: tuple = None, schema: str = 'public') ->
         raise DatabaseError(f"Command failed: {str(e)}")
 
 
-def execute_insert(query: str, params: tuple = None, schema: str = 'public') -> int:
+def execute_insert(query: str, params: tuple = None, schema: Optional[str] = None) -> int:
     """
     Execute INSERT and return new record ID
 
     Args:
         query: SQL INSERT query string
         params: Query parameters (optional)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (default: DB_CONFIG['schema'])
 
     Returns:
         ID of newly inserted record
@@ -190,7 +194,7 @@ def execute_insert(query: str, params: tuple = None, schema: str = 'public') -> 
         raise DatabaseError(f"Insert failed: {str(e)}")
 
 
-def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] = None, schema: str = 'public') -> List[int]:
+def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] = None, schema: Optional[str] = None) -> List[int]:
     """
     Execute bulk INSERT and return list of new record IDs
 
@@ -202,7 +206,7 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         params_list: List of tuples, each containing parameters for one insert
         jsonb_columns: Optional list of column indices (0-based) that contain JSONB data.
                       Dicts at these positions will be automatically converted to JSON strings.
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (default: DB_CONFIG['schema'])
 
     Returns:
         List of IDs for newly inserted records (in order)
@@ -276,17 +280,20 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         raise DatabaseError(f"Bulk insert failed: {str(e)}")
 
 
-def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sql') -> bool:
+def init_database(schema: Optional[str] = None, sql_file_name: str = 'init_database.sql') -> bool:
     """
     Initialize database by running SQL script
 
     Args:
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (default: DB_CONFIG['schema'])
         sql_file_name: Name of SQL initialization file (default: 'init_database.sql')
 
     Returns:
         True if successful
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     try:
         from pathlib import Path
 
@@ -302,10 +309,9 @@ def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sq
         # Execute script
         engine = get_engine()
         with engine.connect() as conn:
-            # Create schema if not public
-            if schema != 'public':
-                conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
-                _set_schema(conn, schema)
+            # Create schema if it doesn't exist
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+            _set_schema(conn, schema)
 
             # Execute the SQL script
             conn.execute(text(sql_script))
@@ -322,12 +328,12 @@ def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sq
 # CYCLE OPERATIONS
 # ============================================================================
 
-def get_active_cycle(schema: str = 'public') -> Optional[Dict[str, Any]]:
+def get_active_cycle(schema: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Get the currently active cycle
 
     Args:
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (default: DB_CONFIG['schema'])
 
     Returns:
         Dictionary with cycle information or None if no active cycle
@@ -343,44 +349,44 @@ def get_active_cycle(schema: str = 'public') -> Optional[Dict[str, Any]]:
     return df.iloc[0].to_dict() if not df.empty else None
 
 
-def get_cycle_by_name(cycle_name: str) -> Optional[Dict[str, Any]]:
+def get_cycle_by_name(cycle_name: str, schema: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Get cycle by name"""
     query = """
         SELECT id, cycle_name, status, created_ts, archived_ts, created_by, metadata
         FROM irp_cycle
         WHERE cycle_name = %s
     """
-    df = execute_query(query, (cycle_name,))
+    df = execute_query(query, (cycle_name,), schema=schema)
     return df.iloc[0].to_dict() if not df.empty else None
 
 
-def create_cycle(cycle_name: str, created_by: str, metadata: Dict = None) -> int:
+def create_cycle(cycle_name: str, created_by: str, metadata: Dict = None, schema: Optional[str] = None) -> int:
     """Create new cycle"""
     query = """
         INSERT INTO irp_cycle (cycle_name, status, created_by, metadata)
         VALUES (%s, %s, %s, %s)
     """
     import json
-    return execute_insert(query, (cycle_name, CycleStatus.ACTIVE, created_by, json.dumps(metadata) if metadata else None))
+    return execute_insert(query, (cycle_name, CycleStatus.ACTIVE, created_by, json.dumps(metadata) if metadata else None), schema=schema)
 
 
-def archive_cycle(cycle_id: int) -> bool:
+def archive_cycle(cycle_id: int, schema: Optional[str] = None) -> bool:
     """Archive a cycle"""
     query = """
         UPDATE irp_cycle
         SET status = %s, archived_ts = NOW()
         WHERE id = %s
     """
-    rows = execute_command(query, (CycleStatus.ARCHIVED, cycle_id))
+    rows = execute_command(query, (CycleStatus.ARCHIVED, cycle_id), schema=schema)
     return rows > 0
 
-def delete_cycle(cycle_id: int) -> bool:
+def delete_cycle(cycle_id: int, schema: Optional[str] = None) -> bool:
     """Hard delete a cycle"""
     query = """
         DELETE FROM irp_cycle
         WHERE id = %s
     """
-    rows = execute_command(query, (cycle_id))
+    rows = execute_command(query, (cycle_id,), schema=schema)
     return rows > 0
 
 
@@ -388,22 +394,22 @@ def delete_cycle(cycle_id: int) -> bool:
 # STAGE OPERATIONS
 # ============================================================================
 
-def get_or_create_stage(cycle_id: int, stage_num: int, stage_name: str) -> int:
+def get_or_create_stage(cycle_id: int, stage_num: int, stage_name: str, schema: Optional[str] = None) -> int:
     """Get existing stage or create new one"""
-    
+
     # Try to get existing
     query = "SELECT id FROM irp_stage WHERE cycle_id = %s AND stage_num = %s"
-    stage_id = execute_scalar(query, (cycle_id, stage_num))
-    
+    stage_id = execute_scalar(query, (cycle_id, stage_num), schema=schema)
+
     if stage_id:
         return stage_id
-    
+
     # Create new
     query = """
         INSERT INTO irp_stage (cycle_id, stage_num, stage_name)
         VALUES (%s, %s, %s)
     """
-    return execute_insert(query, (cycle_id, stage_num, stage_name))
+    return execute_insert(query, (cycle_id, stage_num, stage_name), schema=schema)
 
 # ============================================================================
 # STEP OPERATIONS
@@ -414,28 +420,29 @@ def get_or_create_step(
     step_num: int,
     step_name: str,
     notebook_path: str = None,
+    schema: Optional[str] = None
 ) -> int:
     """Get existing step or create new one"""
-    
+
     # Try to get existing
     query = "SELECT id FROM irp_step WHERE stage_id = %s AND step_num = %s"
-    step_id = execute_scalar(query, (stage_id, step_num))
-    
+    step_id = execute_scalar(query, (stage_id, step_num), schema=schema)
+
     if step_id:
         return step_id
-    
+
     # Create new
     query = """
         INSERT INTO irp_step (stage_id, step_num, step_name, notebook_path)
         VALUES (%s, %s, %s, %s)
     """
-    return execute_insert(query, (stage_id, step_num, step_name, notebook_path))
+    return execute_insert(query, (stage_id, step_num, step_name, notebook_path), schema=schema)
 
 
-def get_step_info(step_id: int) -> Optional[Dict[str, Any]]:
+def get_step_info(step_id: int, schema: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Get step information"""
     query = """
-        SELECT 
+        SELECT
             st.id, st.step_num, st.step_name, st.notebook_path,
             sg.stage_num, sg.stage_name,
             c.cycle_name, c.id as cycle_id
@@ -444,45 +451,45 @@ def get_step_info(step_id: int) -> Optional[Dict[str, Any]]:
         INNER JOIN irp_cycle c ON sg.cycle_id = c.id
         WHERE st.id = %s
     """
-    df = execute_query(query, (step_id,))
+    df = execute_query(query, (step_id,), schema=schema)
     return df.iloc[0].to_dict() if not df.empty else None
 
 # ============================================================================
 # STEP RUN OPERATIONS
 # ============================================================================
 
-def get_last_step_run(step_id: int) -> Optional[Dict[str, Any]]:
+def get_last_step_run(step_id: int, schema: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Get the most recent run for a step"""
     query = """
-        SELECT id, run_number, status, started_ts, completed_ts, 
+        SELECT id, run_number, status, started_ts, completed_ts,
                started_by, error_message, output_data
         FROM irp_step_run
         WHERE step_id = %s
         ORDER BY run_number DESC
         LIMIT 1
     """
-    df = execute_query(query, (step_id,))
+    df = execute_query(query, (step_id,), schema=schema)
     return df.iloc[0].to_dict() if not df.empty else None
 
 
-def create_step_run(step_id: int, started_by: str) -> Tuple[int, int]:
+def create_step_run(step_id: int, started_by: str, schema: Optional[str] = None) -> Tuple[int, int]:
     """
     Create new step run
-    
+
     Returns:
         Tuple of (run_id, run_number)
     """
     # Get next run number
     query = "SELECT COALESCE(MAX(run_number), 0) + 1 FROM irp_step_run WHERE step_id = %s"
-    run_number = execute_scalar(query, (step_id,))
-    
+    run_number = execute_scalar(query, (step_id,), schema=schema)
+
     # Create run
     query = """
         INSERT INTO irp_step_run (step_id, run_number, status, started_by)
         VALUES (%s, %s, 'ACTIVE', %s)
     """
-    run_id = execute_insert(query, (step_id, run_number, started_by))
-    
+    run_id = execute_insert(query, (step_id, run_number, started_by), schema=schema)
+
     return run_id, run_number
 
 
@@ -490,11 +497,12 @@ def update_step_run(
     run_id: int,
     status: str,
     error_message: str = None,
-    output_data: Dict = None
+    output_data: Dict = None,
+    schema: Optional[str] = None
 ) -> bool:
     """Update step run with completion status"""
     import json
-    
+
     query = """
         UPDATE irp_step_run
         SET status = %s,
@@ -503,25 +511,25 @@ def update_step_run(
             output_data = %s
         WHERE id = %s
     """
-    
+
     rows = execute_command(query, (
         status,
         status,
         error_message,
         json.dumps(output_data) if output_data else None,
         run_id
-    ))
-    
+    ), schema=schema)
+
     return rows > 0
 
 # ============================================================================
 # QUERY HELPERS
 # ============================================================================
 
-def get_cycle_progress(cycle_name: str) -> pd.DataFrame:
+def get_cycle_progress(cycle_name: str, schema: Optional[str] = None) -> pd.DataFrame:
     """Get progress for all steps in a cycle"""
     query = """
-        SELECT 
+        SELECT
             sg.stage_num,
             sg.stage_name,
             st.step_num,
@@ -542,14 +550,14 @@ def get_cycle_progress(cycle_name: str) -> pd.DataFrame:
         WHERE c.cycle_name = %s
         ORDER BY sg.stage_num, st.step_num
     """
-    return execute_query(query, (cycle_name,))
+    return execute_query(query, (cycle_name,), schema=schema)
 
 
-def get_step_history(cycle_name: str, stage_num: int = None, step_num: int = None) -> pd.DataFrame:
+def get_step_history(cycle_name: str, stage_num: int = None, step_num: int = None, schema: Optional[str] = None) -> pd.DataFrame:
     """Get execution history for steps"""
-    
+
     base_query = """
-        SELECT 
+        SELECT
             sg.stage_num,
             sg.stage_name,
             st.step_num,
@@ -566,17 +574,17 @@ def get_step_history(cycle_name: str, stage_num: int = None, step_num: int = Non
         INNER JOIN irp_cycle c ON sg.cycle_id = c.id
         WHERE c.cycle_name = %s
     """
-    
+
     params = [cycle_name]
-    
+
     if stage_num is not None:
         base_query += " AND sg.stage_num = %s"
         params.append(stage_num)
-    
+
     if step_num is not None:
         base_query += " AND st.step_num = %s"
         params.append(step_num)
-    
+
     base_query += " ORDER BY sr.started_ts DESC"
-    
-    return execute_query(base_query, tuple(params))
+
+    return execute_query(base_query, tuple(params), schema=schema)

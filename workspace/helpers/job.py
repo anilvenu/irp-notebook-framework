@@ -27,7 +27,7 @@ from datetime import datetime
 from helpers.database import (
     execute_query, execute_command, execute_insert, DatabaseError
 )
-from helpers.constants import JobStatus
+from helpers.constants import JobStatus, DB_CONFIG
 
 
 class JobError(Exception):
@@ -46,7 +46,7 @@ def _create_job_configuration(
     skipped: bool = False,
     overridden: bool = False,
     override_reason_txt: Optional[str] = None,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Create job configuration record.
@@ -66,6 +66,9 @@ def _create_job_configuration(
     Raises:
         JobError: If creation fails
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise JobError(f"Invalid batch_id: {batch_id}")
 
@@ -96,7 +99,7 @@ def _create_job(
     batch_id: int,
     job_configuration_id: int,
     parent_job_id: Optional[int] = None,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Create job record in INITIATED status.
@@ -113,6 +116,9 @@ def _create_job(
     Raises:
         JobError: If creation fails
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise JobError(f"Invalid batch_id: {batch_id}")
 
@@ -177,7 +183,7 @@ def _register_job_submission(
     request: Dict[str, Any],
     response: Dict[str, Any],
     submitted_ts: datetime,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> None:
     """
     Register job submission in database.
@@ -200,6 +206,9 @@ def _register_job_submission(
     Raises:
         JobError: If update fails
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
 
@@ -232,7 +241,7 @@ def _insert_tracking_log(
     workflow_id: str,
     job_status: str,
     response_data: Dict[str, Any],
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Insert job tracking log entry.
@@ -250,6 +259,9 @@ def _insert_tracking_log(
     Raises:
         JobError: If insert fails
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
 
@@ -273,7 +285,7 @@ def _insert_tracking_log(
 # CORE CRUD OPERATIONS
 # ============================================================================
 
-def read_job(job_id: int, schema: str = 'public') -> Dict[str, Any]:
+def read_job(job_id: int, schema: Optional[str] = None) -> Dict[str, Any]:
     """
     Read job by ID.
 
@@ -287,6 +299,9 @@ def read_job(job_id: int, schema: str = 'public') -> Dict[str, Any]:
     Raises:
         JobError: If job not found
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}. Must be a positive integer.")
 
@@ -319,7 +334,7 @@ def read_job(job_id: int, schema: str = 'public') -> Dict[str, Any]:
 def update_job_status(
     job_id: int,
     status: str,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> bool:
     """
     Update job status with validation.
@@ -335,6 +350,9 @@ def update_job_status(
     Raises:
         JobError: If job not found or invalid status
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     # Validate job_id
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}. Must be a positive integer.")
@@ -372,7 +390,7 @@ def update_job_status(
     return rows > 0
 
 
-def get_job_config(job_id: int, schema: str = 'public') -> Dict[str, Any]:
+def get_job_config(job_id: int, schema: Optional[str] = None) -> Dict[str, Any]:
     """
     Get job configuration for a job.
 
@@ -386,6 +404,9 @@ def get_job_config(job_id: int, schema: str = 'public') -> Dict[str, Any]:
     Raises:
         JobError: If job not found
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
 
@@ -425,7 +446,7 @@ def create_job(
     job_configuration_data: Optional[Dict[str, Any]] = None,
     parent_job_id: Optional[int] = None,
     validate: bool = False,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Create a new job with either existing or new job configuration.
@@ -452,6 +473,9 @@ def create_job(
         JobError: If neither or both config parameters provided
         JobError: If validation fails (when validate=True)
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     # Validate exactly one of job_configuration_id or job_configuration_data is provided
     if (job_configuration_id is None) == (job_configuration_data is None):
         raise JobError(
@@ -501,7 +525,7 @@ def create_job(
     return job_id
 
 
-def skip_job(job_id: int, schema: str = 'public') -> None:
+def skip_job(job_id: int, schema: Optional[str] = None) -> None:
     """
     Mark job as skipped.
 
@@ -512,6 +536,9 @@ def skip_job(job_id: int, schema: str = 'public') -> None:
     Raises:
         JobError: If job not found
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
 
@@ -537,7 +564,7 @@ def submit_job(
     job_id: int,
     force: bool = False,
     track_immediately: bool = False,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Submit job to Moody's workflow system.
@@ -563,6 +590,9 @@ def submit_job(
     Raises:
         JobError: If job not found
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
 
@@ -602,7 +632,7 @@ def submit_job(
 def track_job_status(
     job_id: int,
     moodys_workflow_id: Optional[str] = None,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> str:
     """
     Track job status on Moody's workflow system.
@@ -632,6 +662,9 @@ def track_job_status(
 
     NOTE: Currently uses realistic stub. Will be replaced with actual Moody's API.
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
 
@@ -691,7 +724,7 @@ def resubmit_job(
     job_id: int,
     job_configuration_data: Optional[Dict[str, Any]] = None,
     override_reason: Optional[str] = None,
-    schema: str = 'public'
+    schema: Optional[str] = None
 ) -> int:
     """
     Resubmit a job with optional configuration override.
@@ -718,6 +751,9 @@ def resubmit_job(
         JobError: If job not found
         JobError: If override_reason missing when job_configuration_data provided
     """
+    if schema is None:
+        schema = DB_CONFIG['schema']
+
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
 

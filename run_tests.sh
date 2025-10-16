@@ -32,8 +32,9 @@ cd "$SCRIPT_DIR"
 export DB_SERVER=${DB_SERVER:-localhost}
 export DB_PORT=${DB_PORT:-5432}
 export DB_NAME=${DB_NAME:-irp_db}
-export DB_USER=${DB_USER:-irp_user}
-export DB_PASSWORD=${DB_PASSWORD:-irp_pass}
+export DB_USER=${DB_USER:-irp_test}
+export DB_PASSWORD=${DB_PASSWORD:-g0test}
+export DB_SCHEMA=${DB_SCHEMA:-test}
 
 echo ""
 echo "Database Configuration:"
@@ -41,6 +42,7 @@ echo "  Host: $DB_SERVER"
 echo "  Port: $DB_PORT"
 echo "  Database: $DB_NAME"
 echo "  User: $DB_USER"
+echo "  Schema: $DB_SCHEMA"
 echo ""
 
 # Check if venv exists - supports (venv) and (.venv)
