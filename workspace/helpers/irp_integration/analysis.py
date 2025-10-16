@@ -31,14 +31,17 @@ class AnalysisManager:
                           model_profile_id: int,
                           output_profile_id: int,
                           event_rate_scheme_id: int,
-                          treaty_ids: list
+                          treaty_ids: list,
+                          *,
+                          global_analysis_settings: dict = {"franchiseDeductible": False,"minLossThreshold": "1.00","treatConstructionOccupancyAsUnknown": True,"numMaxLossEvent": 1},
+                          currency: dict = {} # TODO
                         ) -> dict:
         data = {
             "currency": { # TODO
-                "asOfDate": "2023-05-12",
-                "code": "EUR",
-                "scheme": "Test new scheme_185",
-                "vintage": "test2"
+                "asOfDate": "2018-11-15",
+                "code": "USD",
+                "scheme": "RMS",
+                "vintage": "RL18.1"
             },
             "edm": edm_name,
             "eventRateSchemeId": event_rate_scheme_id,
@@ -50,12 +53,7 @@ class AnalysisManager:
             # "tagIds": [ # TODO
             #     1202
             # ],
-            "globalAnalysisSettings": {
-                "franchiseDeductible": False,
-                "minLossThreshold": "1.00",
-                "treatConstructionOccupancyAsUnknown": True,
-                "numMaxLossEvent": 1
-            },
+            "globalAnalysisSettings": global_analysis_settings,
             "jobName": job_name
         }
 
@@ -76,5 +74,34 @@ class AnalysisManager:
                                           treaty_ids)
         return {}
     
-    # def create_analysis_group(self, analysis_ids: list, group_name: str, simulate_to_plt: bool = True, )
+    def create_analysis_group(self, 
+                              analysis_ids: list, 
+                              group_name: str, 
+                              *,
+                              simulate_to_plt: bool = True,
+                              num_simulations: int = 50000,
+                              propogate_detailed_losses: bool = False,
+                              reporting_window_start: str = "01/01/2021",
+                              simulation_window_start: str = "01/01/2021",
+                              simulation_window_end: str = "12/31/2021",
+                              ) -> dict:
+        data = {
+            "analysisIds": analysis_ids,
+            "name": group_name,
+            "currency": { # TODO
+                "asOfDate": "2018-11-15",
+                "code": "USD",
+                "scheme": "RMS",
+                "vintage": "RL18.1"
+            },
+            "simulateToPLT": simulate_to_plt,
+            "numOfSimulations": num_simulations,
+            "propagateDetailedLosses": propogate_detailed_losses,
+            "reportingWindowStart": reporting_window_start,
+            "simulationWindowStart": simulation_window_start,
+            "simulationWindowEnd": simulation_window_end
+        }
+
+        response = self.client.execute_workflow('POST', '/riskmodeler/v2/analysis-groups/', json=data)
+        return response.json()
         
