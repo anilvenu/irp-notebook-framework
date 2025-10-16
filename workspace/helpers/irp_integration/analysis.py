@@ -30,7 +30,8 @@ class AnalysisManager:
                           portfolio_id: int,
                           model_profile_id: int,
                           output_profile_id: int,
-                          event_rate_scheme_id: int
+                          event_rate_scheme_id: int,
+                          treaty_ids: list
                         ) -> dict:
         data = {
             "currency": { # TODO
@@ -45,10 +46,7 @@ class AnalysisManager:
             "id": portfolio_id,
             "modelProfileId": model_profile_id,
             "outputProfileId": output_profile_id,
-            # "treaties": [ # TODO
-            #     1
-            # ],
-            "treatiesName": [],
+            "treaties": treaty_ids,
             # "tagIds": [ # TODO
             #     1202
             # ],
@@ -64,7 +62,7 @@ class AnalysisManager:
         response = self.client.execute_workflow('POST', f"/riskmodeler/v2/portfolios/{portfolio_id}/process", json=data)
         return response.json()
     
-    def execute_analysis(self, job_name: str, edm_name: str, portfolio_id: int, analysis_profile_name: str, output_profile_name: str, event_rate_scheme_name: str) -> dict:
+    def execute_analysis(self, job_name: str, edm_name: str, portfolio_id: int, analysis_profile_name: str, output_profile_name: str, event_rate_scheme_name: str, treaty_ids: list) -> dict:
         model_profile_response = self.get_model_profiles_by_name([analysis_profile_name])
         output_profile_response = self.get_output_profile_by_name(output_profile_name)
         event_rate_scheme_response = self.get_event_rate_scheme_by_name(event_rate_scheme_name)
@@ -74,6 +72,9 @@ class AnalysisManager:
                                           portfolio_id, 
                                           model_profile_response['items'][0]['id'], 
                                           output_profile_response[0]['id'], 
-                                          event_rate_scheme_response['items'][0]['eventRateSchemeId'])
+                                          event_rate_scheme_response['items'][0]['eventRateSchemeId'],
+                                          treaty_ids)
         return {}
+    
+    # def create_analysis_group(self, analysis_ids: list, group_name: str, simulate_to_plt: bool = True, )
         
