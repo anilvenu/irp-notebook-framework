@@ -144,7 +144,7 @@ query = "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)"
 params_list = [('test_cycle_1', 'ACTIVE'), ('test_cycle_2', 'ACTIVE')]
 
 # All inserts go to 'test' schema
-ids = bulk_insert(query, params_list, schema='test')
+ids = bulk_insert(query, params_list)
 
 # Production data remains untouched!
 ```

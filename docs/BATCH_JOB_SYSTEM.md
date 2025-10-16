@@ -4,15 +4,7 @@
 
 The IRP Notebook Framework includes a comprehensive batch and job processing system for orchestrating Moody's workflow submissions. The system manages the entire lifecycle from configuration to job completion.
 
-## Architecture
-
-```
-Cycle → Configuration → Batch → Job Configuration → Job
-                          ↓
-                    Batch Recon ← Job Tracking
-```
-
-### Key Entities
+## Key Entities
 
 | Entity | Purpose | Cardinality |
 |--------|---------|-------------|
@@ -38,6 +30,7 @@ ERROR (if validation fails)
 ```
 
 TODO : ACTIVE will be revisited and removed if not needed
+
 
 
 ### Key Operations
@@ -89,6 +82,12 @@ ConfigurationTransformer.list_types()
 - `passthrough` - Single job, no copy
 - `multi_job` - Expects config with `jobs` list, creates one job per item
 
+TODO
+
+The decorator ```register``` has been created so that
+
+
+
 ---
 
 ## Batch
@@ -101,8 +100,8 @@ A **Batch** represents a collection of related jobs generated from a master conf
 
 ```
 INITIATED → ACTIVE → COMPLETED
-              ↓         ↓
-           FAILED   CANCELLED
+              ↓     
+           FAILED  OR CANCELLED
 ```
 
 ### Creating a Batch
@@ -263,13 +262,6 @@ A **Job** is an individual Moody's workflow submission. Jobs have a full audit t
 
 ### Job Status Lifecycle
 
-```
-INITIATED → SUBMITTED → QUEUED → PENDING → RUNNING → COMPLETED
-                                                  ↓
-                                              FAILED
-                                                  ↓
-                                      CANCEL_REQUESTED → CANCELLING → CANCELLED
-```
 
 **Terminal States:** COMPLETED, FAILED, CANCELLED, FORCED_OK
 
@@ -477,18 +469,7 @@ df = execute_query(
 ## Database Schema Reference
 
 ### Table Relationships
-
-```
-irp_configuration (1) ─── (many) irp_batch
-                                     │
-                                     ├─── (many) irp_job_configuration
-                                     │              │
-                                     │              └─── (many) irp_job
-                                     │                         │
-                                     ├─── (many) irp_batch_recon_log
-                                     │
-                                     └─── (many) irp_job_tracking_log
-```
+TODO
 
 ### Key Tables
 

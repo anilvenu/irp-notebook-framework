@@ -20,13 +20,27 @@ ARCHIVE_PATH = WORKFLOWS_PATH / '_Archive'
 # DATABASE CONFIGURATION
 # ============================================================================
 
+# Database configuration - NO DEFAULTS for security
+# Environment variables MUST be set explicitly:
+# - Production: Set via docker-compose.yml (reads from .env)
+# - Test: Set via run-tests.sh script
+
 DB_CONFIG = {
-    'host': os.getenv('DB_SERVER', 'postgres'),
-    'port': int(os.getenv('DB_PORT', '5432')),
-    'database': os.getenv('DB_NAME', 'irp_db'),
-    'user': os.getenv('DB_USER', 'irp_user'),
-    'password': os.getenv('DB_PASSWORD', 'irp_pass')
+    'host': os.getenv('DB_SERVER'),
+    'port': int(os.getenv('DB_PORT', '5432')),  # Port defaults to 5432 (standard PostgreSQL)
+    'database': os.getenv('DB_NAME'),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD')
 }
+
+# Validate database configuration - fail fast if incomplete
+_missing_config = [k for k, v in DB_CONFIG.items() if v is None and k != 'port']
+if _missing_config:
+    raise ValueError(
+        f"Database configuration incomplete! Missing environment variables: {', '.join(_missing_config).upper()}\n"
+        f"Required: DB_NAME, DB_USER, DB_PASSWORD, DB_SERVER\n"
+        f"Ensure these are set in docker-compose.yml (production) or run-tests.sh (test)"
+    )
 
 # ============================================================================
 # SYSTEM CONFIGURATION

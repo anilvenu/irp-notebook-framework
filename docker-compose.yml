@@ -15,11 +15,12 @@ services:
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - PYTHONPATH=${NOTEBOOK_HOME_DIR:-/home/jovyan}/workspace
+      # Production database configuration (from .env file)
       - DB_SERVER=postgres
-      - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-irp_db}
-      - DB_USER=${DB_USER:-irp_user}
-      - DB_PASSWORD=${DB_PASSWORD:-irp_pass}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
       - RISK_MODELER_BASE_URL=${RISK_MODELER_BASE_URL:-https://api-euw1.rms-ppe.com}
       - RISK_MODELER_API_KEY=${RISK_MODELER_API_KEY:-your_api_key}
     volumes:
@@ -39,18 +40,23 @@ services:
   postgres:
     # PostgreSQL Database Service
     # This service runs a PostgreSQL database using the official postgres:15-alpine image.
-    # It sets up the database name, user, and password using environment variables
-    # or defaults if not provided. The database data is persisted using a Docker volume.
+    # It creates TWO databases via init script:
+    #   1. Production DB (irp_db with irp_user) - used by Jupyter notebooks
+    #   2. Test DB (test_db with test_user) - used by test scripts
+    # The database data is persisted using a Docker volume.
     image: postgres:15-alpine
     container_name: irp-postgres
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=${DB_NAME:-irp_db}
-      - POSTGRES_USER=${DB_USER:-irp_user}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-irp_pass}
+      # Production database credentials (from .env)
+      # Init script uses these to create production DB and user
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s

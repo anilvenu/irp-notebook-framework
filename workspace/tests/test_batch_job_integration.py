@@ -48,8 +48,7 @@ from helpers.job import (
 )
 from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus
 
-TEST_SCHEMA = 'test'
-
+TEST_SCHEMA = Path(__file__).stem
 
 def setup_test_schema():
     """Initialize test schema with database tables"""

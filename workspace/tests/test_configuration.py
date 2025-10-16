@@ -38,7 +38,9 @@ from helpers.configuration import (
 )
 from helpers.constants import ConfigurationStatus
 
-TEST_SCHEMA = 'test'
+
+TEST_SCHEMA = Path(__file__).stem
+
 TEST_EXCEL_PATH = str(Path(__file__).parent / 'test_configuration.xlsx')
 
 def setup_test_schema():

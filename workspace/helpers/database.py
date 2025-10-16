@@ -224,8 +224,8 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         ]
         ids = bulk_insert(query, params, jsonb_columns=[2])
 
-        # Test insert (using test schema)
-        ids = bulk_insert(query, params, schema='test')
+        # Test insert
+        ids = bulk_insert(query, params)
     """
     import json
 

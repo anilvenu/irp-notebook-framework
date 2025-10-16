@@ -44,7 +44,10 @@ from helpers.batch import (
 from helpers.job import create_job, update_job_status
 from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus
 
-TEST_SCHEMA = 'test'
+
+
+TEST_SCHEMA = Path(__file__).stem
+
 
 
 def setup_test_schema():

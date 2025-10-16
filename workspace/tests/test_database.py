@@ -33,7 +33,7 @@ from helpers.database import (
 )
 
 
-TEST_SCHEMA = 'test'
+TEST_SCHEMA = Path(__file__).stem
 
 
 def setup_test_schema():

@@ -28,19 +28,54 @@ echo "============================================"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-# Set database connection to localhost for testing
-export DB_SERVER=${DB_SERVER:-localhost}
-export DB_PORT=${DB_PORT:-5432}
-export DB_NAME=${DB_NAME:-irp_db}
-export DB_USER=${DB_USER:-irp_user}
-export DB_PASSWORD=${DB_PASSWORD:-irp_pass}
+# Set TEST database connection for all tests
+# This ensures tests NEVER touch production database (irp_db)
+export DB_SERVER=localhost
+export DB_PORT=5432
+export DB_NAME=test_db
+export DB_USER=test_user
+export DB_PASSWORD=test_pass
 
 echo ""
-echo "Database Configuration:"
+echo -e "${GREEN}TEST${NC} Database Configuration (Isolated from Production):"
 echo "  Host: $DB_SERVER"
 echo "  Port: $DB_PORT"
-echo "  Database: $DB_NAME"
-echo "  User: $DB_USER"
+echo "  Database: $DB_NAME (TEST DATABASE)"
+echo "  User: $DB_USER (TEST USER)"
+echo ""
+echo -e "${YELLOW}NOTE:${NC} Tests run against 'test_db' - production 'irp_db' is protected"
+echo ""
+
+# Ensure test database exists in Docker postgres container
+echo "Checking test database setup..."
+CONTAINER_NAME="irp-postgres"
+
+# Check if postgres container is running
+if ! docker ps | grep -q "$CONTAINER_NAME"; then
+    echo -e "${RED}✗${NC} PostgreSQL container '$CONTAINER_NAME' is not running"
+    echo "  Start it with: docker-compose up -d postgres"
+    exit 1
+fi
+
+# Check if test_user exists, create if not
+if ! docker exec $CONTAINER_NAME psql -U irp_user -d irp_db -tAc "SELECT 1 FROM pg_roles WHERE rolname='test_user'" | grep -q 1; then
+    echo "  Creating test user..."
+    docker exec $CONTAINER_NAME psql -U irp_user -d irp_db -c "CREATE USER test_user WITH PASSWORD 'test_pass';" > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} Test user created"
+else
+    echo -e "  ${GREEN}✓${NC} Test user exists"
+fi
+
+# Check if test_db exists, create if not
+if ! docker exec $CONTAINER_NAME psql -U irp_user -d irp_db -lqt | cut -d \| -f 1 | grep -qw test_db; then
+    echo "  Creating test database..."
+    docker exec $CONTAINER_NAME psql -U irp_user -d irp_db -c "CREATE DATABASE test_db OWNER test_user;" > /dev/null 2>&1
+    docker exec $CONTAINER_NAME psql -U irp_user -d irp_db -c "GRANT ALL PRIVILEGES ON DATABASE test_db TO test_user;" > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} Test database created"
+else
+    echo -e "  ${GREEN}✓${NC} Test database exists"
+fi
+
 echo ""
 
 # Check if venv exists - supports (venv) and (.venv)
