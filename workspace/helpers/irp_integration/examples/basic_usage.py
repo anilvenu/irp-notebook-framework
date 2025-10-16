@@ -65,7 +65,7 @@ import_response = irp_client.mri_import.execute_mri_import(
 print(json.dumps(import_response, indent=2))
 
 # Geocode
-geocode_response = irp_client.portfolio.geocode_portfolio(edm_name, portfolio_id)
+geocode_response = irp_client.portfolio.geohaz_portfolio(edm_name, portfolio_id)
 print(json.dumps(geocode_response, indent=2))
 
 # Analysis
