@@ -14,9 +14,37 @@ echo "============================================"
 
 # Check if .env file exists
 if [ ! -f .env ]; then
-    echo ".env file missing from the root directory."
+    echo "ERROR: .env file missing from the root directory."
     exit 1
 fi
+
+# Validate required environment variables
+echo "Validating environment configuration..."
+MISSING_VARS=()
+REQUIRED_VARS=("DB_NAME" "DB_USER" "DB_PASSWORD" "DB_PORT")
+
+for var in "${REQUIRED_VARS[@]}"; do
+    if ! grep -q "^${var}=" .env || [ -z "$(grep "^${var}=" .env | cut -d'=' -f2)" ]; then
+        MISSING_VARS+=("$var")
+    fi
+done
+
+if [ ${#MISSING_VARS[@]} -ne 0 ]; then
+    echo "ERROR: Missing or empty required variables in .env:"
+    for var in "${MISSING_VARS[@]}"; do
+        echo "  - $var"
+    done
+    echo ""
+    echo "Please ensure .env contains all required database configuration:"
+    echo "  DB_NAME=irp_db"
+    echo "  DB_USER=irp_user"
+    echo "  DB_PASSWORD=irp_pass"
+    echo "  DB_PORT=5432"
+    exit 1
+fi
+
+echo "✓ Environment configuration valid"
+echo ""
 
 # Start Docker containers
 docker-compose up -d

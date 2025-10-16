@@ -15,6 +15,7 @@ Run this test:
 """
 
 import sys
+import argparse
 from pathlib import Path
 from datetime import datetime
 import json
@@ -48,7 +49,9 @@ from helpers.job import (
 )
 from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus
 
+
 TEST_SCHEMA = Path(__file__).stem
+
 
 def setup_test_schema():
     """Initialize test schema with database tables"""
@@ -554,8 +557,12 @@ def test_parent_child_job_chain():
         return False
 
 
-def run_all_tests():
-    """Run all integration tests and report results"""
+def run_all_tests(preserve=False):
+    """Run all tests and report results
+
+    Args:
+        preserve: If True, keep schema after tests for debugging
+    """
     print("\n" + "="*80)
     print("BATCH/JOB INTEGRATION TEST SUITE")
     print("="*80)
@@ -566,6 +573,9 @@ def run_all_tests():
         print("Database connection failed. Please check your configuration.")
         return
     print("✓ Database connection successful")
+
+    # Cleanup any preserved schema from last run
+    cleanup_test_schema()
 
     # Setup test schema
     if not setup_test_schema():
@@ -593,8 +603,11 @@ def run_all_tests():
             traceback.print_exc()
             results.append((test_name, False))
 
-    # Clean up test schema
-    cleanup_test_schema()
+    # Clean up test schema (unless preserve flag set)
+    if not preserve:
+        cleanup_test_schema()
+    else:
+        print(f"\nSchema '{TEST_SCHEMA}' preserved for debugging")
 
     # Summary
     print("\n" + "="*80)
@@ -616,4 +629,9 @@ def run_all_tests():
 
 
 if __name__ == "__main__":
-    run_all_tests()
+    parser = argparse.ArgumentParser(description='Run database tests')
+    parser.add_argument('--preserve', action='store_true',
+                       help='Preserve test schema after tests for debugging')
+    args = parser.parse_args()
+
+    run_all_tests(preserve=args.preserve)

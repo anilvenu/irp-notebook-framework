@@ -40,9 +40,8 @@ services:
   postgres:
     # PostgreSQL Database Service
     # This service runs a PostgreSQL database using the official postgres:15-alpine image.
-    # It creates TWO databases via init script:
-    #   1. Production DB (irp_db with irp_user) - used by Jupyter notebooks
-    #   2. Test DB (test_db with test_user) - used by test scripts
+    # Production DB (irp_db with irp_user) is created automatically by POSTGRES_DB env var.
+    # Test DB (test_db with test_user) is created by run-tests.sh when tests are run.
     # The database data is persisted using a Docker volume.
     image: postgres:15-alpine
     container_name: irp-postgres
@@ -50,13 +49,12 @@ services:
       - "5432:5432"
     environment:
       # Production database credentials (from .env)
-      # Init script uses these to create production DB and user
+      # PostgreSQL will create this database and user automatically on first start
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
