@@ -675,7 +675,7 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
             recon_result = BatchStatus.ACTIVE
 
     # Build recon summary
-    cancelled_job_ids = [j['id'] for j in non_skipped_jobs]
+    cancelled_job_ids = [j['id'] for j in non_skipped_jobs if j['status'] == JobStatus.CANCELLED]
     error_job_ids = [j['id'] for j in non_skipped_jobs if j['status'] == JobStatus.ERROR]
     failed_job_ids = [j['id'] for j in non_skipped_jobs if j['status'] == JobStatus.FAILED]
 
