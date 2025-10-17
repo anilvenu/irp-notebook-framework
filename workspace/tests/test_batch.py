@@ -105,8 +105,8 @@ def create_test_hierarchy(cycle_name='test_cycle'):
 
     # Create cycle
     cycle_id = execute_insert(
-        "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)",
-        (cycle_name, 'ACTIVE', 'test_user'),
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        (cycle_name, 'ACTIVE'),
         schema=TEST_SCHEMA
     )
 
@@ -298,8 +298,8 @@ def test_create_batch_multi_job():
         # Create hierarchy with multi-job config
         import json
         cycle_id = execute_insert(
-            "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)",
-            ('test_multi_job', 'ACTIVE', 'test_user'),
+            "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+            ('test_multi_job', 'ACTIVE'),
             schema=TEST_SCHEMA
         )
         stage_id = execute_insert(

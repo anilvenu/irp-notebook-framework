@@ -79,8 +79,7 @@ def cycle_summary(cycle: Dict[str, Any]):
     header(f"Cycle: {cycle.get('cycle_name', 'Unknown')}")
     data = {
         "Status": cycle.get("status", "N/A"),
-        "Created": str(cycle.get("created_ts", "N/A")),
-        "Created By": cycle.get("created_by", "N/A")
+        "Created": str(cycle.get("created_ts", "N/A"))
     }
     if cycle.get("archived_ts"):
         data["Archived"] = str(cycle["archived_ts"])

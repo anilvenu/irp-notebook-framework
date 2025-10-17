@@ -121,7 +121,7 @@ echo "$(pwd)/workspace" > $(python -c "import site; print(f'{site.getsitepackage
 python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')"
 
 # Create workspace/tests/results
-mkdir workspace/tests/results
+mkdir -p workspace/tests/results
 
 # Run the tests
 echo ""

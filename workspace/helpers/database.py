@@ -208,24 +208,12 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         List of IDs for newly inserted records (in order)
 
     Example:
-        # Basic insert
-        query = "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)"
+        query = "INSERT INTO tbl (name, status, json_data) VALUES (%s, %s, %s)"
         params = [
-            ('cycle1', 'ACTIVE', 'user1'),
-            ('cycle2', 'ACTIVE', 'user2')
-        ]
-        ids = bulk_insert(query, params)
-
-        # Insert with JSONB
-        query = "INSERT INTO irp_cycle (cycle_name, status, metadata) VALUES (%s, %s, %s)"
-        params = [
-            ('cycle1', 'ACTIVE', {'key': 'value1'}),
-            ('cycle2', 'ACTIVE', {'key': 'value2'})
+            ('n1', 'ACTIVE', {'key': 'value1'}),
+            ('n2', 'ACTIVE', {'key': 'value2'})
         ]
         ids = bulk_insert(query, params, jsonb_columns=[2])
-
-        # Test insert
-        ids = bulk_insert(query, params)
     """
     import json
 
@@ -333,7 +321,7 @@ def get_active_cycle(schema: str = 'public') -> Optional[Dict[str, Any]]:
         Dictionary with cycle information or None if no active cycle
     """
     query = """
-        SELECT id, cycle_name, status, created_ts, created_by, metadata
+        SELECT id, cycle_name, status, created_ts
         FROM irp_cycle
         WHERE status = 'ACTIVE'
         ORDER BY created_ts DESC
@@ -346,7 +334,7 @@ def get_active_cycle(schema: str = 'public') -> Optional[Dict[str, Any]]:
 def get_cycle_by_name(cycle_name: str) -> Optional[Dict[str, Any]]:
     """Get cycle by name"""
     query = """
-        SELECT id, cycle_name, status, created_ts, archived_ts, created_by, metadata
+        SELECT id, cycle_name, status, created_ts, archived_t
         FROM irp_cycle
         WHERE cycle_name = %s
     """
@@ -354,14 +342,13 @@ def get_cycle_by_name(cycle_name: str) -> Optional[Dict[str, Any]]:
     return df.iloc[0].to_dict() if not df.empty else None
 
 
-def create_cycle(cycle_name: str, created_by: str, metadata: Dict = None) -> int:
+def create_cycle(cycle_name: str) -> int:
     """Create new cycle"""
     query = """
-        INSERT INTO irp_cycle (cycle_name, status, created_by, metadata)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO irp_cycle (cycle_name, status)
+        VALUES (%s, %s, %s)
     """
-    import json
-    return execute_insert(query, (cycle_name, CycleStatus.ACTIVE, created_by, json.dumps(metadata) if metadata else None))
+    return execute_insert(query, (cycle_name, CycleStatus.ACTIVE))
 
 
 def archive_cycle(cycle_id: int) -> bool:
@@ -454,11 +441,11 @@ def get_step_info(step_id: int) -> Optional[Dict[str, Any]]:
 def get_last_step_run(step_id: int) -> Optional[Dict[str, Any]]:
     """Get the most recent run for a step"""
     query = """
-        SELECT id, run_number, status, started_ts, completed_ts, 
+        SELECT id, run_num, status, started_ts, completed_ts, 
                started_by, error_message, output_data
         FROM irp_step_run
         WHERE step_id = %s
-        ORDER BY run_number DESC
+        ORDER BY run_num DESC
         LIMIT 1
     """
     df = execute_query(query, (step_id,))
@@ -470,20 +457,20 @@ def create_step_run(step_id: int, started_by: str) -> Tuple[int, int]:
     Create new step run
     
     Returns:
-        Tuple of (run_id, run_number)
+        Tuple of (run_id, run_num)
     """
     # Get next run number
-    query = "SELECT COALESCE(MAX(run_number), 0) + 1 FROM irp_step_run WHERE step_id = %s"
-    run_number = execute_scalar(query, (step_id,))
+    query = "SELECT COALESCE(MAX(run_num), 0) + 1 FROM irp_step_run WHERE step_id = %s"
+    run_num = execute_scalar(query, (step_id,))
     
     # Create run
     query = """
-        INSERT INTO irp_step_run (step_id, run_number, status, started_by)
+        INSERT INTO irp_step_run (step_id, run_num, status, started_by)
         VALUES (%s, %s, 'ACTIVE', %s)
     """
-    run_id = execute_insert(query, (step_id, run_number, started_by))
+    run_id = execute_insert(query, (step_id, run_num, started_by))
     
-    return run_id, run_number
+    return run_id, run_num
 
 
 def update_step_run(
@@ -527,16 +514,16 @@ def get_cycle_progress(cycle_name: str) -> pd.DataFrame:
             st.step_num,
             st.step_name,
             sr.status as last_status,
-            sr.run_number as last_run,
+            sr.run_num as last_run,
             sr.completed_ts as last_completed
         FROM irp_step st
         INNER JOIN irp_stage sg ON st.stage_id = sg.id
         INNER JOIN irp_cycle c ON sg.cycle_id = c.id
         LEFT JOIN LATERAL (
-            SELECT status, run_number, completed_ts
+            SELECT status, run_num, completed_ts
             FROM irp_step_run
             WHERE step_id = st.id
-            ORDER BY run_number DESC
+            ORDER BY run_num DESC
             LIMIT 1
         ) sr ON TRUE
         WHERE c.cycle_name = %s
@@ -554,7 +541,7 @@ def get_step_history(cycle_name: str, stage_num: int = None, step_num: int = Non
             sg.stage_name,
             st.step_num,
             st.step_name,
-            sr.run_number,
+            sr.run_num,
             sr.status,
             sr.started_ts,
             sr.completed_ts,

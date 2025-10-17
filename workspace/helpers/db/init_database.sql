@@ -33,9 +33,7 @@ CREATE TABLE irp_cycle (
     cycle_name VARCHAR(255) UNIQUE NOT NULL,
     status cycle_status_enum DEFAULT 'ACTIVE',
     created_ts TIMESTAMPTZ DEFAULT NOW(),
-    archived_ts TIMESTAMPTZ NULL,
-    created_by VARCHAR(255) NULL,
-    metadata JSONB NULL
+    archived_ts TIMESTAMPTZ NULL
 );
 
 -- Configuration for Cycle
@@ -79,7 +77,7 @@ CREATE TABLE irp_step (
 CREATE TABLE irp_step_run (
     id SERIAL PRIMARY KEY,
     step_id INTEGER NOT NULL,
-    run_number INTEGER NOT NULL,
+    run_num INTEGER NOT NULL,
     status step_status_enum DEFAULT 'ACTIVE',
     started_ts TIMESTAMPTZ DEFAULT NOW(),
     completed_ts TIMESTAMPTZ NULL,
@@ -98,12 +96,8 @@ CREATE TABLE irp_batch (
     status batch_status_enum DEFAULT 'INITIATED',
     submitted_ts TIMESTAMPTZ NULL,
     completed_ts TIMESTAMPTZ NULL,
-    total_jobs INTEGER DEFAULT 0,
-    completed_jobs INTEGER DEFAULT 0,
-    failed_jobs INTEGER DEFAULT 0,
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     updated_ts TIMESTAMPTZ DEFAULT NOW(),
-    metadata JSONB NULL,
     CONSTRAINT fk_batch_step FOREIGN KEY (step_id) REFERENCES irp_step(id),
     CONSTRAINT fk_batch_configuration FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
 );

@@ -64,7 +64,7 @@ class Step:
         
         # Initialize run tracking
         self.run_id = None
-        self.run_number = None
+        self.run_num = None
         self.logs = []
         
         # Auto-start if not executed
@@ -101,14 +101,14 @@ class Step:
         
         try:
             # Create new step run
-            self.run_id, self.run_number = db.create_step_run(
+            self.run_id, self.run_num = db.create_step_run(
                 self.step_id,
                 SYSTEM_USER
             )
             
             self.start_time = datetime.now()
             
-            print(f"Starting Step Run #{self.run_number}")
+            print(f"Starting Step Run #{self.run_num}")
             print(f"{self.context}")
             print(f"Run ID: {self.run_id}")
             
@@ -183,7 +183,7 @@ class Step:
             
             # Add execution metadata
             final_output['_meta'] = {
-                'run_number': self.run_number,
+                'run_num': self.run_num,
                 'start_time': self.start_time.isoformat(),
                 'end_time': datetime.now().isoformat(),
                 'logs': self.logs[-10:]  # Last 10 log entries
@@ -200,7 +200,7 @@ class Step:
             
             print("\n" + "="*60)
             print(f"STEP COMPLETED")
-            print(f"   Run #{self.run_number} completed in {duration:.1f} seconds")
+            print(f"   Run #{self.run_num} completed in {duration:.1f} seconds")
             print("="*60)
             
         except Exception as e:
@@ -234,7 +234,7 @@ class Step:
             
             print("\n" + "="*60)
             print(f"STEP FAILED")
-            print(f"Run #{self.run_number} failed after {duration:.1f} seconds")
+            print(f"Run #{self.run_num} failed after {duration:.1f} seconds")
             print(f"Error: {error_message}")
             print("="*60)
             

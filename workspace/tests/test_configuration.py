@@ -95,8 +95,8 @@ def cleanup_test_schema():
 def create_test_cycle(cycle_name):
     """Helper function to create a test cycle and return its ID"""
     cycle_id = execute_insert(
-        "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)",
-        (cycle_name, 'ACTIVE', 'test_user'),
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        (cycle_name, 'ACTIVE'),
         schema=TEST_SCHEMA
     )
     return cycle_id
@@ -361,8 +361,8 @@ def test_load_configuration_active_cycle_check():
 
         # Create another cycle (archived)
         archived_cycle_id = execute_insert(
-            "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)",
-            ('archived_cycle', 'ARCHIVED', 'test_user'),
+            "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+            ('archived_cycle', 'ARCHIVED'),
             schema=TEST_SCHEMA
         )
         print(f"  Created archived cycle ID: {archived_cycle_id}")

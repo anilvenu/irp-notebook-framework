@@ -78,7 +78,7 @@ def validate_cycle_name(cycle_name: str) -> bool:
     return True
 
 
-def create_cycle(cycle_name: str, created_by: str = None) -> bool:
+def create_cycle(cycle_name: str) -> bool:
     """
     Create a new active cycle.
     
@@ -90,15 +90,11 @@ def create_cycle(cycle_name: str, created_by: str = None) -> bool:
     
     Args:
         cycle_name: Name for the new cycle
-        created_by: User creating the cycle
     
     Returns:
         True if successful
     """
-    
-    if created_by is None:
-        created_by = SYSTEM_USER
-    
+        
     try:
         # Validate name
         valid = validate_cycle_name(cycle_name)
@@ -139,7 +135,7 @@ def create_cycle(cycle_name: str, created_by: str = None) -> bool:
         _register_stages_and_steps(0, new_dir, apply=False)
 
 
-        cycle_id = db.create_cycle(cycle_name, created_by)
+        cycle_id = db.create_cycle(cycle_name)
         
         # Register stages and steps
         print('Registering stages and steps...')
@@ -290,8 +286,7 @@ def get_cycle_status() -> Any:
             cycle_name,
             status,
             created_ts,
-            archived_ts,
-            created_by
+            archived_ts
         FROM irp_cycle
         ORDER BY
             CASE status

@@ -107,8 +107,8 @@ def create_test_hierarchy(cycle_name='test_cycle', config_data=None):
 
     # Create cycle
     cycle_id = execute_insert(
-        "INSERT INTO irp_cycle (cycle_name, status, created_by) VALUES (%s, %s, %s)",
-        (cycle_name, 'ACTIVE', 'test_user'),
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        (cycle_name, 'ACTIVE'),
         schema=TEST_SCHEMA
     )
 

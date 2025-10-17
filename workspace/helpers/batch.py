@@ -109,9 +109,12 @@ def _insert_recon_log(
 
 def _lookup_step_id(configuration_id: int, schema: str = 'public') -> Optional[int]:
     """
+
+    TODO
+
     Lookup step_id for a configuration (placeholder - returns None for now).
 
-    In future, this could derive step from configuration metadata or context.
+    In future, this could derive step from configuration or context.
     For now, requires explicit step_id parameter.
 
     Args:
@@ -149,8 +152,7 @@ def read_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
 
     query = """
         SELECT id, step_id, configuration_id, batch_type, status,
-               created_ts, submitted_ts, completed_ts,
-               total_jobs, completed_jobs, failed_jobs, metadata
+               created_ts, submitted_ts, completed_ts
         FROM irp_batch
         WHERE id = %s
     """
@@ -161,10 +163,6 @@ def read_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
         raise BatchError(f"Batch with id {batch_id} not found")
 
     batch = df.iloc[0].to_dict()
-
-    # Parse JSON metadata if it's a string
-    if isinstance(batch.get('metadata'), str):
-        batch['metadata'] = json.loads(batch['metadata'])
 
     return batch
 
@@ -591,6 +589,7 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
     3. Determine batch status:
        - CANCELLED: All jobs are CANCELLED
        - FAILED: At least one job is FAILED
+       - ERROR: At least one job is ERROR (TODO)
        - COMPLETED: All configs have at least one FINISHED job OR skipped job
        - ACTIVE: Otherwise
     4. Create recon log entry with detailed summary
@@ -626,7 +625,7 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
         status = job['status']
         # Treat skipped jobs as a pseudo-status for recon summary
         if job['skipped']:
-            status = 'SKIPPED'
+            status = 'SKIPPED'  # This is a pseudo-status that we will use to track SKIPPED jobs
         status_counts[status] = status_counts.get(status, 0) + 1
 
     # Determine batch status
@@ -636,14 +635,16 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
     fulfilled_configs = 0
 
     # Check for all CANCELLED
-    if all(j['status'] == 'CANCELLED' for j in non_skipped_jobs):
+    if all(j['status'] == JobStatus.CANCELLED for j in non_skipped_jobs):
         recon_result = BatchStatus.CANCELLED
-        cancelled_job_ids = [j['id'] for j in non_skipped_jobs]
+        
+    # Check for any ERROR
+    elif any(j['status'] == JobStatus.ERROR for j in non_skipped_jobs):
+        recon_result = BatchStatus.ERROR
 
     # Check for any FAILED
-    elif any(j['status'] == 'FAILED' for j in non_skipped_jobs):
+    elif any(j['status'] == JobStatus.FAILED for j in non_skipped_jobs):
         recon_result = BatchStatus.FAILED
-        failed_job_ids = [j['id'] for j in non_skipped_jobs if j['status'] == 'FAILED']
 
     else:
         # Check if all configs are fulfilled
@@ -660,7 +661,7 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
         for config in non_skipped_configs:
             config_jobs = jobs_by_config.get(config['id'], [])
             has_success = any(
-                j['status'] in ['FINISHED'] or j['skipped']
+                j['status'] in [JobStatus.FINISHED]
                 for j in config_jobs
             )
             if has_success:
@@ -674,6 +675,10 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
             recon_result = BatchStatus.ACTIVE
 
     # Build recon summary
+    cancelled_job_ids = [j['id'] for j in non_skipped_jobs]
+    error_job_ids = [j['id'] for j in non_skipped_jobs if j['status'] == JobStatus.ERROR]
+    failed_job_ids = [j['id'] for j in non_skipped_jobs if j['status'] == JobStatus.FAILED]
+
     recon_summary = {
         'total_configs': len(all_configs),
         'non_skipped_configs': len(non_skipped_configs),
@@ -682,7 +687,8 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
         'non_skipped_jobs': len(non_skipped_jobs),
         'job_status_counts': status_counts,
         'failed_job_ids': failed_job_ids,
-        'cancelled_job_ids': cancelled_job_ids
+        'cancelled_job_ids': cancelled_job_ids,
+        'error_job_ids': error_job_ids
     }
 
     # Insert recon log
