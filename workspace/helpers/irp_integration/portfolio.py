@@ -1,3 +1,4 @@
+import json
 from .client import Client
 
 class PortfolioManager:
@@ -9,10 +10,10 @@ class PortfolioManager:
         data = {
             "name": portfolio_name,
             "number": portfolio_number,
-            "description": "This is a test portfolio created from a notebook",
+            "description": description,
         }
         response = self.client.request('POST', '/riskmodeler/v2/portfolios', params=params, json=data)
-        return {'id': response.headers['location']}
+        return {'id': response.headers['location'].split('/')[-1]}
 
     def get_portfolios_by_edm_name(self, edm_name: str) -> dict:
         params = {"datasource": edm_name}
@@ -24,26 +25,51 @@ class PortfolioManager:
         response = self.client.request('GET', f'/riskmodeler/v2/portfolios/{portfolio_id}', params=params)
         return response.json()
     
-    def geocode_portfolio(self,
-                          edm_name: str,
-                          portfolio_id: int,
-                          *,
-                          name: str = "geocode",
-                          type: str = "geocode",
-                          engine_type: str = "RL",
-                          version: str = "21.0",
-                          layer_options: dict = {"aggregateTriggerEnabled": "true", "geoLicenseType": "0", "skipPrevGeocoded": False}
+    # TODO: Refactor repeating code blocks
+    def geohaz_portfolio(self,
+                         edm_name: str,
+                         portfolio_id: int,
+                         *,
+                         geocode: bool = True,
+                         hazard_eq: bool = False,
+                         hazard_ws: bool = False,
+                         engine_type: str = "RL",
+                         version: str = "22.0",
+                         geocode_layer_options: dict = {"aggregateTriggerEnabled": "true", "geoLicenseType": "0", "skipPrevGeocoded": False},
+                         hazard_layer_options: dict = {"overrideUserDef": False, "skipPrevHazard": False}
                         ) -> dict:
         params = {"datasource": edm_name}
-        data = [
-            {
-                "name": name,
-                "type": type,
-                "engineType": engine_type,
-                "version": version,
-                "layerOptions": layer_options,
-            }
-        ]
+        data = []
+        if geocode:
+            data.append(
+                {
+                    "name": "geocode",
+                    "type": "geocode",
+                    "engineType": engine_type,
+                    "version": version,
+                    "layerOptions": geocode_layer_options,
+                }
+            )
+        if hazard_eq:
+            data.append(
+                {
+                    "name": "earthquake",
+                    "type": "hazard",
+                    "engineType": engine_type,
+                    "version": version,
+                    "layerOptions": hazard_layer_options
+                }
+            )
+        if hazard_ws:
+            data.append(
+                {
+                    "name": "windstorm",
+                    "type": "hazard",
+                    "engineType": engine_type,
+                    "version": version,
+                    "layerOptions": hazard_layer_options
+                }
+            )
 
         response = self.client.execute_workflow('POST',
                                                 f"/riskmodeler/v2/portfolios/{portfolio_id}/geohaz",

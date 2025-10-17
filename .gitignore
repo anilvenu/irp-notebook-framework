@@ -10,6 +10,7 @@ env/
 .venv
 _Archive/
 workspace/workflows/Active_*
+workspace/workflows/_Tools/files/working_files/*.csv
 
 # Jupyterlab files
 .ipython/
