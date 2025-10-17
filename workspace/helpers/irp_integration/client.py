@@ -87,22 +87,19 @@ class Client:
     def poll_workflow_batch(self, workflow_ids, interval=20, timeout=600000) -> requests.Response:
         start = time.time()
         while True:
-            print(f"Polling batch workflow ids: {','.join(workflow_ids)}")
-            params = {'ids': ','.join(workflow_ids)}
-            r = requests.get(f"{self.base_url}/riskmodeler/v1/workflows", 
-                             headers=self.headers, 
-                             params=params)
-            r.raise_for_status()
+            print(f"Polling batch workflow ids: {','.join(str(item) for item in workflow_ids)}")
+            params = {'ids': ','.join(str(item) for item in workflow_ids)}
+            response = self.request('GET', f"/riskmodeler/v1/workflows", headers=self.headers, params=params)
 
             all_completed = True
-            for workflow in r.json().get('workflows', []):
+            for workflow in response.json().get('workflows', []):
                 status = workflow.get('status', '')
                 if status in self.WORKFLOW_IN_PROGRESS:
                     all_completed = False
                     break
 
             if all_completed:
-                return r
+                return response
             
             if time.time() - start > timeout:
                 raise TimeoutError(f"Batch workflows did not complete within {timeout} seconds.")

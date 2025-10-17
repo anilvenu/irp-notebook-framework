@@ -7,8 +7,32 @@ class ReferenceDataManager:
 
     def get_currencies(self) -> dict:
         params = {
-            "fields": "code, name",
+            "fields": "code,name",
             "limit": 1000
         }
-        response = self.client.request('GET', '/riskmodeler/v1/domains/Client/tablespace/UserConfig/entities/currency/values')
+        response = self.client.request('GET', '/riskmodeler/v1/domains/Client/tablespace/UserConfig/entities/currency/values', params=params)
         return response.json()
+    
+    def get_tag_by_name(self, tag_name: str) -> dict:
+        params = {
+            "isActive": True,
+            "filter": f"TAGNAME = '{tag_name}'"
+        }
+        response = self.client.request('GET', '/data-store/referencedata/v1/tags', params=params)
+        return response.json()
+    
+    def create_tag(self, tag_name: str):
+        data = {"tagName": tag_name}
+        response = self.client.request('POST', '/data-store/referencedata/v1/tags', json=data)
+        return {"id": response.headers['location'].split('/')[-1]}
+    
+    def get_tag_ids_from_tag_names(self, tag_names: list) -> list:
+        tag_ids = []
+        for tag_name in tag_names:
+            tag_search_response = self.get_tag_by_name(tag_name)
+            if len(tag_search_response) > 0:
+                tag_ids.append(tag_search_response[0]['tagId'])
+            else:
+                tag_ids.append(self.create_tag(tag_name)['id'])
+
+        return tag_ids
