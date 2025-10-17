@@ -105,11 +105,7 @@ CREATE TABLE irp_batch (
     updated_ts TIMESTAMPTZ DEFAULT NOW(),
     metadata JSONB NULL,
     CONSTRAINT fk_batch_step FOREIGN KEY (step_id) REFERENCES irp_step(id),
-<<<<<<< HEAD
-    CONSTRAINT uq_step_batch UNIQUE(step_id, batch_name)
-=======
     CONSTRAINT fk_batch_configuration FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
->>>>>>> main
 );
 
 
