@@ -2,7 +2,7 @@
 
 ## Overview
 
-The IRP Notebook Framework includes a comprehensive batch and job processing system for orchestrating Moody's workflow submissions. The system manages the entire lifecycle from configuration to job completion.
+The IRP Notebook Framework includes a batch and job processing system for orchestrating Moody's workflow submissions. The system manages the entire lifecycle from configuration to job completion.
 
 ## Key Entities
 
@@ -17,21 +17,7 @@ The IRP Notebook Framework includes a comprehensive batch and job processing sys
 
 ## Configuration
 
-### What is a Configuration?
-
-A **Configuration** is the master settings document for a risk analysis cycle. It contains all parameters needed to run the analysis, typically loaded from an Excel file.
-
-### Configuration Status Lifecycle
-
-```
-NEW → VALID → ACTIVE* → (used in batches)
-  ↓
-ERROR (if validation fails)
-```
-
-TODO : ACTIVE will be revisited and removed if not needed
-
-
+A **Configuration** is the master settings document for a risk analysis cycle. It contains all parameters needed to run the analysis, loaded from an Excel Configuration file.
 
 ### Key Operations
 
@@ -57,42 +43,11 @@ config = read_configuration(config_id)
 
 ### Configuration Transformers
 
-Configurations are transformed into job-specific configurations using registered transformers:
-
-```python
-from helpers.configuration import ConfigurationTransformer
-
-# Register custom transformer
-@ConfigurationTransformer.register('portfolio_analysis')
-def transform_portfolio(config):
-    """Transform config into per-portfolio job configs"""
-    portfolios = config['portfolios']
-    return [
-        {'portfolio_id': p['id'], 'params': p}
-        for p in portfolios
-    ]
-
-# List available transformers
-ConfigurationTransformer.list_types()
-# Returns: ['default', 'passthrough', 'multi_job', 'portfolio_analysis']
-```
-
-**Built-in Transformers:**
-- `default` - Creates single job with config as-is
-- `passthrough` - Single job, no copy
-- `multi_job` - Expects config with `jobs` list, creates one job per item
-
-TODO
-
-The decorator ```register``` has been created so that
-
-
+Configurations are transformed into job-specific configurations using registered transformers
 
 ---
 
 ## Batch
-
-### What is a Batch?
 
 A **Batch** represents a collection of related jobs generated from a master configuration. Each batch has a specific type (e.g., 'portfolio_analysis', 'risk_calculation') that determines how jobs are generated.
 
@@ -185,6 +140,8 @@ final_status = recon_batch(batch_id)
 }
 ```
 
+TODO - may need to replace with Moody's JOB IDs?
+
 ### Querying Batches
 
 ```python
@@ -206,8 +163,6 @@ non_skipped = get_batch_job_configurations(batch_id, skipped=False)
 ---
 
 ## Job Configuration
-
-### What is a Job Configuration?
 
 A **Job Configuration** is the specific configuration data for a single job, derived from the master configuration via a transformer. It can be:
 - **Original**: Created by transformer during batch creation
@@ -256,14 +211,12 @@ new_job_id = resubmit_job(
 
 ## Job
 
-### What is a Job?
-
 A **Job** is an individual Moody's workflow submission. Jobs have a full audit trail including parent-child relationships for resubmissions.
 
 ### Job Status Lifecycle
 
 
-**Terminal States:** COMPLETED, FAILED, CANCELLED, FORCED_OK
+**Terminal States:** COMPLETED, FAILED, CANCELLED
 
 ### Creating Jobs
 
@@ -543,56 +496,4 @@ update_batch_status(1, 'INVALID')  # Raises: BatchError("Invalid status: INVALID
 create_batch('nonexistent', config_id, step_id)  # Raises: BatchError("Unknown batch_type...")
 ```
 
----
-
-## Future Enhancements
-
-### Not Yet Implemented
-
-1. **Moody's API Integration**
-   - Replace stub in `job.py::_submit_job()`
-   - Replace stub in `job.py::track_job_status()`
-   - Add retry logic, exponential backoff
-
-2. **Job/Batch Cancellation**
-   - `cancel_job(job_id)` - Request cancellation
-   - `cancel_batch(batch_id)` - Cancel all jobs
-
-3. **Batch Resubmission**
-   - `resubmit_batch(batch_id)` - Resubmit failed batch
-
-4. **Advanced Validation**
-   - Batch-type-specific configuration validators
-   - Currently `validate=True` in create_job() is a placeholder
-
----
-
-## Module Reference
-
-### helpers.batch
-
-Functions: `create_batch`, `submit_batch`, `create_and_submit_batch`, `read_batch`, `update_batch_status`, `get_batch_jobs`, `get_batch_job_configurations`, `recon_batch`
-
-Exception: `BatchError`
-
-### helpers.job
-
-Functions: `create_job`, `submit_job`, `track_job_status`, `resubmit_job`, `read_job`, `update_job_status`, `get_job_config`, `skip_job`
-
-Exception: `JobError`
-
-### helpers.configuration
-
-Functions: `read_configuration`, `update_configuration_status`, `load_configuration_file`
-
-Class: `ConfigurationTransformer` (with `@register` decorator and `get_job_configurations()`)
-
-Exception: `ConfigurationError`
-
----
-
-## See Also
-
-- [Configuration Transformers](CONFIGURATION_TRANSFORMERS.md) - Detailed transformer guide
-- [Bulk Insert](BULK_INSERT.md) - Database performance optimization
-- API documentation: Use `help()` on any function for detailed docstrings
+**API documentation:** Use `help()` on any function for detailed docstrings

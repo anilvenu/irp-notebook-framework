@@ -84,16 +84,17 @@ class BatchStatus:
     COMPLETED = 'COMPLETED'
     FAILED = 'FAILED'
     CANCELLED = 'CANCELLED'
+    ERROR = 'ERROR'
 
     @classmethod
     def all(cls):
-        return [cls.INITIATED, cls.ACTIVE, cls.COMPLETED, cls.FAILED, cls.CANCELLED]
+        return [cls.INITIATED, cls.ACTIVE, cls.COMPLETED, cls.FAILED, cls.CANCELLED, cls.ERROR]
 
 
 class ConfigurationStatus:
     NEW = 'NEW'
     VALID = 'VALID'
-    ACTIVE = 'ACTIVE'
+    ACTIVE = 'ACTIVE'   # TOTO - Remove if not used
     ERROR = 'ERROR'
 
     @classmethod
@@ -112,7 +113,7 @@ class JobStatus:
     CANCEL_REQUESTED = 'CANCEL_REQUESTED'
     CANCELLING = 'CANCELLING'
     CANCELLED = 'CANCELLED'
-    FORCED_OK = 'FORCED_OK'
+    ERROR = 'ERROR'
 
 
     @classmethod
@@ -120,22 +121,13 @@ class JobStatus:
         return [
             cls.INITIATED, cls.SUBMITTED, cls.QUEUED, cls.PENDING,
             cls.RUNNING, cls.FINISHED, cls.FAILED, cls.CANCEL_REQUESTED,
-            cls.CANCELLING, cls.CANCELLED, cls.FORCED_OK
+            cls.CANCELLING, cls.CANCELLED, cls.ERROR
         ]
-    @classmethod
-    def terminal(cls):
-        """Terminal statuses - job cannot continue from these"""
-        return [cls.FINISHED, cls.FAILED, cls.CANCELLED, cls.FORCED_OK]
 
     @classmethod
-    def active(cls):
-        """Active statuses - job is still in progress"""
-        return [cls.PENDING, cls.RUNNING, cls.CANCEL_REQUESTED, cls.CANCELLING]
-
-    @classmethod
-    def completed(cls):
-        """Completed statuses - job has finished one way or another"""
-        return [cls.FINISHED, cls.FORCED_OK]
+    def ready_for_submit(cls):
+        """Statuses that are ready for submission"""
+        return [cls.INITIATED]
 
     def __str__(self):
         return self.value

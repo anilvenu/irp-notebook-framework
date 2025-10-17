@@ -25,7 +25,7 @@ from datetime import datetime
 from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
-from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus
+from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus
 from helpers.configuration import read_configuration, update_configuration_status, ConfigurationTransformer
 from helpers.cycle import get_active_cycle_id
 
@@ -335,14 +335,13 @@ def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     Submit all eligible jobs in batch to Moody's.
 
     Process:
-    1. Validate batch is in (INITIATED, ACTIVE, or FAILED) status
-    2. Validate configuration is VALID or ACTIVE
-    3. Validate cycle is ACTIVE
-    4. Get all jobs in batch
-    5. For each job in INITIATED status, call submit_job
-    6. Update batch status to ACTIVE
-    7. Update batch submitted_ts
-    8. Update configuration status to ACTIVE
+    1. Validate configuration is VALID or ACTIVE
+    2. Validate cycle is ACTIVE
+    3. Get all jobs in batch
+    4. For each job in INITIATED status, call submit_job
+    5. Update batch status to ACTIVE
+    6. Update batch submitted_ts
+    7. Update configuration status to ACTIVE
 
     Args:
         batch_id: Batch ID
@@ -366,15 +365,6 @@ def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     # Validate batch_id
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise BatchError(f"Invalid batch_id: {batch_id}")
-
-    # Read and validate batch
-    batch = read_batch(batch_id, schema=schema)
-
-    if batch['status'] not in [BatchStatus.INITIATED, BatchStatus.ACTIVE, BatchStatus.FAILED]:
-        raise BatchError(
-            f"Batch {batch_id} has status '{batch['status']}'. "
-            f"Can only submit batches in INITIATED, ACTIVE, or FAILED status."
-        )
 
     # Read and validate configuration
     config = read_configuration(batch['configuration_id'], schema=schema)
@@ -406,7 +396,7 @@ def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     # Submit eligible jobs
     submitted_jobs = []
     for job_record in jobs:
-        if job_record['status'] == 'INITIATED' and not job_record['skipped']:
+        if job_record['status'] in JobStatus.ready_for_submit() and not job_record['skipped']:
             try:
                 job.submit_job(job_record['id'], schema=schema)
                 submitted_jobs.append({
