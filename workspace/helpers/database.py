@@ -7,6 +7,7 @@ from sqlalchemy.pool import NullPool
 import pandas as pd
 from typing import Optional, List, Dict, Any, Tuple
 from helpers.constants import DB_CONFIG, CycleStatus, StepStatus
+from helpers.db_context import get_current_schema
 
 
 class DatabaseError(Exception):
@@ -82,50 +83,56 @@ def test_connection(schema: str = 'public') -> bool:
         return False
 
 
-def execute_query(query: str, params: tuple = None, schema: str = 'public') -> pd.DataFrame:
+def execute_query(query: str, params: tuple = None, schema: str = None) -> pd.DataFrame:
     """
     Execute SELECT query and return results as DataFrame
 
     Args:
         query: SQL query string
         params: Query parameters (optional)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (optional, uses context if not provided)
 
     Returns:
         DataFrame with query results
     """
     try:
+        # Use provided schema, or get from context
+        active_schema = schema if schema is not None else get_current_schema()
+
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
 
         engine = get_engine()
         with engine.connect() as conn:
-            _set_schema(conn, schema)
+            _set_schema(conn, active_schema)
             df = pd.read_sql_query(text(converted_query), conn, params=param_dict)
         return df
     except Exception as e:
         raise DatabaseError(f"Query failed: {str(e)}")
 
 
-def execute_scalar(query: str, params: tuple = None, schema: str = 'public') -> Any:
+def execute_scalar(query: str, params: tuple = None, schema: str = None) -> Any:
     """
     Execute query and return single scalar value
 
     Args:
         query: SQL query string
         params: Query parameters (optional)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (optional, uses context if not provided)
 
     Returns:
         Single value from query
     """
     try:
+        # Use provided schema, or get from context
+        active_schema = schema if schema is not None else get_current_schema()
+
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
 
         engine = get_engine()
         with engine.connect() as conn:
-            _set_schema(conn, schema)
+            _set_schema(conn, active_schema)
             result = conn.execute(text(converted_query), param_dict)
             row = result.fetchone()
             return row[0] if row else None
@@ -133,25 +140,28 @@ def execute_scalar(query: str, params: tuple = None, schema: str = 'public') -> 
         raise DatabaseError(f"Scalar query failed: {str(e)}")
 
 
-def execute_command(query: str, params: tuple = None, schema: str = 'public') -> int:
+def execute_command(query: str, params: tuple = None, schema: str = None) -> int:
     """
     Execute INSERT/UPDATE/DELETE and return rows affected
 
     Args:
         query: SQL query string
         params: Query parameters (optional)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (optional, uses context if not provided)
 
     Returns:
         Number of rows affected
     """
     try:
+        # Use provided schema, or get from context
+        active_schema = schema if schema is not None else get_current_schema()
+
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
 
         engine = get_engine()
         with engine.connect() as conn:
-            _set_schema(conn, schema)
+            _set_schema(conn, active_schema)
             result = conn.execute(text(converted_query), param_dict)
             conn.commit()
             return result.rowcount
@@ -159,19 +169,22 @@ def execute_command(query: str, params: tuple = None, schema: str = 'public') ->
         raise DatabaseError(f"Command failed: {str(e)}")
 
 
-def execute_insert(query: str, params: tuple = None, schema: str = 'public') -> int:
+def execute_insert(query: str, params: tuple = None, schema: str = None) -> int:
     """
     Execute INSERT and return new record ID
 
     Args:
         query: SQL INSERT query string
         params: Query parameters (optional)
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (optional, uses context if not provided)
 
     Returns:
         ID of newly inserted record
     """
     try:
+        # Use provided schema, or get from context
+        active_schema = schema if schema is not None else get_current_schema()
+
         # Add RETURNING id if not present
         if "RETURNING" not in query.upper():
             query = query + " RETURNING id"
@@ -181,7 +194,7 @@ def execute_insert(query: str, params: tuple = None, schema: str = 'public') -> 
 
         engine = get_engine()
         with engine.connect() as conn:
-            _set_schema(conn, schema)
+            _set_schema(conn, active_schema)
             result = conn.execute(text(converted_query), param_dict)
             conn.commit()
             row = result.fetchone()
@@ -190,7 +203,7 @@ def execute_insert(query: str, params: tuple = None, schema: str = 'public') -> 
         raise DatabaseError(f"Insert failed: {str(e)}")
 
 
-def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] = None, schema: str = 'public') -> List[int]:
+def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] = None, schema: str = None) -> List[int]:
     """
     Execute bulk INSERT and return list of new record IDs
 
@@ -202,7 +215,7 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         params_list: List of tuples, each containing parameters for one insert
         jsonb_columns: Optional list of column indices (0-based) that contain JSONB data.
                       Dicts at these positions will be automatically converted to JSON strings.
-        schema: Database schema to use (default: 'public')
+        schema: Database schema to use (optional, uses context if not provided)
 
     Returns:
         List of IDs for newly inserted records (in order)
@@ -221,6 +234,9 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         return []
 
     try:
+        # Use provided schema, or get from context
+        active_schema = schema if schema is not None else get_current_schema()
+
         # Add RETURNING id if not present
         if "RETURNING" not in query.upper():
             query = query + " RETURNING id"
@@ -244,7 +260,7 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         inserted_ids = []
 
         with engine.connect() as conn:
-            _set_schema(conn, schema)
+            _set_schema(conn, active_schema)
 
             # Execute all inserts in a single transaction
             for params in processed_params:
