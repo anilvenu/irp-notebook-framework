@@ -120,27 +120,29 @@ echo ""
 echo "$(pwd)/workspace" > $(python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')")
 python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')"
 
+# Create workspace/tests/results
+mkdir workspace/tests/results
 
 # Run the tests
 echo ""
 echo "Running database tests..."
-python workspace/tests/test_database.py $PRESERVE_FLAG
+python workspace/tests/test_database.py $PRESERVE_FLAG > workspace/tests/results/test_database.log
 
 echo ""
 echo "Running configuration tests..."
-python workspace/tests/test_configuration.py $PRESERVE_FLAG
+python workspace/tests/test_configuration.py $PRESERVE_FLAG > workspace/tests/results/test_configuration.log
 
 echo ""
 echo "Running batch management tests..."
-python workspace/tests/test_batch.py $PRESERVE_FLAG
+python workspace/tests/test_batch.py $PRESERVE_FLAG > workspace/tests/results/test_batch.log
 
 echo ""
 echo "Running job management tests..."
-python workspace/tests/test_job.py $PRESERVE_FLAG
+python workspace/tests/test_job.py $PRESERVE_FLAG > workspace/tests/results/test_job.log
 
 echo ""
 echo "Running batch/job integration tests..."
-python workspace/tests/test_batch_job_integration.py $PRESERVE_FLAG
+python workspace/tests/test_batch_job_integration.py $PRESERVE_FLAG > workspace/tests/results/test_batch_job_integration.log
 
 # Capture exit code
 EXIT_CODE=$?

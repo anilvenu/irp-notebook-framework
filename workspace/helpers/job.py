@@ -19,6 +19,7 @@ Workflow:
 4. resubmit_job() - Creates new job, optionally with override, and skips original
 """
 
+import os
 import json
 import random
 from typing import Dict, Any, Optional, Tuple
@@ -562,6 +563,18 @@ def submit_job(
 
     Raises:
         JobError: If job not found
+
+    TODO:
+
+    1. Implement error check for job submission. If the submission succeeds, 
+       job should be updated to SUBMITTED status. If failed, it should be set 
+       to ERROR status
+    2. Implement error check when resubmitting a failed job. If the submission succeeds, 
+       job should be updated to SUBMITTED status. If failed, it should be set 
+       to ERROR status
+    3. Enhance batch recon. If any job is in ERROR status, the batch should be set 
+       to ERROR status
+
     """
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
@@ -592,8 +605,10 @@ def submit_job(
             schema=schema
         )
 
+
     # Optionally track immediately
     if track_immediately:
+        os.wait(5)
         track_job_status(job_id, schema=schema)
 
     return job_id
@@ -757,6 +772,11 @@ def resubmit_job(
             parent_job_id=parent_job_id,
             schema=schema
         )
+
+        # Submit the job
+        submit_job(new_job_id, schema=schema)
+        # TODO Handle submission error
+        
     else:
         # Reuse same config
         job_config_id = job['job_configuration_id']
@@ -768,7 +788,11 @@ def resubmit_job(
             schema=schema
         )
 
-    # Only skip original job after new job created successfully
+        # Submit the job
+        submit_job(new_job_id, schema=schema)
+        # TODO Handle submission error
+
+    # Skip original job after new job is created
     skip_job(job_id, schema=schema)
 
     return new_job_id
