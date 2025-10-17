@@ -366,6 +366,9 @@ def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise BatchError(f"Invalid batch_id: {batch_id}")
 
+    # Read batch
+    batch = read_batch(batch_id, schema=schema)
+
     # Read and validate configuration
     config = read_configuration(batch['configuration_id'], schema=schema)
 
