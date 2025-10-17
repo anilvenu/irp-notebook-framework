@@ -15,13 +15,15 @@ echo "============================================"
 # Check if .env file exists
 if [ ! -f .env ]; then
     echo "ERROR: .env file missing from the root directory."
+    echo ""
+    read -p "Press Enter to exit..."
     exit 1
 fi
 
 # Validate required environment variables
 echo "Validating environment configuration..."
 MISSING_VARS=()
-REQUIRED_VARS=("DB_NAME" "DB_USER" "DB_PASSWORD" "DB_PORT")
+REQUIRED_VARS=("DB_NAME" "DB_USER" "DB_PASSWORD" "DB_PORT" "RISK_MODELER_BASE_URL" "RISK_MODELER_API_KEY" "RISK_MODELER_RESOURCE_GROUP_ID")
 
 for var in "${REQUIRED_VARS[@]}"; do
     if ! grep -q "^${var}=" .env || [ -z "$(grep "^${var}=" .env | cut -d'=' -f2)" ]; then
@@ -35,11 +37,9 @@ if [ ${#MISSING_VARS[@]} -ne 0 ]; then
         echo "  - $var"
     done
     echo ""
-    echo "Please ensure .env contains all required database configuration:"
-    echo "  DB_NAME=irp_db"
-    echo "  DB_USER=irp_user"
-    echo "  DB_PASSWORD=irp_pass"
-    echo "  DB_PORT=5432"
+    echo "Please ensure .env contains all required database and risk modeler configuration"
+    echo ""
+    read -p "Press Enter to exit..."
     exit 1
 fi
 
