@@ -455,7 +455,7 @@ TODO
 **irp_job_tracking_log**
 - `job_id` - Job that was tracked
 - `job_status` - Status from Moody's
-- `response_data` - API response (JSONB)
+- `tracking_data` - API response (JSONB)
 
 ---
 

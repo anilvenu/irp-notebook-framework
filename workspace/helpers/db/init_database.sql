@@ -130,7 +130,7 @@ CREATE TABLE irp_job (
     parent_job_id INTEGER,
     submitted_ts TIMESTAMPTZ NULL,
     completed_ts TIMESTAMPTZ NULL,
-    last_poll_ts TIMESTAMPTZ NULL,
+    last_tracked_ts TIMESTAMPTZ NULL,
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     updated_ts TIMESTAMPTZ DEFAULT NOW(),
     submission_request JSONB NULL,
@@ -156,7 +156,7 @@ CREATE TABLE irp_job_tracking_log (
     tracked_ts TIMESTAMPTZ DEFAULT NOW(),
     moodys_workflow_id VARCHAR(50) NOT NULL,
     job_status job_status_enum NOT NULL,
-    response_data JSONB NULL,
+    tracking_data JSONB NULL,
     CONSTRAINT fk_tracking_job FOREIGN KEY (job_id) REFERENCES irp_job(id) ON DELETE CASCADE
 );
 

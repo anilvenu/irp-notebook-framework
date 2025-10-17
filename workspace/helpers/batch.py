@@ -486,7 +486,7 @@ def get_batch_jobs(
     query = """
         SELECT id, batch_id, job_configuration_id, moodys_workflow_id,
                status, skipped, last_error, parent_job_id,
-               submitted_ts, completed_ts, last_poll_ts,
+               submitted_ts, completed_ts, last_tracked_ts,
                created_ts, updated_ts,
                submission_request, submission_response
         FROM irp_job

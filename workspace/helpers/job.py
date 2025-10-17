@@ -232,7 +232,7 @@ def _insert_tracking_log(
     job_id: int,
     workflow_id: str,
     job_status: str,
-    response_data: Dict[str, Any],
+    tracking_data: Dict[str, Any],
     schema: str = 'public'
 ) -> int:
     """
@@ -242,7 +242,7 @@ def _insert_tracking_log(
         job_id: Job ID
         workflow_id: Moody's workflow ID
         job_status: Job status from tracking
-        response_data: Response from Moody's API
+        tracking_data: Response from Moody's API
         schema: Database schema
 
     Returns:
@@ -257,12 +257,12 @@ def _insert_tracking_log(
     try:
         query = """
             INSERT INTO irp_job_tracking_log
-            (job_id, moodys_workflow_id, job_status, response_data)
+            (job_id, moodys_workflow_id, job_status, tracking_data)
             VALUES (%s, %s, %s, %s)
         """
         tracking_id = execute_insert(
             query,
-            (job_id, workflow_id, job_status, json.dumps(response_data)),
+            (job_id, workflow_id, job_status, json.dumps(tracking_data)),
             schema=schema
         )
         return tracking_id
@@ -294,7 +294,7 @@ def read_job(job_id: int, schema: str = 'public') -> Dict[str, Any]:
     query = """
         SELECT id, batch_id, job_configuration_id, moodys_workflow_id,
                status, skipped, last_error, parent_job_id,
-               submitted_ts, completed_ts, last_poll_ts,
+               submitted_ts, completed_ts, last_tracked_ts,
                created_ts, updated_ts,
                submission_request, submission_response
         FROM irp_job
@@ -358,7 +358,7 @@ def update_job_status(
         UPDATE irp_job
         SET status = %s,
             completed_ts = CASE WHEN %s IN (%s, %s, %s) THEN NOW() ELSE completed_ts END,
-            last_poll_ts = NOW(),
+            last_tracked_ts = NOW(),
             updated_ts = NOW()
         WHERE id = %s
     """
@@ -681,7 +681,7 @@ def track_job_status(
         new_status = current_status
 
     # Stub response data
-    response_data = {
+    tracking_data = {
         'workflow_id': workflow_id,
         'status': new_status,
         'polled_at': datetime.now().isoformat(),
@@ -689,7 +689,7 @@ def track_job_status(
     }
 
     # Insert tracking log
-    _insert_tracking_log(job_id, workflow_id, new_status, response_data, schema=schema)
+    _insert_tracking_log(job_id, workflow_id, new_status, tracking_data, schema=schema)
 
     # Update job status if changed
     if new_status != current_status:
