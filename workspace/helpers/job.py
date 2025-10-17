@@ -608,7 +608,7 @@ def submit_job(
 
     # Optionally track immediately
     if track_immediately:
-        os.wait(5)
+        time.sleep(5)
         track_job_status(job_id, schema=schema)
 
     return job_id

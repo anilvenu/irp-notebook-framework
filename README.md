@@ -6,8 +6,8 @@ A business-user-friendly Jupyter notebook framework for managing IRP (Internal R
 
 ### Prerequisites
 - Docker and Docker Compose installed
-- 4GB+ RAM available for containers
-- Port 8888 (Jupyter) and 1433 (SQL Server) available
+- 8GB+ RAM available for containers
+- Port 8888 (Jupyter) and 5432 (PostgreSQL) available
 
 ### Setup
 
@@ -21,12 +21,21 @@ cd irp-notebook-framework
 
 3. **Start the environment**
 ```bash
-chmod +x start.sh stop.sh
+chmod +x start.sh stop.sh test.sh
 ./start.sh
 ```
 
 4. **Access JupyterLab**
 - URL: http://localhost:8888
+
+This will launch JupyterLab and you should see the following directories
+
+```
+helper/
+workflows/
+``` 
+
+
 
 
 ## Project Structure
