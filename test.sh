@@ -1,33 +1,6 @@
 #!/bin/bash
-#
-# Test Runner for IRP Notebook Framework
-# This script sets up the environment and runs database tests
-#
-# Usage: ./run_tests.sh [--preserve]
-#   --preserve: Keep test schemas after tests for debugging
-#
+# Run pytest tests
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-# Parse command line arguments
-PRESERVE_FLAG=""
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --preserve)
-            PRESERVE_FLAG="--preserve"
-            shift
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Usage: $0 [--preserve]"
-            exit 1
-            ;;
-    esac
-done
 
 echo "============================================"
 echo " "
@@ -40,31 +13,15 @@ echo " "
 echo "IRP Notebook Framework Test Runner"
 echo "============================================"
 
-if [ -n "$PRESERVE_FLAG" ]; then
-    echo -e "${YELLOW}⚠️  PRESERVE MODE: Test schemas will be kept for debugging${NC}"
-fi
 
-# Get script directory and project root
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
 
-# Set TEST database connection for all tests
-# This ensures tests NEVER touch production database (irp_db)
+echo "Setting environment variables" 
+# Set TEST database connection
 export DB_SERVER=localhost
 export DB_PORT=5432
 export DB_NAME=test_db
 export DB_USER=test_user
 export DB_PASSWORD=test_pass
-
-echo ""
-echo -e "${GREEN}TEST${NC} Database Configuration (Isolated from Production):"
-echo "  Host: $DB_SERVER"
-echo "  Port: $DB_PORT"
-echo "  Database: $DB_NAME (TEST DATABASE)"
-echo "  User: $DB_USER (TEST USER)"
-echo ""
-echo -e "${YELLOW}NOTE:${NC} Tests run against 'test_db' - production 'irp_db' is protected"
-echo ""
 
 # Ensure test database exists in Docker postgres container
 echo "Checking test database setup..."
@@ -97,7 +54,6 @@ else
 fi
 
 echo ""
-
 # Check if venv exists - supports (venv) and (.venv)
 if [ -d "venv" ]; then
     echo -e "${GREEN}✓${NC} Found venv directory"
@@ -111,45 +67,17 @@ else
     echo "  Running with system Python..."
 fi
 
-# In docker, we are mounting the host /workspace (where we have all code) to /workspace on docker
-# and we also set the PYTHONPATH to /workspace
-# If we skip the step below, Python will look for packages in the project home and expect to see
-# workspace.helper instead of helper. By setting the workspace path we are enabling packages
-# under /workspace to be recognized. The scope of this is limited to the current virtual environment.
-echo ""
-echo "$(pwd)/workspace" > $(python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')")
+# Install packages for test
+pip install -r requirements-test.txt -q
+
+# Set workspace path for imports
+echo "$(pwd)/workspace" > $(python -c "import site; print(site.getsitepackages()[0])")/workspace.pth
 python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')"
 
-# Create workspace/tests/results
-mkdir -p workspace/tests/results
-
-# Run the tests
-echo ""
-echo "Running database tests..."
-python workspace/tests/test_database.py $PRESERVE_FLAG > workspace/tests/results/test_database.log
-
-echo ""
-echo "Running configuration tests..."
-python workspace/tests/test_configuration.py $PRESERVE_FLAG > workspace/tests/results/test_configuration.log
-
-echo ""
-echo "Running batch management tests..."
-python workspace/tests/test_batch.py $PRESERVE_FLAG > workspace/tests/results/test_batch.log
-
-echo ""
-echo "Running job management tests..."
-python workspace/tests/test_job.py $PRESERVE_FLAG > workspace/tests/results/test_job.log
-
-echo ""
-echo "Running batch/job integration tests..."
-python workspace/tests/test_batch_job_integration.py $PRESERVE_FLAG > workspace/tests/results/test_batch_job_integration.log
-
-# Capture exit code
-EXIT_CODE=$?
-
+# Run ALL pytest tests in a single command for unified results
+# This excludes legacy test files
+pytest workspace/tests/ -v "$@"
 # Deactivate venv if it was activated
 if [ -n "$VIRTUAL_ENV" ]; then
     deactivate
 fi
-
-#exit $EXIT_CODE
