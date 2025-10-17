@@ -33,6 +33,11 @@ class AnalysisManager:
         params = {'where': f"eventRateSchemeName=\"{scheme_name}\""}
         response = self.client.request('GET', '/data-store/referencetables/eventratescheme', params=params)
         return response.json()
+    
+    def get_analyses_by_ids(self, analysis_ids: list) -> dict:
+        params = {'filter': f"appAnalysisId IN ({','.join(str(id) for id in analysis_ids)})"}
+        response = self.client.request('GET', '/platform/riskdata/v1/analyses', params=params)
+        return response.json()
 
     def submit_analysis_job(self, 
                             job_name: str, 

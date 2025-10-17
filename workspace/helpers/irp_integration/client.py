@@ -27,18 +27,21 @@ class Client:
         session.mount("http://", HTTPAdapter(max_retries=retry))
         self.session = session
 
-    def request(self, method, path, *, base_url=None, params=None, json=None, headers=None, timeout=None, stream=False) -> requests.Response:
-        if base_url:
-            url = f"{base_url}/{path.lstrip('/')}"
+    def request(self, method, path, *, full_url=None, base_url=None, params=None, json=None, headers={}, timeout=None, stream=False) -> requests.Response:
+        if full_url:
+            url = full_url
         else:
-            url = f"{self.base_url}/{path.lstrip('/')}"
+            if base_url:
+                url = f"{base_url}/{path.lstrip('/')}"
+            else:
+                url = f"{self.base_url}/{path.lstrip('/')}"
 
         response = self.session.request(
             method=method,
             url=url,
             params=params,
             json=json,
-            headers=headers,
+            headers=self.headers | headers,
             timeout=timeout or self.timeout,
             stream=stream,
         )
@@ -73,7 +76,7 @@ class Client:
         start = time.time()
         while True:
             print(f"Polling workflow url {workflow_url}")
-            response = self.request('GET', f"/riskmodeler/v1/workflows/{workflow_url.split('/')[-1]}", headers=self.headers)
+            response = self.request('GET', '', full_url=workflow_url)
             print(f"Workflow status: {response.json().get('status', '')}; Percent complete: {response.json().get('progress', '')}")
 
             status = response.json().get('status', '')
@@ -89,7 +92,7 @@ class Client:
         while True:
             print(f"Polling batch workflow ids: {','.join(str(item) for item in workflow_ids)}")
             params = {'ids': ','.join(str(item) for item in workflow_ids)}
-            response = self.request('GET', f"/riskmodeler/v1/workflows", headers=self.headers, params=params)
+            response = self.request('GET', f"/riskmodeler/v1/workflows", params=params)
 
             all_completed = True
             for workflow in response.json().get('workflows', []):
@@ -108,7 +111,7 @@ class Client:
     def execute_workflow(self, method, path, *, params=None, json=None, headers=None, timeout=None, stream=False) -> requests.Response:
         print("Submitting workflow request...")
         response = self.request(method, path, params=params, json=json, headers=headers, timeout=timeout, stream=stream)
-        if response.status_code != 202:
+        if response.status_code not in (201,202):
             return response
         else:
             workflow_url = self.get_location_header(response)
