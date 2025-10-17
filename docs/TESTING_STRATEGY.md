@@ -5,6 +5,61 @@
 
 ---
 
+## Executive Summary
+
+### Purpose
+This testing strategy ensures the IRP Notebook Framework delivers reliable, production-ready risk analysis workflows through comprehensive automated and manual testing.
+
+### Testing Scope
+
+The application workspace comprises two main parts:
+
+1. **Workflows** - Jupyter Notebooks for risk analysts to perform core analysis cycle activities, plus tool notebooks for administrative functions
+2. **Helpers** - Python and SQL code supporting the core workflow and tool notebooks
+
+### Testing Approach
+
+- **Workflow and Tools Testing**:
+  - Tested by the project team during development
+  - Delivered to the risk modeling team for user acceptance testing (UAT)
+
+- **Helper Testing**:
+  - Tested as part of workflow testing
+  - Tested using dedicated scripts that validate database operations and key scenarios:
+    - Cycle creation
+    - Batch creation
+    - Batch reconciliation
+    - Job resubmission
+
+- **Moody's Integration Testing**:
+  - Controlled manual workflow using Jupyter Notebooks
+  - End-to-end functional flow with example portfolio covering complete lifecycle
+  - Workflow tools serve as testing tools for idempotent operations (job status tracking, batch reconciliation)
+
+- **Source Database Integration Testing**:
+  - Workflow notebooks that extract and stage data from SQL Server to CSVs
+  - Test validations reused as pipeline validations post-development
+
+### Key Testing Phases
+
+| Phase | Responsibility | Method | Deliverables |
+|-------|---------------|--------|--------------|
+| **Unit Testing** | Development Team | Automated (pytest) | 60-75% code coverage on helpers |
+| **Integration Testing** | Development Team | Automated + Manual | Database operations, Moody's API scenarios |
+| **E2E Testing** | Development Team | Manual workflow execution | Complete cycle validation |
+| **UAT** | Risk Modeling Team | Manual execution | User sign-off on workflows and tools |
+| **Production Validation** | Development Team | Automated scripts | Pipeline integrity checks |
+
+### Quality Gates
+
+- All unit tests must pass before code merge
+- Integration tests validate database and external API interactions
+- E2E tests confirm complete workflow execution
+- UAT approval required before production deployment
+- Automated data pipeline validations run post-deployment
+
+---
+
 ## 1. Overview
 
 The IRP Notebook Framework comprises two main components:

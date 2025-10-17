@@ -150,6 +150,91 @@ TEST SUMMARY
 🎉 All tests passed!
 ```
 
+## pytest (New Testing Framework)
+
+### 🆕 pytest Support Added!
+
+We've added pytest infrastructure alongside the existing test runner. Both methods work!
+
+**To use pytest**:
+```bash
+# Install pytest dependencies
+pip install -r requirements-test.txt
+
+# Run all tests with pytest (schemas cleaned up after tests)
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run with verbose output AND show setup/teardown messages
+pytest -v -s
+
+# Run with coverage
+pytest --cov=workspace/helpers --cov-report=html
+
+# Run specific test
+pytest workspace/tests/test_database.py::test_basic_bulk_insert
+
+# Run in parallel (faster!)
+pytest -n auto
+
+# 🔍 PRESERVE schemas for debugging (schemas NOT dropped after tests)
+pytest --preserve-schema
+
+# Use convenience script (includes proper environment setup)
+source ./run_pytest_test.sh
+```
+
+**Schema Management (Critical)**:
+
+The `--preserve-schema` flag controls test schema lifecycle:
+
+| Command | Behavior | When to Use |
+|---------|----------|-------------|
+| `pytest` | ✓ Drop existing schema at start<br>✓ Create fresh schema<br>✓ **Drop schema after tests** | Normal test runs |
+| `pytest --preserve-schema` | ✓ Drop existing schema at start<br>✓ Create fresh schema<br>⚠️ **Keep schema after tests** | Debugging test failures, inspecting test data |
+
+**Important Notes**:
+- ✅ **Always drops previously preserved schemas** at the start of each run
+- ✅ No manual cleanup needed between runs
+- ✅ Multiple test files use different schemas (test_database, test_job, test_batch)
+- ✅ Safe to run tests repeatedly
+
+**Example Workflow**:
+```bash
+# 1. Run tests normally (auto-cleanup)
+pytest workspace/tests/test_database.py
+
+# 2. Test fails - want to inspect data
+pytest workspace/tests/test_database.py --preserve-schema
+
+# 3. Connect to database and query:
+#    SELECT * FROM test_database.irp_cycle;
+
+# 4. Fix code, run again (auto-drops old preserved schema, creates new)
+pytest workspace/tests/test_database.py
+
+# 5. Tests pass, schema is cleaned up automatically
+```
+
+**Benefits of pytest**:
+- ✅ Automatic test discovery
+- ✅ Rich assertion messages
+- ✅ Fixtures for shared test data
+- ✅ Coverage reporting
+- ✅ Parallel execution
+- ✅ Better CI/CD integration
+
+**Migration Status**:
+- Phase 1: ✅ Infrastructure added (pytest.ini, conftest.py, requirements-test.txt)
+- Phase 2: 🔄 Converting test files to pytest style
+- Phase 3: ⏳ Full migration
+
+See [PYTEST_MIGRATION_GUIDE.md](../../docs/PYTEST_MIGRATION_GUIDE.md) for details.
+
+---
+
 ## Troubleshooting
 
 ### Database Connection Failed
@@ -157,7 +242,7 @@ TEST SUMMARY
 If you see "Database connection failed":
 1. Verify PostgreSQL is running
 2. Check database credentials in environment variables
-3. Ensure the database exists (`irp_db`)
+3. Ensure the database exists (`test_db` for tests)
 4. Verify the user has appropriate permissions
 
 ### Import Errors
@@ -173,6 +258,14 @@ If tests fail due to existing test schema:
 ```sql
 -- Manually drop the test schema
 DROP SCHEMA IF EXISTS test CASCADE;
+DROP SCHEMA IF EXISTS test_database CASCADE;
+DROP SCHEMA IF EXISTS test_job CASCADE;
+DROP SCHEMA IF EXISTS test_batch CASCADE;
+```
+
+Or use pytest which handles this automatically:
+```bash
+pytest  # Auto-cleanup
 ```
 
 Then re-run the tests.

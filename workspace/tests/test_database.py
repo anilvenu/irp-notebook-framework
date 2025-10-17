@@ -1,96 +1,39 @@
 """
-Test suite for database operations
+Test suite for database operations (pytest version)
 
 This test file demonstrates and validates database functionality including:
 - bulk_insert with JSONB support
 - Error handling and transaction rollback
 - Performance comparisons
 
-All tests run in the 'test' schema to avoid affecting production data.
+All tests run in the 'test_database' schema (auto-managed by test_schema fixture).
 
-Run this test:
-    python workspace/tests/test_database.py
+Run these tests:
+    pytest workspace/tests/test_database.py
+    pytest workspace/tests/test_database.py -v
+    pytest workspace/tests/test_database.py --preserve-schema
 """
 
-import argparse
-from datetime import datetime
-import sys
 import time
-from pathlib import Path
+from datetime import datetime
+import pytest
 
-# Add workspace to path - go up two levels from tests/ to project root, then into workspace
-workspace_path = Path(__file__).parent.parent
-sys.path.insert(0, str(workspace_path))
-
-# Import database functions
 from helpers.database import (
     bulk_insert,
     execute_query,
-    execute_command,
     execute_insert,
-    test_connection,
-    init_database,
     DatabaseError
 )
 
 
-TEST_SCHEMA = Path(__file__).stem
+# ============================================================================
+# Tests
+# ============================================================================
 
-
-def setup_test_schema():
-    """Initialize test schema with database tables"""
-    print("\n" + "="*80)
-    print("SETUP: Initializing Test Schema")
-    print("="*80)
-
-    try:
-        # Initialize test schema
-        print(f"Creating and initializing schema '{TEST_SCHEMA}'...")
-        success = init_database(schema=TEST_SCHEMA)
-
-        if not success:
-            print("✗ Failed to initialize test schema")
-            return False
-
-        print(f"✓ Test schema '{TEST_SCHEMA}' initialized successfully")
-        return True
-
-    except Exception as e:
-        print(f"✗ Setup failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def cleanup_test_schema():
-    """Drop the test schema"""
-    print("\n" + "="*80)
-    print("CLEANUP: Dropping Test Schema")
-    print("="*80)
-
-    try:
-        from helpers.database import get_engine
-        from sqlalchemy import text
-
-        engine = get_engine()
-        with engine.connect() as conn:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {TEST_SCHEMA} CASCADE"))
-            conn.commit()
-
-        print(f"✓ Test schema '{TEST_SCHEMA}' dropped successfully")
-        return True
-
-    except Exception as e:
-        print(f"Warning: Cleanup failed: {e}")
-        return False
-
-
-def test_basic_bulk_insert():
-    """Test 1: Basic bulk insert without JSONB fields"""
-    print("\n" + "="*80)
-    print("TEST 1: Basic Bulk Insert (Multiple Cycles)")
-    print("="*80)
-
+@pytest.mark.database
+@pytest.mark.unit
+def test_basic_bulk_insert(test_schema):
+    """Test basic bulk insert without JSONB fields"""
     query = """
         INSERT INTO irp_cycle (cycle_name, status)
         VALUES (%s, %s)
@@ -104,39 +47,32 @@ def test_basic_bulk_insert():
         ('test_cycle_5', 'ACTIVE'),
     ]
 
-    try:
-        print(f"Inserting {len(params_list)} cycles...")
-        start_time = time.time()
-        ids = bulk_insert(query, params_list, schema=TEST_SCHEMA)
-        elapsed = time.time() - start_time
+    # Perform bulk insert
+    start_time = time.time()
+    ids = bulk_insert(query, params_list, schema=test_schema)
+    elapsed = time.time() - start_time
 
-        print(f"✓ Successfully inserted {len(ids)} records")
-        print(f"  Returned IDs: {ids}")
-        print(f"  Time elapsed: {elapsed:.4f} seconds")
+    # Assertions
+    assert len(ids) == len(params_list), f"Expected {len(params_list)} IDs, got {len(ids)}"
+    assert all(isinstance(id, int) for id in ids), "All IDs should be integers"
+    assert elapsed < 1.0, f"Bulk insert took too long: {elapsed:.4f}s"
 
-        # Verify inserts
-        df = execute_query(
-            "SELECT * FROM irp_cycle WHERE cycle_name LIKE 'test_cycle_%' ORDER BY id",
-            schema=TEST_SCHEMA
-        )
-        print(f"✓ Verified {len(df)} records in database")
-        print("\nInserted records:")
-        print(df[['id', 'cycle_name', 'status']].to_string(index=False))
+    # Verify inserts
+    df = execute_query(
+        "SELECT * FROM irp_cycle WHERE cycle_name LIKE 'test_cycle_%' ORDER BY id",
+        schema=test_schema
+    )
+    assert len(df) == len(params_list), f"Expected {len(params_list)} records, found {len(df)}"
 
-        return True
-    except Exception as e:
-        print(f"✗ Test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+    # Verify specific data
+    assert df.iloc[0]['cycle_name'] == 'test_cycle_1'
+    assert df.iloc[2]['status'] == 'ARCHIVED'
 
 
-def test_error_handling():
-    """Test 2: Error handling and transaction rollback"""
-    print("\n" + "="*80)
-    print("TEST 2: Error Handling and Transaction Rollback")
-    print("="*80)
-
+@pytest.mark.database
+@pytest.mark.unit
+def test_error_handling_rollback(test_schema):
+    """Test error handling and transaction rollback on duplicate key"""
     query = """
         INSERT INTO irp_cycle (cycle_name, status)
         VALUES (%s, %s)
@@ -149,200 +85,210 @@ def test_error_handling():
         ('rollback_1', 'ACTIVE'),  # Duplicate - should fail
     ]
 
-    try:
-        print("Testing rollback with duplicate key violation...")
-        print(f"Attempting to insert {len(params_list)} records (with 1 duplicate)...")
+    # Count before insert
+    before_count = execute_query(
+        "SELECT COUNT(*) as count FROM irp_cycle WHERE cycle_name LIKE 'rollback_%'",
+        schema=test_schema
+    ).iloc[0]['count']
 
-        # Count before insert
-        before_count = execute_query(
-            "SELECT COUNT(*) as count FROM irp_cycle WHERE cycle_name LIKE 'rollback_%'",
-            schema=TEST_SCHEMA
-        ).iloc[0]['count']
-        print(f"  Records before insert: {before_count}")
+    # Attempt insert - should fail
+    with pytest.raises(DatabaseError) as exc_info:
+        bulk_insert(query, params_list, schema=test_schema)
 
-        try:
-            ids = bulk_insert(query, params_list, schema=TEST_SCHEMA)
-            print(f"✗ Expected failure but got success: {ids}")
-            return False
-        except DatabaseError as e:
-            print(f"✓ Correctly caught error: {e}")
+    # Verify error message contains expected info
+    assert "duplicate" in str(exc_info.value).lower() or "unique" in str(exc_info.value).lower()
 
-            # Verify rollback - no records should be inserted
-            after_count = execute_query(
-                "SELECT COUNT(*) as count FROM irp_cycle WHERE cycle_name LIKE 'rollback_%'",
-                schema=TEST_SCHEMA
-            ).iloc[0]['count']
-            print(f"  Records after failed insert: {after_count}")
+    # Verify rollback - no records should be inserted
+    after_count = execute_query(
+        "SELECT COUNT(*) as count FROM irp_cycle WHERE cycle_name LIKE 'rollback_%'",
+        schema=test_schema
+    ).iloc[0]['count']
 
-            if after_count == before_count:
-                print("✓ Transaction correctly rolled back - no partial inserts")
-                return True
-            else:
-                print(f"✗ Transaction not rolled back - {after_count - before_count} records inserted")
-                return False
-
-    except Exception as e:
-        print(f"✗ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+    assert after_count == before_count, \
+        f"Transaction not rolled back - {after_count - before_count} records inserted"
 
 
-def test_batch_configuration_jsonb():
-    """Test 3: Bulk insert into irp_configuration table with JSONB"""
-    print("\n" + "="*80)
-    print("TEST 3: Bulk Insert Configurations with JSONB config_data")
-    print("="*80)
+@pytest.mark.database
+@pytest.mark.integration
+def test_configuration_jsonb_insert(test_schema):
+    """Test bulk insert into irp_configuration table with JSONB config_data"""
 
-    try:
-        # Setup: Create cycle, stage, step, and batch
-        print("Setting up test hierarchy...")
-        cycle_id = execute_insert(
-            "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
-            ('config_cycle', 'ACTIVE'),
-            schema=TEST_SCHEMA
-        )
+    # Setup: Create cycle hierarchy
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('config_cycle', 'ACTIVE'),
+        schema=test_schema
+    )
 
-        stage_id = execute_insert(
-            "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
-            (cycle_id, 1, 'config_stage'),
-            schema=TEST_SCHEMA
-        )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'config_stage'),
+        schema=test_schema
+    )
 
-        step_id = execute_insert(
-            "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
-            (stage_id, 1, 'config_step'),
-            schema=TEST_SCHEMA
-        )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'config_step'),
+        schema=test_schema
+    )
 
-        # Bulk insert configurations
-        query = """
-            INSERT INTO irp_configuration (cycle_id, configuration_file_name, configuration_data, file_last_updated_ts)
-            VALUES (%s, %s, %s, %s)
-        """
-
-        params_list = [
-            (cycle_id, 'file-A.xlsx', {
-                'portfolio': 'Portfolio_A',
-                'start_date': '2024-01-01',
-                'end_date': '2024-12-31',
-                'parameters': {'risk_level': 'high', 'threshold': 0.95}
-            },  datetime.now()),
-            (cycle_id, 'file-B.xlsx', {
-                'portfolio': 'Portfolio_B',
-                'start_date': '2024-01-01',
-                'end_date': '2024-12-31',
-                'parameters': {'risk_level': 'medium', 'threshold': 0.85}
-            }, datetime.now()),
-            (cycle_id, 'file-C.xlsx', {
-                'portfolio': 'Portfolio_C',
-                'start_date': '2024-01-01',
-                'end_date': '2024-12-31',
-                'parameters': {'risk_level': 'low', 'threshold': 0.75}
-            }, datetime.now()),  
-        ]
-
-        print(f"\nInserting {len(params_list)} configurations with JSONB config_data...")
-        start_time = time.time()
-        ids = bulk_insert(query, params_list, jsonb_columns=[2], schema=TEST_SCHEMA)
-        elapsed = time.time() - start_time
-
-        print(f"✓ Successfully inserted {len(ids)} configurations")
-        print(f"  Returned IDs: {ids}")
-        print(f"  Time elapsed: {elapsed:.4f} seconds")
-
-        # Verify inserts
-        df = execute_query(
-            "SELECT * FROM irp_configuration WHERE cycle_id = %s ORDER BY id",
-            (cycle_id,),
-            schema=TEST_SCHEMA
-        )
-        print(f"✓ Verified {len(df)} configurations in database")
-        print("\nInserted configurations:")
-        for _, row in df.iterrows():
-            print(f"  ID {row['id']}: {row['configuration_file_name']}")
-            print(f"    Config Data: {row['configuration_data']}")
-
-        return True
-    except Exception as e:
-        print(f"✗ Test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def run_all_tests(preserve=False):
-    """Run all tests and report results
-
-    Args:
-        preserve: If True, keep schema after tests for debugging
+    # Bulk insert configurations with JSONB
+    query = """
+        INSERT INTO irp_configuration (cycle_id, configuration_file_name, configuration_data, file_last_updated_ts)
+        VALUES (%s, %s, %s, %s)
     """
-    print("\n" + "="*80)
-    print("BULK INSERT TEST SUITE")
-    print("="*80)
 
-    # Test database connection
-    print("\nTesting database connection...")
-    if not test_connection():
-        print("✗ Database connection failed. Please check your configuration.")
-        return
-    print("✓ Database connection successful")
-
-    # Cleanup any preserved schema from last run
-    cleanup_test_schema()
-
-    # Setup test schema
-    if not setup_test_schema():
-        print("\n✗ Failed to setup test schema. Aborting tests.")
-        return
-
-    # Run tests
-    tests = [
-        ("Basic Bulk Insert", test_basic_bulk_insert),
-        ("Error Handling", test_error_handling),
-        ("Configuration JSONB", test_batch_configuration_jsonb),
+    params_list = [
+        (cycle_id, 'file-A.xlsx', {
+            'portfolio': 'Portfolio_A',
+            'start_date': '2024-01-01',
+            'end_date': '2024-12-31',
+            'parameters': {'risk_level': 'high', 'threshold': 0.95}
+        }, datetime.now()),
+        (cycle_id, 'file-B.xlsx', {
+            'portfolio': 'Portfolio_B',
+            'start_date': '2024-01-01',
+            'end_date': '2024-12-31',
+            'parameters': {'risk_level': 'medium', 'threshold': 0.85}
+        }, datetime.now()),
+        (cycle_id, 'file-C.xlsx', {
+            'portfolio': 'Portfolio_C',
+            'start_date': '2024-01-01',
+            'end_date': '2024-12-31',
+            'parameters': {'risk_level': 'low', 'threshold': 0.75}
+        }, datetime.now()),
     ]
 
-    results = []
-    for test_name, test_func in tests:
-        try:
-            result = test_func()
-            results.append((test_name, result))
-        except Exception as e:
-            print(f"\n✗ {test_name} crashed: {e}")
-            import traceback
-            traceback.print_exc()
-            results.append((test_name, False))
+    # Perform bulk insert with JSONB column
+    start_time = time.time()
+    ids = bulk_insert(query, params_list, jsonb_columns=[2], schema=test_schema)
+    elapsed = time.time() - start_time
 
-    # Clean up test schema (unless preserve flag set)
-    if not preserve:
-        cleanup_test_schema()
-    else:
-        print(f"\nSchema '{TEST_SCHEMA}' preserved for debugging")
+    # Assertions
+    assert len(ids) == len(params_list), f"Expected {len(params_list)} IDs, got {len(ids)}"
+    assert elapsed < 1.0, f"Bulk insert took too long: {elapsed:.4f}s"
 
-    # Summary
-    print("\n" + "="*80)
-    print("TEST SUMMARY")
-    print("="*80)
-    passed = sum(1 for _, result in results if result)
-    total = len(results)
+    # Verify inserts
+    df = execute_query(
+        "SELECT * FROM irp_configuration WHERE cycle_id = %s ORDER BY id",
+        (cycle_id,),
+        schema=test_schema
+    )
+    assert len(df) == len(params_list), f"Expected {len(params_list)} configurations, found {len(df)}"
 
-    for test_name, result in results:
-        status = "✓ PASS" if result else "✗ FAIL"
-        print(f"{status}: {test_name}")
+    # Verify JSONB data integrity
+    config_a = df[df['configuration_file_name'] == 'file-A.xlsx'].iloc[0]
+    assert config_a['configuration_data']['portfolio'] == 'Portfolio_A'
+    assert config_a['configuration_data']['parameters']['risk_level'] == 'high'
+    assert config_a['configuration_data']['parameters']['threshold'] == 0.95
 
-    print(f"\n{passed}/{total} tests passed")
-
-    if passed == total:
-        print("\nAll tests passed!")
-    else:
-        print(f"\n⚠️  {total - passed} test(s) failed")
+    config_b = df[df['configuration_file_name'] == 'file-B.xlsx'].iloc[0]
+    assert config_b['configuration_data']['parameters']['threshold'] == 0.85
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run database tests')
-    parser.add_argument('--preserve', action='store_true',
-                       help='Preserve test schema after tests for debugging')
-    args = parser.parse_args()
+@pytest.mark.database
+@pytest.mark.unit
+def test_bulk_insert_returns_correct_ids(test_schema):
+    """Test that bulk_insert returns IDs in insertion order"""
+    query = """
+        INSERT INTO irp_cycle (cycle_name, status)
+        VALUES (%s, %s)
+    """
 
-    run_all_tests(preserve=args.preserve)
+    params_list = [
+        ('ordered_1', 'ACTIVE'),
+        ('ordered_2', 'ACTIVE'),
+        ('ordered_3', 'ACTIVE'),
+    ]
+
+    ids = bulk_insert(query, params_list, schema=test_schema)
+
+    # Verify IDs are sequential and in order
+    assert ids[0] < ids[1] < ids[2], "IDs should be in ascending order"
+
+    # Verify each ID corresponds to correct record
+    for idx, id in enumerate(ids):
+        df = execute_query(
+            "SELECT cycle_name FROM irp_cycle WHERE id = %s",
+            (id,),
+            schema=test_schema
+        )
+        expected_name = params_list[idx][0]
+        assert df.iloc[0]['cycle_name'] == expected_name, \
+            f"ID {id} should correspond to {expected_name}"
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_empty_bulk_insert(test_schema):
+    """Test bulk_insert behavior with empty params list"""
+    query = """
+        INSERT INTO irp_cycle (cycle_name, status)
+        VALUES (%s, %s)
+    """
+
+    params_list = []
+
+    ids = bulk_insert(query, params_list, schema=test_schema)
+
+    # Should return empty list
+    assert ids == [], "Empty params should return empty list"
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_multiple_jsonb_columns(test_schema):
+    """Test bulk insert with multiple JSONB columns"""
+
+    # Setup cycle
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('multi_jsonb_cycle', 'ACTIVE'),
+        schema=test_schema
+    )
+
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'multi_jsonb_stage'),
+        schema=test_schema
+    )
+
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'multi_jsonb_step'),
+        schema=test_schema
+    )
+
+    # Insert configuration with multiple JSONB columns
+    # Note: configuration_data is JSONB at index 2
+    query = """
+        INSERT INTO irp_configuration
+        (cycle_id, configuration_file_name, configuration_data, file_last_updated_ts)
+        VALUES (%s, %s, %s, %s)
+    """
+
+    config_data = {
+        'portfolio': 'Portfolio_X',
+        'nested': {
+            'level1': {
+                'level2': {'value': 42}
+            }
+        }
+    }
+
+    params_list = [
+        (cycle_id, 'multi_jsonb.xlsx', config_data, datetime.now())
+    ]
+
+    ids = bulk_insert(query, params_list, jsonb_columns=[2], schema=test_schema)
+
+    # Verify nested JSONB access
+    df = execute_query(
+        "SELECT configuration_data FROM irp_configuration WHERE id = %s",
+        (ids[0],),
+        schema=test_schema
+    )
+
+    retrieved_data = df.iloc[0]['configuration_data']
+    assert retrieved_data['nested']['level1']['level2']['value'] == 42, \
+        "Nested JSONB data should be preserved"
