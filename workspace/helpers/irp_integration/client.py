@@ -27,18 +27,21 @@ class Client:
         session.mount("http://", HTTPAdapter(max_retries=retry))
         self.session = session
 
-    def request(self, method, path, *, base_url=None, params=None, json=None, headers=None, timeout=None, stream=False) -> requests.Response:
-        if base_url:
-            url = f"{base_url}/{path.lstrip('/')}"
+    def request(self, method, path, *, full_url=None, base_url=None, params=None, json=None, headers={}, timeout=None, stream=False) -> requests.Response:
+        if full_url:
+            url = full_url
         else:
-            url = f"{self.base_url}/{path.lstrip('/')}"
+            if base_url:
+                url = f"{base_url}/{path.lstrip('/')}"
+            else:
+                url = f"{self.base_url}/{path.lstrip('/')}"
 
         response = self.session.request(
             method=method,
             url=url,
             params=params,
             json=json,
-            headers=headers,
+            headers=self.headers | headers,
             timeout=timeout or self.timeout,
             stream=stream,
         )
@@ -73,8 +76,7 @@ class Client:
         start = time.time()
         while True:
             print(f"Polling workflow url {workflow_url}")
-            response = requests.get(workflow_url, headers=self.headers)
-            response.raise_for_status()
+            response = self.request('GET', '', full_url=workflow_url)
             print(f"Workflow status: {response.json().get('status', '')}; Percent complete: {response.json().get('progress', '')}")
 
             status = response.json().get('status', '')
@@ -85,25 +87,22 @@ class Client:
                 raise TimeoutError(f"Workflow did not complete within {timeout} seconds.")
             time.sleep(interval)
 
-    def poll_workflow_batch(self, workflow_ids, interval=10, timeout=600000) -> requests.Response:
+    def poll_workflow_batch(self, workflow_ids, interval=20, timeout=600000) -> requests.Response:
         start = time.time()
         while True:
-            print(f"Polling batch workflow ids: {','.join(workflow_ids)}")
-            params = {'ids': ','.join(workflow_ids)}
-            r = requests.get(f"{self.base_url}/riskmodeler/v1/workflows", 
-                             headers=self.headers, 
-                             params=params)
-            r.raise_for_status()
+            print(f"Polling batch workflow ids: {','.join(str(item) for item in workflow_ids)}")
+            params = {'ids': ','.join(str(item) for item in workflow_ids)}
+            response = self.request('GET', f"/riskmodeler/v1/workflows", params=params)
 
             all_completed = True
-            for workflow in r.json().get('workflows', []):
+            for workflow in response.json().get('workflows', []):
                 status = workflow.get('status', '')
                 if status in self.WORKFLOW_IN_PROGRESS:
                     all_completed = False
                     break
 
             if all_completed:
-                return r
+                return response
             
             if time.time() - start > timeout:
                 raise TimeoutError(f"Batch workflows did not complete within {timeout} seconds.")
@@ -112,7 +111,7 @@ class Client:
     def execute_workflow(self, method, path, *, params=None, json=None, headers=None, timeout=None, stream=False) -> requests.Response:
         print("Submitting workflow request...")
         response = self.request(method, path, params=params, json=json, headers=headers, timeout=timeout, stream=stream)
-        if response.status_code != 202:
+        if response.status_code not in (201,202):
             return response
         else:
             workflow_url = self.get_location_header(response)

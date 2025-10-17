@@ -23,6 +23,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - RISK_MODELER_BASE_URL=${RISK_MODELER_BASE_URL:-https://api-euw1.rms-ppe.com}
       - RISK_MODELER_API_KEY=${RISK_MODELER_API_KEY:-your_api_key}
+      - RISK_MODELER_RESOURCE_GROUP_ID=${RISK_MODELER_RESOURCE_GROUP_ID:-your_group_id}
     volumes:
       - ./workspace:${NOTEBOOK_HOME_DIR:-/home/jovyan}/workspace
     depends_on:

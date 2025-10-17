@@ -65,6 +65,33 @@ class EDMManager:
         response = self.client.execute_workflow('POST', '/riskmodeler/v2/exports', json=data)
         return response.json()
     
+    def upgrade_edm_version(self, edm_name: str) -> dict:
+        params = {
+            "datasourcename": edm_name,
+            "operation": "EDM_DATA_UPGRADE"
+        }
+        response = self.client.execute_workflow('POST', '/riskmodeler/v2/datasources', params=params)
+        return response.json()
+    
     def delete_edm(self, edm_name: str) -> dict:
         response = self.client.execute_workflow('DELETE', f'/riskmodeler/v2/datasources/{edm_name}')
         return response.json()
+    
+    def get_cedants_by_edm(self, edm_name: str) -> dict:
+        params = {
+            "fields": "id, name",
+            "datasource": edm_name,
+            "limit": 1000
+        }
+        response = self.client.request('GET', '/riskmodeler/v1/cedants', params=params)
+        return response.json()
+
+    def get_lobs_by_edm(self, edm_name: str) -> dict:
+        params = {
+            "fields": "id, name",
+            "datasource": edm_name,
+            "limit": 1000
+        }
+        response = self.client.request('GET', '/riskmodeler/v1/lobs', params=params)
+        return response.json()
+    
