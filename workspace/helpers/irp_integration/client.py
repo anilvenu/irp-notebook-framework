@@ -73,8 +73,7 @@ class Client:
         start = time.time()
         while True:
             print(f"Polling workflow url {workflow_url}")
-            response = requests.get(workflow_url, headers=self.headers)
-            response.raise_for_status()
+            response = self.request('GET', f"/riskmodeler/v1/workflows/{workflow_url.split('/')[-1]}", headers=self.headers)
             print(f"Workflow status: {response.json().get('status', '')}; Percent complete: {response.json().get('progress', '')}")
 
             status = response.json().get('status', '')
@@ -85,7 +84,7 @@ class Client:
                 raise TimeoutError(f"Workflow did not complete within {timeout} seconds.")
             time.sleep(interval)
 
-    def poll_workflow_batch(self, workflow_ids, interval=10, timeout=600000) -> requests.Response:
+    def poll_workflow_batch(self, workflow_ids, interval=20, timeout=600000) -> requests.Response:
         start = time.time()
         while True:
             print(f"Polling batch workflow ids: {','.join(workflow_ids)}")

@@ -1,3 +1,4 @@
+import json
 from .client import Client
 
 class PortfolioManager:
@@ -35,7 +36,7 @@ class PortfolioManager:
                          engine_type: str = "RL",
                          version: str = "22.0",
                          geocode_layer_options: dict = {"aggregateTriggerEnabled": "true", "geoLicenseType": "0", "skipPrevGeocoded": False},
-                         hazard_layer_options: dict = {"overrideUserDef": False,"skipPrevHazard": False}
+                         hazard_layer_options: dict = {"overrideUserDef": False, "skipPrevHazard": False}
                         ) -> dict:
         params = {"datasource": edm_name}
         data = []

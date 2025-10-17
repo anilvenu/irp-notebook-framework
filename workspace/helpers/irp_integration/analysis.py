@@ -1,3 +1,4 @@
+import json
 from .client import Client
 
 class AnalysisManager:
@@ -102,6 +103,6 @@ class AnalysisManager:
             "simulationWindowEnd": simulation_window_end
         }
 
-        response = self.client.execute_workflow('POST', '/riskmodeler/v2/analysis-groups/', json=data)
+        response = self.client.execute_workflow('POST', '/riskmodeler/v2/analysis-groups', json=data)
         return response.json()
         
