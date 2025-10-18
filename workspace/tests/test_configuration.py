@@ -41,7 +41,21 @@ TEST_EXCEL_PATH = str(Path(__file__).parent / 'test_configuration.xlsx')
 # ============================================================================
 
 def create_test_cycle(test_schema, cycle_name='test_cycle'):
-    """Helper to create a test cycle"""
+    """
+    Helper to create a test cycle.
+
+    Archives any existing ACTIVE cycles first to ensure only one ACTIVE cycle exists,
+    matching production behavior where get_active_cycle_id() expects a single ACTIVE cycle.
+    """
+    from helpers.database import execute_command
+
+    # Archive all existing active cycles
+    execute_command(
+        "UPDATE irp_cycle SET status = 'ARCHIVED' WHERE status = 'ACTIVE'",
+        schema=test_schema
+    )
+
+    # Create new active cycle
     cycle_id = execute_insert(
         "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
         (cycle_name, 'ACTIVE'),
