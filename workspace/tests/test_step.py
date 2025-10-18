@@ -7,7 +7,7 @@ This is a high-level domain class for tracking step execution.
 
 import pytest
 from helpers.step import Step, StepError
-from helpers.database import create_cycle, get_or_create_stage, get_or_create_step, get_last_step_run
+from helpers.database import register_cycle, get_or_create_stage, get_or_create_step, get_last_step_run
 from helpers.constants import StepStatus
 
 
@@ -38,7 +38,7 @@ def mock_context():
 def test_step_initialization(test_schema, mock_context):
     """Test Step class initialization"""
     # Create hierarchy
-    cycle_id = create_cycle('test_cycle_1')
+    cycle_id = register_cycle('test_cycle_1')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -60,7 +60,7 @@ def test_step_initialization(test_schema, mock_context):
 def test_step_already_executed(test_schema, mock_context):
     """Test Step detects already executed steps"""
     # Create hierarchy
-    cycle_id = create_cycle('test_cycle_2')
+    cycle_id = register_cycle('test_cycle_2')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -83,7 +83,7 @@ def test_step_already_executed(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_log(test_schema, mock_context):
     """Test Step logging functionality"""
-    cycle_id = create_cycle('test_cycle_3')
+    cycle_id = register_cycle('test_cycle_3')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -108,7 +108,7 @@ def test_step_log(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_checkpoint(test_schema, mock_context):
     """Test Step checkpoint functionality"""
-    cycle_id = create_cycle('test_cycle_4')
+    cycle_id = register_cycle('test_cycle_4')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -131,7 +131,7 @@ def test_step_checkpoint(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_complete(test_schema, mock_context):
     """Test Step completion"""
-    cycle_id = create_cycle('test_cycle_5')
+    cycle_id = register_cycle('test_cycle_5')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -155,7 +155,7 @@ def test_step_complete(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_fail(test_schema, mock_context):
     """Test Step failure"""
-    cycle_id = create_cycle('test_cycle_6')
+    cycle_id = register_cycle('test_cycle_6')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -177,7 +177,7 @@ def test_step_fail(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_skip(test_schema, mock_context):
     """Test Step skipping"""
-    cycle_id = create_cycle('test_cycle_7')
+    cycle_id = register_cycle('test_cycle_7')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -199,7 +199,7 @@ def test_step_skip(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_get_last_output(test_schema, mock_context):
     """Test getting last output from completed step"""
-    cycle_id = create_cycle('test_cycle_8')
+    cycle_id = register_cycle('test_cycle_8')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -224,7 +224,7 @@ def test_step_get_last_output(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_context_manager(test_schema, mock_context):
     """Test Step as context manager"""
-    cycle_id = create_cycle('test_cycle_9')
+    cycle_id = register_cycle('test_cycle_9')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -245,7 +245,7 @@ def test_step_context_manager(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_context_manager_exception(test_schema, mock_context):
     """Test Step context manager with exception - auto fails"""
-    cycle_id = create_cycle('test_cycle_10')
+    cycle_id = register_cycle('test_cycle_10')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -270,7 +270,7 @@ def test_step_context_manager_exception(test_schema, mock_context):
 @pytest.mark.integration
 def test_step_force_reexecution(test_schema, mock_context):
     """Test forcing re-execution of already executed step"""
-    cycle_id = create_cycle('test_cycle_11')
+    cycle_id = register_cycle('test_cycle_11')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -298,7 +298,7 @@ def test_step_force_reexecution(test_schema, mock_context):
 def test_step_module_uses_context(test_schema, mock_context):
     """Test that Step class uses schema context correctly"""
     # Create data in test schema
-    cycle_id = create_cycle('context_cycle')
+    cycle_id = register_cycle('context_cycle')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 

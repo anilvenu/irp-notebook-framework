@@ -143,7 +143,7 @@ class WorkContext:
                     )
                 
                 # Create cycle
-                self.cycle_id = db.create_cycle(self.cycle_name, SYSTEM_USER)
+                self.cycle_id = db.register_cycle(self.cycle_name, SYSTEM_USER)
                 print(f"Created cycle: {self.cycle_name}")
             else:
                 self.cycle_id = cycle['id']

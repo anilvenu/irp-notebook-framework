@@ -98,19 +98,16 @@ def create_cycle(cycle_name: str) -> bool:
     Returns:
         True if successful
     """
-    # Validate name
-    valid = validate_cycle_name(cycle_name)
-    if not valid:
-        raise CycleError('Cycle name validation failed')
-        
     try:
-        
+        # Validate name
+        valid = validate_cycle_name(cycle_name)
+        if not valid:
+            raise CycleError('Cycle name validation failed')
+        print("Cycle name validation passed...")
+
         # Check for existing active cycle
         active_cycle = db.get_active_cycle()
         
-        if active_cycle['cycle_name'] == cycle_name:
-            raise CycleError(f"An active cycle by this name {active_cycle['cycle_name']} exists")
-
         if active_cycle:
             print(f"Archiving current cycle: {active_cycle['cycle_name']}")
             
@@ -142,7 +139,7 @@ def create_cycle(cycle_name: str) -> bool:
         _register_stages_and_steps(0, new_dir, apply=False)
 
 
-        cycle_id = db.create_cycle(cycle_name)
+        cycle_id = db.register_cycle(cycle_name)
         
         # Register stages and steps
         print('Registering stages and steps...')

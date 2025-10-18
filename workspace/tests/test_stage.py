@@ -12,14 +12,14 @@ from helpers.stage import (
     list_stages_for_cycle,
     StageError
 )
-from helpers.database import create_cycle
+from helpers.database import register_cycle
 
 
 @pytest.mark.database
 @pytest.mark.unit
 def test_get_or_create_stage_new(test_schema):
     """Test creating a new stage using stage.py module"""
-    cycle_id = create_cycle('test_cycle_1')
+    cycle_id = register_cycle('test_cycle_1')
 
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup Stage')
 
@@ -37,7 +37,7 @@ def test_get_or_create_stage_new(test_schema):
 @pytest.mark.unit
 def test_get_or_create_stage_existing(test_schema):
     """Test get_or_create_stage returns existing stage (idempotent)"""
-    cycle_id = create_cycle('test_cycle_2')
+    cycle_id = register_cycle('test_cycle_2')
 
     # Create first time
     stage_id_1 = get_or_create_stage(cycle_id, 1, 'Setup')
@@ -52,7 +52,7 @@ def test_get_or_create_stage_existing(test_schema):
 @pytest.mark.unit
 def test_get_or_create_stage_different_numbers(test_schema):
     """Test creating stages with different stage numbers"""
-    cycle_id = create_cycle('test_cycle_3')
+    cycle_id = register_cycle('test_cycle_3')
 
     stage_1 = get_or_create_stage(cycle_id, 1, 'Stage One')
     stage_2 = get_or_create_stage(cycle_id, 2, 'Stage Two')
@@ -68,7 +68,7 @@ def test_get_or_create_stage_different_numbers(test_schema):
 @pytest.mark.unit
 def test_get_stage_by_id_found(test_schema):
     """Test retrieving stage by ID"""
-    cycle_id = create_cycle('test_cycle_4')
+    cycle_id = register_cycle('test_cycle_4')
     stage_id = get_or_create_stage(cycle_id, 5, 'Test Stage')
 
     stage = get_stage_by_id(stage_id)
@@ -93,7 +93,7 @@ def test_get_stage_by_id_not_found(test_schema):
 @pytest.mark.unit
 def test_list_stages_for_cycle_empty(test_schema):
     """Test listing stages for cycle with no stages"""
-    cycle_id = create_cycle('test_cycle_5')
+    cycle_id = register_cycle('test_cycle_5')
 
     stages = list_stages_for_cycle(cycle_id)
 
@@ -104,7 +104,7 @@ def test_list_stages_for_cycle_empty(test_schema):
 @pytest.mark.integration
 def test_list_stages_for_cycle_multiple(test_schema):
     """Test listing multiple stages for a cycle"""
-    cycle_id = create_cycle('test_cycle_6')
+    cycle_id = register_cycle('test_cycle_6')
 
     # Create stages in random order
     get_or_create_stage(cycle_id, 3, 'Finalize')
@@ -123,8 +123,8 @@ def test_list_stages_for_cycle_multiple(test_schema):
 @pytest.mark.integration
 def test_list_stages_for_cycle_isolation(test_schema):
     """Test that stages are properly isolated by cycle"""
-    cycle_1 = create_cycle('test_cycle_7')
-    cycle_2 = create_cycle('test_cycle_8')
+    cycle_1 = register_cycle('test_cycle_7')
+    cycle_2 = register_cycle('test_cycle_8')
 
     # Create stages for both cycles
     get_or_create_stage(cycle_1, 1, 'Cycle1 Stage1')
@@ -149,7 +149,7 @@ def test_stage_module_uses_context(test_schema):
     # This test verifies that all stage operations happen in test schema
     # not in 'public' schema
 
-    cycle_id = create_cycle('context_test_cycle')
+    cycle_id = register_cycle('context_test_cycle')
     stage_id = get_or_create_stage(cycle_id, 1, 'Context Test Stage')
 
     # If context is working, this should find the stage

@@ -10,7 +10,7 @@ import tempfile
 import shutil
 from pathlib import Path
 from helpers import cycle
-from helpers.database import create_cycle, execute_insert, execute_command
+from helpers.database import register_cycle, execute_insert, execute_command
 from helpers import constants
 
 
@@ -23,7 +23,7 @@ def test_get_active_cycle_id(test_schema):
     assert cycle_id is None
 
     # Create a cycle
-    new_cycle_id = create_cycle('test_cycle_1')
+    new_cycle_id = register_cycle('test_cycle_1')
 
     # Now should return that cycle
     active_id = cycle.get_active_cycle_id()
@@ -35,9 +35,9 @@ def test_get_active_cycle_id(test_schema):
 def test_delete_archived_cycles(test_schema):
     """Test deleting archived cycles"""
     # Create some cycles
-    cycle_1 = create_cycle('cycle_1')
-    cycle_2 = create_cycle('cycle_2')
-    cycle_3 = create_cycle('cycle_3')
+    cycle_1 = register_cycle('cycle_1')
+    cycle_2 = register_cycle('cycle_2')
+    cycle_3 = register_cycle('cycle_3')
 
     # Archive two of them
     execute_insert(
@@ -95,7 +95,7 @@ def test_validate_cycle_name_forbidden_prefix(test_schema):
 def test_validate_cycle_name_already_exists(test_schema):
     """Test cycle name validation - name already exists"""
     # Create a cycle
-    create_cycle('Analysys-2024-Q1-test_validate_cycle_name_already_exists')
+    register_cycle('Analysys-2024-Q1-test_validate_cycle_name_already_exists')
 
     # Try to validate same name
     result = cycle.validate_cycle_name('Analysys-2024-Q1-test_validate_cycle_name_already_exists')
@@ -115,8 +115,8 @@ def test_validate_cycle_name_valid(test_schema):
 def test_get_cycle_status(test_schema):
     """Test getting cycle status"""
     # Create cycles with different statuses
-    cycle_1 = create_cycle('Analysys-2024-Q1-test_get_cycle_status-cycle-1')
-    cycle_2 = create_cycle('Analysys-2024-Q1-test_get_cycle_status-cycle-2')
+    cycle_1 = register_cycle('Analysys-2024-Q1-test_get_cycle_status-cycle-1')
+    cycle_2 = register_cycle('Analysys-2024-Q1-test_get_cycle_status-cycle-2')
 
     execute_command(
         "UPDATE irp_cycle SET status = %s WHERE id = %s",
@@ -139,7 +139,7 @@ def test_get_cycle_progress(test_schema):
     from helpers.database import get_or_create_stage, get_or_create_step
 
     # Create a cycle with stages and steps
-    cycle_id = create_cycle('progress_cycle')
+    cycle_id = register_cycle('progress_cycle')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -158,7 +158,7 @@ def test_get_step_history(test_schema):
     from helpers.database import get_or_create_stage, get_or_create_step, create_step_run, update_step_run
 
     # Create hierarchy
-    cycle_id = create_cycle('history_cycle')
+    cycle_id = register_cycle('history_cycle')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -184,7 +184,7 @@ def test_get_step_history_filtered_by_stage(test_schema):
     from helpers.database import get_or_create_stage, get_or_create_step, create_step_run
 
     # Create hierarchy with multiple stages
-    cycle_id = create_cycle('filter_cycle')
+    cycle_id = register_cycle('filter_cycle')
     stage_1 = get_or_create_stage(cycle_id, 1, 'Stage1')
     stage_2 = get_or_create_stage(cycle_id, 2, 'Stage2')
 
@@ -365,8 +365,8 @@ def test_create_cycle_duplicate_run(test_schema, temp_cycle_dirs):
     assert result is True
 
     # Create same cycle again - should fail with CycleError
-    with pytest.raises(CycleError, match='Cycle name validation failed'):
-        cycle.create_cycle('Analysis-2024-Q1-run-twice')
+    result = cycle.create_cycle('Analysis-2024-Q1-run-twice')
+    assert result is False
 
  
 @pytest.mark.database

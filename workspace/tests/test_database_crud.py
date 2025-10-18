@@ -7,7 +7,7 @@ All operations use context from the test_schema fixture (no schema= parameters n
 
 import pytest
 from helpers.database import (
-    create_cycle, get_cycle_by_name, get_active_cycle, archive_cycle,
+    register_cycle, get_cycle_by_name, get_active_cycle, archive_cycle,
     get_or_create_stage, get_or_create_step,
     create_step_run, update_step_run, get_last_step_run, get_step_info
 )
@@ -24,7 +24,7 @@ from helpers.constants import CycleStatus, StepStatus
 def test_create_cycle(test_schema):
     """Test creating a new cycle"""
     # Create cycle (no schema= parameter - uses context!)
-    cycle_id = create_cycle('test_cycle_1')
+    cycle_id = register_cycle('test_cycle_1')
 
     assert cycle_id > 0, "Cycle ID should be positive"
 
@@ -40,7 +40,7 @@ def test_create_cycle(test_schema):
 def test_get_cycle_by_name(test_schema):
     """Test retrieving cycle by name"""
     # Create cycle
-    cycle_id = create_cycle('test_cycle_2')
+    cycle_id = register_cycle('test_cycle_2')
 
     # Retrieve by name
     cycle = get_cycle_by_name('test_cycle_2')
@@ -63,7 +63,7 @@ def test_get_cycle_by_name_not_found(test_schema):
 def test_get_active_cycle(test_schema):
     """Test retrieving the active cycle"""
     # Create a cycle
-    cycle_id = create_cycle('test_cycle_3')
+    cycle_id = register_cycle('test_cycle_3')
 
     # Should have active cycle
     active = get_active_cycle()
@@ -78,7 +78,7 @@ def test_get_active_cycle(test_schema):
 def test_archive_cycle(test_schema):
     """Test archiving a cycle"""
     # Create cycle
-    cycle_id = create_cycle('test_cycle_4')
+    cycle_id = register_cycle('test_cycle_4')
 
     # Verify it's active first
     cycle_before = get_cycle_by_name('test_cycle_4')
@@ -98,13 +98,13 @@ def test_archive_cycle(test_schema):
 def test_multiple_cycles(test_schema):
     """Test creating multiple cycles (only one can be active)"""
     # Create first cycle
-    cycle_id_1 = create_cycle('test_cycle_5')
+    cycle_id_1 = register_cycle('test_cycle_5')
 
     # Archive it
     archive_cycle(cycle_id_1)
 
     # Create second cycle
-    cycle_id_2 = create_cycle('test_cycle_6')
+    cycle_id_2 = register_cycle('test_cycle_6')
 
     # Active should be the second one
     active = get_active_cycle()
@@ -125,7 +125,7 @@ def test_multiple_cycles(test_schema):
 @pytest.mark.unit
 def test_create_step(test_schema):
     """Test creating a step"""
-    cycle_id = create_cycle('test_cycle_10')
+    cycle_id = register_cycle('test_cycle_10')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
 
     # Create step
@@ -147,7 +147,7 @@ def test_create_step(test_schema):
 @pytest.mark.unit
 def test_get_or_create_step_existing(test_schema):
     """Test get_or_create_step returns existing step"""
-    cycle_id = create_cycle('test_cycle_11')
+    cycle_id = register_cycle('test_cycle_11')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
 
     # Create step
@@ -163,7 +163,7 @@ def test_get_or_create_step_existing(test_schema):
 @pytest.mark.unit
 def test_get_step_info(test_schema):
     """Test getting complete step information"""
-    cycle_id = create_cycle('test_cycle_12')
+    cycle_id = register_cycle('test_cycle_12')
     stage_id = get_or_create_stage(cycle_id, 2, 'Processing')
     step_id = get_or_create_step(stage_id, 3, 'Transform', '/nb/transform.ipynb')
 
@@ -187,7 +187,7 @@ def test_get_step_info(test_schema):
 @pytest.mark.unit
 def test_create_step_run(test_schema):
     """Test creating a step run"""
-    cycle_id = create_cycle('test_cycle_13')
+    cycle_id = register_cycle('test_cycle_13')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -202,7 +202,7 @@ def test_create_step_run(test_schema):
 @pytest.mark.unit
 def test_multiple_step_runs(test_schema):
     """Test creating multiple runs for same step"""
-    cycle_id = create_cycle('test_cycle_14')
+    cycle_id = register_cycle('test_cycle_14')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -222,7 +222,7 @@ def test_multiple_step_runs(test_schema):
 @pytest.mark.unit
 def test_update_step_run_completed(test_schema):
     """Test updating step run to completed"""
-    cycle_id = create_cycle('test_cycle_15')
+    cycle_id = register_cycle('test_cycle_15')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
     run_id, run_num = create_step_run(step_id, 'test_user')
@@ -243,7 +243,7 @@ def test_update_step_run_completed(test_schema):
 @pytest.mark.unit
 def test_update_step_run_failed(test_schema):
     """Test updating step run to failed"""
-    cycle_id = create_cycle('test_cycle_16')
+    cycle_id = register_cycle('test_cycle_16')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
     run_id, run_num = create_step_run(step_id, 'test_user')
@@ -263,7 +263,7 @@ def test_update_step_run_failed(test_schema):
 @pytest.mark.unit
 def test_get_last_step_run(test_schema):
     """Test getting the most recent step run"""
-    cycle_id = create_cycle('test_cycle_17')
+    cycle_id = register_cycle('test_cycle_17')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
 
@@ -295,7 +295,7 @@ def test_get_last_step_run(test_schema):
 def test_complete_hierarchy(test_schema):
     """Test creating complete cycle → stage → step → run hierarchy"""
     # Create cycle
-    cycle_id = create_cycle('test_cycle_18')
+    cycle_id = register_cycle('test_cycle_18')
 
     # Create stages
     stage_1_id = get_or_create_stage(cycle_id, 1, 'Setup')
@@ -344,7 +344,7 @@ def test_schema_isolation(test_schema):
     and not the 'public' schema.
     """
     # Create data in test schema
-    cycle_id = create_cycle('test_isolation')
+    cycle_id = register_cycle('test_isolation')
 
     # Verify it exists in this context
     cycle = get_cycle_by_name('test_isolation')

@@ -357,7 +357,7 @@ def get_cycle_by_name(cycle_name: str) -> Optional[Dict[str, Any]]:
     return df.iloc[0].to_dict() if not df.empty else None
 
 
-def create_cycle(cycle_name: str) -> int:
+def register_cycle(cycle_name: str) -> int:
     """Create new cycle"""
     query = """
         INSERT INTO irp_cycle (cycle_name, status)
