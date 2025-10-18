@@ -11,10 +11,28 @@ The IRP Notebook Framework uses a sophisticated test infrastructure built on pyt
 
 The `test.sh` script orchestrates the entire test execution process:
 
+**Environment Preparation**:
+- Detects and activates virtual environment (`venv` or `.venv`)
+- Installs test requirements from `requirements-test.txt`
+- Sets up Python import path via `workspace.pth` for helper module imports
+
 **Database Setup (Docker-based)**:
 - Verifies PostgreSQL container `irp-postgres` is running
 - Auto-creates test database (`test_db`) and test user (`test_user`) if they don't exist
-- Sets environment variables for database connection:
+
+**Test Execution**:
+- Runs all tests with single pytest command: `pytest workspace/tests/ -v "$@"`
+- Passes through all arguments (supports `-m`, `-k`, `--preserve-schema`, etc.)
+
+---
+
+### Test Data Strategy (conftest.py)
+
+Test data will be completely isolated from production data. Production will be running on ```irp_db``` and test on ```test_db```.
+
+**Database Connection Paramters for Test**:
+- Sets environment variables for database connection at the module level before helpers are imported (specifically ```constants.py```):
+
   ```bash
   DB_SERVER=localhost
   DB_PORT=5432
@@ -23,18 +41,7 @@ The `test.sh` script orchestrates the entire test execution process:
   DB_PASSWORD=test_pass
   ```
 
-**Environment Preparation**:
-- Detects and activates virtual environment (`venv` or `.venv`)
-- Installs test requirements from `requirements-test.txt`
-- Sets up Python import path via `workspace.pth` for helper module imports
-
-**Test Execution**:
-- Runs all tests with single pytest command: `pytest workspace/tests/ -v "$@"`
-- Passes through all arguments (supports `-m`, `-k`, `--preserve-schema`, etc.)
-
----
-
-### Schema Isolation Strategy (conftest.py - test_schema fixture)
+#### Schema Isolation Strategy (conftest.py - test_schema fixture)
 
 **Key Concept**: Each test file gets its own isolated PostgreSQL schema
 
@@ -149,7 +156,7 @@ pytest workspace/tests/ -n auto
 # No conflicts!
 ```
 
-**Avoid Parallel Execution Within SAME FILE**
+**✗ Avoid Parallel Execution Within SAME FILE**
 
 Tests within same file share the same schema → "one active cycle" conflicts:
 
@@ -158,7 +165,7 @@ Tests within same file share the same schema → "one active cycle" conflicts:
 
 @pytest.mark.parametrize("cycle_name", ["cycle1", "cycle2", "cycle3"])
 def test_something(test_schema, cycle_name):
-    cycle_id = register_cycle(cycle_name)  # ❌ If run in parallel, conflicts!
+    cycle_id = register_cycle(cycle_name)  # ✗ If run in parallel, conflicts!
     # Only ONE can be ACTIVE at a time in test_batch schema
 ```
 
@@ -204,7 +211,7 @@ create_test_hierarchy(cycle_name, schema)  # Creates full cycle→stage→step�
 
 ---
 
-### 6. Test Execution Examples
+### Test Execution Examples
 
 **Run All Tests**:
 ```bash

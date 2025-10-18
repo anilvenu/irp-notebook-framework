@@ -13,16 +13,6 @@ echo " "
 echo "IRP Notebook Framework Test Runner"
 echo "============================================"
 
-
-
-echo "Setting environment variables" 
-# Set TEST database connection
-export DB_SERVER=localhost
-export DB_PORT=5432
-export DB_NAME=test_db
-export DB_USER=test_user
-export DB_PASSWORD=test_pass
-
 # Ensure test database exists in Docker postgres container
 echo "Checking test database setup..."
 CONTAINER_NAME="irp-postgres"
@@ -71,8 +61,8 @@ fi
 pip install -r requirements-test.txt -q
 
 # Set workspace path for imports
-echo "$(pwd)/workspace" > $(python -c "import site; print(site.getsitepackages()[0])")/workspace.pth
-python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')"
+#echo "$(pwd)/workspace" > $(python -c "import site; print(site.getsitepackages()[0])")/workspace.pth
+#python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')"
 
 # Run ALL pytest tests in a single command for unified results
 pytest workspace/tests/ -v "$@"

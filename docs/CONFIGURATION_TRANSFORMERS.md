@@ -352,8 +352,8 @@ def transform_table_split(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 ### 1. **Naming Conventions**
 
 Use descriptive, lowercase names with underscores:
-- ✅ `portfolio_batch`, `monthly_split`, `table_split`
-- ❌ `type1`, `MyTransformer`, `PORTFOLIO`
+- GOOD `portfolio_batch`, `monthly_split`, `table_split`
+- BAD  `type1`, `MyTransformer`, `PORTFOLIO`
 
 ### 2. **Documentation**
 
@@ -391,12 +391,12 @@ def transform_portfolio_batch(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 Avoid modifying the input configuration:
 
 ```python
-# ❌ Bad: Modifies input
+# Bad: Modifies input
 def bad_transformer(config):
     config['processed'] = True  # Modifies input!
     return [config]
 
-# ✅ Good: Creates copies
+# Good: Creates copies
 def good_transformer(config):
     job = config.copy()
     job['processed'] = True
@@ -520,11 +520,11 @@ batch_type = batch['metadata'].get('batch_type', 'default')
 **Solution:** Ensure your transformer always returns a list:
 
 ```python
-# ❌ Wrong
+# Wrong
 def bad_transformer(config):
     return config  # Should be [config]
 
-# ✅ Correct
+# Correct
 def good_transformer(config):
     return [config]
 ```

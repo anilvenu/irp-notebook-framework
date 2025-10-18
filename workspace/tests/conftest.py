@@ -6,23 +6,45 @@ This module provides:
 - Database connection verification
 - Shared fixtures for common test scenarios
 - Custom pytest options (--preserve-schema)
+- Environment variable setup for test database
+- Python path configuration for workspace imports
 """
 
+# Set environment variables BEFORE any imports
+# The helpers.constants module reads DB_CONFIG from environment on import
+# So we MUST set these before importing helpers.database or helpers.constants
+import os
+import sys
 import pytest
 from pathlib import Path
+from sqlalchemy import text
+from datetime import datetime
+import json
+
+# Set test database environment variables FIRST
+# FORCE test database configuration to prevent using production irp_db
+# This is critical when running from VSCode Testing or pytest directly
+os.environ['DB_SERVER'] = 'localhost'
+os.environ['DB_PORT'] = '5432'
+os.environ['DB_NAME'] = 'test_db'
+os.environ['DB_USER'] = 'test_user'
+os.environ['DB_PASSWORD'] = 'test_pass'
+
+# Add workspace directory to Python path for imports
+workspace_path = Path(__file__).parent.parent.resolve()
+workspace_path_str = str(workspace_path)
+if workspace_path_str not in sys.path:
+    sys.path.insert(0, workspace_path_str)
+
+# NOW import from helpers (DB_CONFIG will use test_db)
 from helpers.database import (
     init_database,
     get_engine,
     test_connection,
     execute_insert,
-    execute_query,
-    DatabaseError,
     set_schema
 )
 from helpers.constants import ConfigurationStatus
-from sqlalchemy import text
-from datetime import datetime
-import json
 
 
 # ==============================================================================
@@ -40,7 +62,13 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    """Configure pytest with custom markers"""
+    """
+    Configure pytest with custom markers and environment setup.
+
+    This runs once at the start of the test session and sets up:
+    - Custom pytest markers
+    """
+    # Configure custom markers
     config.addinivalue_line(
         "markers", "unit: Unit tests for individual functions"
     )
@@ -74,13 +102,32 @@ def verify_database_connection():
     is not available.
     """
     if not test_connection():
+
+        # Checking for PostgreSQL container
+        result = os.popen("docker ps | grep postgres").read()
+        if not result:
+            pytest.fail("PostgreSQL container is not running.")
+
+        # Checking if the DB_SERVER, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD match the test database settings
+        db_server = os.environ.get('DB_SERVER')
+        db_port = os.environ.get('DB_PORT')
+        db_name = os.environ.get('DB_NAME')
+        db_user = os.environ.get('DB_USER')
+        db_password = os.environ.get('DB_PASSWORD')
+        print(f"Server: {db_server}, Port: {db_port}, DB Name: {db_name}, User: {db_user}, Password: {db_password}")
+        
+
+
         pytest.fail(
             "Database connection failed. Please ensure:\n"
             "  1. PostgreSQL container is running\n"
             "  2. test_db and test_user exist\n"
             "  3. Environment variables are set correctly\n"
             "Run: docker ps | grep postgres"
+            f"Server: {db_server}, Port: {db_port}, DB Name: {db_name}, User: {db_user}, Password: {db_password}"
         )
+
+
 
 
 # ==============================================================================
@@ -117,7 +164,7 @@ def test_schema(request):
     print(f"\n{'='*80}")
     print(f"SETUP: Initializing Test Schema '{schema}'")
     if preserve_mode:
-        print(f"⚠️  PRESERVE MODE: Schema will be kept after tests")
+        print(f"⚠  PRESERVE MODE: Schema will be kept after tests")
     print(f"{'='*80}")
 
     # Cleanup any existing schema from previous run
@@ -132,7 +179,7 @@ def test_schema(request):
             existing = result.fetchone()
 
             if existing:
-                print(f"⚠️  Found existing schema '{schema}' (from previous --preserve run)")
+                print(f"⚠  Found existing schema '{schema}' (from previous --preserve run)")
 
             conn.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
             conn.commit()
@@ -142,7 +189,7 @@ def test_schema(request):
         else:
             print(f"✓ No existing schema found")
     except Exception as e:
-        print(f"⚠️  Warning: Could not drop existing schema: {e}")
+        print(f"⚠  Warning: Could not drop existing schema: {e}")
 
     # Initialize new schema
     try:
@@ -174,7 +221,7 @@ def test_schema(request):
         except Exception as e:
             print(f"Warning: Cleanup failed for schema '{schema}': {e}")
     else:
-        print(f"\n⚠️  Schema '{schema}' preserved for debugging")
+        print(f"\n⚠ Schema '{schema}' preserved for debugging")
 
     # Reset schema context to 'public'
     set_schema('public')

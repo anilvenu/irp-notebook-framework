@@ -2,6 +2,10 @@
 
 A business-user-friendly Jupyter notebook framework for managing IRP (Internal Risk Processing) workflows, replacing complex orchestration systems with simple, visual notebooks.
 
+✓
+✗
+⚠
+
 ## Quick Start
 
 ### Prerequisites

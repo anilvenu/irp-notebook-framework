@@ -33,7 +33,7 @@ from helpers.constants import ConfigurationStatus
 
 
 # Test Excel file path
-TEST_EXCEL_PATH = str(Path(__file__).parent / 'test_configuration.xlsx')
+TEST_EXCEL_PATH = str(Path(__file__).parent / 'files/test_configuration.xlsx')
 
 
 # ============================================================================
