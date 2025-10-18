@@ -158,7 +158,7 @@ STAGE_PATTERN = r'Stage_(\d+)_(.+)'
 
 CYCLE_NAME_RULES = {
     'min_length': 3,
-    'max_length': 100,
+    'max_length': 255,
     'allowed_chars': r'^[a-zA-Z0-9_\-]+$',
     'valid_pattern': r'^Analysis-20\d{2}-Q[1-4](-[\w-]+)?$',
     'example': 'Analysis-2025-Q4 OR Analysis-2025-Q4-v1',

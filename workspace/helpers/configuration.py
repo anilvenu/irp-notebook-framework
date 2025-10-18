@@ -250,7 +250,10 @@ def load_configuration_file(
         ConfigurationError: If validation fails or file issues
     """
     # Validate that the provided cycle_id matches the active cycle
-    active_cycle_id = get_active_cycle_id(schema=schema)
+    # Note: get_active_cycle_id() now uses schema context
+    from helpers.db_context import schema_context
+    with schema_context(schema):
+        active_cycle_id = get_active_cycle_id()
     if active_cycle_id != cycle_id:
         raise ConfigurationError(
             f"Provided cycle_id {cycle_id} does not match active cycle {active_cycle_id}"

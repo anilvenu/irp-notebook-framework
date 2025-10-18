@@ -326,12 +326,11 @@ def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sq
 # CYCLE OPERATIONS
 # ============================================================================
 
-def get_active_cycle(schema: str = 'public') -> Optional[Dict[str, Any]]:
+def get_active_cycle() -> Optional[Dict[str, Any]]:
     """
     Get the currently active cycle
 
-    Args:
-        schema: Database schema to use (default: 'public')
+    Uses schema from context (see db_context.py).
 
     Returns:
         Dictionary with cycle information or None if no active cycle
@@ -343,14 +342,14 @@ def get_active_cycle(schema: str = 'public') -> Optional[Dict[str, Any]]:
         ORDER BY created_ts DESC
         LIMIT 1
     """
-    df = execute_query(query, schema=schema)
+    df = execute_query(query)
     return df.iloc[0].to_dict() if not df.empty else None
 
 
 def get_cycle_by_name(cycle_name: str) -> Optional[Dict[str, Any]]:
     """Get cycle by name"""
     query = """
-        SELECT id, cycle_name, status, created_ts, archived_t
+        SELECT id, cycle_name, status, created_ts, archived_ts
         FROM irp_cycle
         WHERE cycle_name = %s
     """
@@ -362,7 +361,7 @@ def create_cycle(cycle_name: str) -> int:
     """Create new cycle"""
     query = """
         INSERT INTO irp_cycle (cycle_name, status)
-        VALUES (%s, %s, %s)
+        VALUES (%s, %s)
     """
     return execute_insert(query, (cycle_name, CycleStatus.ACTIVE))
 

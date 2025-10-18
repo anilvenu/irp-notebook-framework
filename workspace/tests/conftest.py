@@ -18,6 +18,7 @@ from helpers.database import (
     execute_query,
     DatabaseError
 )
+from helpers.db_context import set_schema
 from helpers.constants import ConfigurationStatus
 from sqlalchemy import text
 from datetime import datetime
@@ -148,9 +149,14 @@ def test_schema(request):
         success = init_database(schema=schema)
         if not success:
             pytest.fail(f"Failed to initialize test schema '{schema}'")
-        print(f"✓ Test schema '{schema}' initialized successfully\n")
+        print(f"✓ Test schema '{schema}' initialized successfully")
     except Exception as e:
         pytest.fail(f"Failed to setup test schema '{schema}': {e}")
+
+    # Set schema context for all tests in this module
+    # This allows tests to call functions without schema= parameter
+    set_schema(schema)
+    print(f"✓ Schema context set to '{schema}'\n")
 
     # Provide schema to tests
     yield schema
@@ -169,6 +175,10 @@ def test_schema(request):
             print(f"Warning: Cleanup failed for schema '{schema}': {e}")
     else:
         print(f"\n⚠️  Schema '{schema}' preserved for debugging")
+
+    # Reset schema context to 'public'
+    set_schema('public')
+    print(f"✓ Schema context reset to 'public'")
 
 
 # ==============================================================================

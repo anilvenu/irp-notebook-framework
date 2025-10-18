@@ -58,23 +58,27 @@ def validate_cycle_name(cycle_name: str) -> bool:
     # Check forbidden prefixes
     for prefix in CYCLE_NAME_RULES['forbidden_prefixes']:
         if cycle_name.startswith(prefix):
-            return False, f"Name cannot start with '{prefix}'"
-    
+            print(f"Name cannot start with '{prefix}'")
+            return False
+
     # Check if name already exists
     existing = db.get_cycle_by_name(cycle_name)
     if existing:
-        return False, f"Cycle '{cycle_name}' already exists"
-    
+        print(f"Cycle '{cycle_name}' already exists")
+        return False
+
     # Check if Active_ directory exists
     active_dir = WORKFLOWS_PATH / f"Active_{cycle_name}"
     if active_dir.exists():
-        return False, f"Directory 'Active_{cycle_name}' already exists"
-    
+        print(f"Directory 'Active_{cycle_name}' already exists")
+        return False
+
     # Check archive
     archive_dir = ARCHIVE_PATH / cycle_name
     if archive_dir.exists():
-        return False, f"Cycle '{cycle_name}' exists in archive"
-    
+        print(f"Cycle '{cycle_name}' exists in archive")
+        return False
+
     return True
 
 
@@ -263,17 +267,16 @@ def _register_stages_and_steps(cycle_id: int, cycle_dir: Path, apply=False) -> i
     return stage_count
 
 
-def get_active_cycle_id(schema: str = 'public') -> int:
+def get_active_cycle_id() -> int:
     """
     Get the ID of the currently active cycle
 
-    Args:
-        schema: Database schema to use (default: 'public')
+    Uses schema from context (see db_context.py).
 
     Returns:
         Cycle ID of active cycle, or None if no active cycle
     """
-    active_cycle = db.get_active_cycle(schema=schema)
+    active_cycle = db.get_active_cycle()
     return active_cycle['id'] if active_cycle else None
 
 
