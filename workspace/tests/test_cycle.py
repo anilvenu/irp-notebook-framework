@@ -354,7 +354,21 @@ def test_archive_cycle_by_name(test_schema, temp_cycle_dirs):
     archive_dir = temp_cycle_dirs['archive'] / cycle_name
     assert archive_dir.exists()
 
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_cycle_duplicate_run(test_schema, temp_cycle_dirs):
+    """Test cycle.create_cycle() back to back mimicing accidental rerun"""
+    from helpers.cycle import CycleError
 
+    # Create cycle first time - should succeed
+    result = cycle.create_cycle('Analysis-2024-Q1-run-twice')
+    assert result is True
+
+    # Create same cycle again - should fail with CycleError
+    with pytest.raises(CycleError, match='Cycle name validation failed'):
+        cycle.create_cycle('Analysis-2024-Q1-run-twice')
+
+ 
 @pytest.mark.database
 @pytest.mark.integration
 def test_create_cycle_registers_stages_and_steps(test_schema, temp_cycle_dirs):
