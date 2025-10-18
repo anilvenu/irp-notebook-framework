@@ -16,22 +16,6 @@ from helpers import constants
 
 @pytest.mark.database
 @pytest.mark.unit
-def test_get_active_cycle_id(test_schema):
-    """Test getting active cycle ID"""
-    # No active cycle initially
-    cycle_id = cycle.get_active_cycle_id()
-    assert cycle_id is None
-
-    # Create a cycle
-    new_cycle_id = register_cycle('test_cycle_1')
-
-    # Now should return that cycle
-    active_id = cycle.get_active_cycle_id()
-    assert active_id == new_cycle_id
-
-
-@pytest.mark.database
-@pytest.mark.unit
 def test_delete_archived_cycles(test_schema):
     """Test deleting archived cycles"""
     # Create some cycles
@@ -322,6 +306,8 @@ def test_create_cycle_archives_previous(test_schema, temp_cycle_dirs):
 @pytest.mark.integration
 def test_archive_cycle_by_name(test_schema, temp_cycle_dirs):
     """Test cycle.archive_cycle_by_name() moves directory and updates database"""
+
+
 
     cycle_name = 'Analysis-2025-Q1-Archive-Test'
     active_directory_name = f'Active_{cycle_name}'

@@ -16,9 +16,9 @@ from helpers.database import (
     test_connection,
     execute_insert,
     execute_query,
-    DatabaseError
+    DatabaseError,
+    set_schema
 )
-from helpers.db_context import set_schema
 from helpers.constants import ConfigurationStatus
 from sqlalchemy import text
 from datetime import datetime

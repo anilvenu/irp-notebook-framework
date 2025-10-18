@@ -1,0 +1,1000 @@
+  264      },
+  265      "auto_submit": true
+  266    }'
+  267  curl -X POST http://localhost:8000/api/analyses/from-yaml   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  268      "yaml_content": {
+  269        "analysis": {
+  270          "name": "Authenticated API Test - gotta be Clean",
+  271          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  272        }
+  273      },
+  274      "auto_submit": true
+  275    }'
+  276  docker-compose down
+  277  curl -X POST http://localhost:8000/api/analyses/from-yaml   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  278      "yaml_content": {
+  279        "analysis": {
+  280          "name": "Authenticated API Test - This one gotta be Clean - not go to Complete",
+  281          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  282        }
+  283      },
+  284      "auto_submit": true
+  285    }'
+  286  curl -X POST http://localhost:8000/api/jobs/71/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  287  python -v
+  288  python3 -v
+  289  alias python=python3
+  290  python --version
+  291  whereis python
+  292  whereis python3
+  293  python -m venv .venv 
+  294  apt install python3.12-venv
+  295  sudo apt install python3.12-venv
+  296  python -m venv .venv 
+  297  pip install -r infrastructure/requirements.txt 
+  298  sudo apt install python3-pip
+  299  chmod +x infrastructure/start.sh
+  300  cd infrastructure/
+  301  ./start.sh 
+  302  cd ..
+  303  cd ~
+  304  cd irp-notebook-framework/
+  305  ls
+  306  docker-compose up --build -d 
+  307  cd ..
+  308  sudo apt-get update
+  309  sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common libssl-dev libffi-dev git wget nano
+  310  sudo groupadd docker
+  311  sudo usermod -aG docker ${USER}
+  312  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  313  sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  314  curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+  315  echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+  316  sudo apt-get update
+  317  sudo apt-get upgrade -y
+  318  sudo apt-get autoremove -y
+  319  sudo apt-get install -y docker-ce containerd.io
+  320  sudo apt-get install -y kubectl
+  321  sudo curl -sSL https://github.com/docker/compose/releases/download/`curl -s https://github.com/docker/compose/tags | \
+  322  echo "sudo service docker start" >> ~/.profile
+  323  exit
+  324  docker ps
+  325  cd infrastructure/
+  326  docker-compose up -d 
+  327  docker-compose down -v 
+  328  docker-compose up -d --build 
+  329  ls
+  330  ./start.sh 
+  331  cd ..
+  332  docker-compose down -v 
+  333  cd irp-notebook-framework/
+  334  docker-compose down -v 
+  335  ./start.sh 
+  336  clear
+  337  chmod +x start.sh stop.sh
+  338  ./start.sh
+  339  curl -I https://mcr.microsoft.com/v2/mssql/server/manifests/2022-latest
+  340  docker-compose up -d --build
+  341  docker-compose up --build
+  342  docker pull mcr.microsoft.com/mssql/server:2019-latest
+  343  curl -I https://mcr.microsoft.com/v2/mssql/server/manifests/2022-latest
+  344  curl -I https://mcr.microsoft.com/v2/mssql/server/manifests/2019-latest
+  345  docker pull mcr.microsoft.com/mssql/server:2019-latest
+  346  docker pull mcr.microsoft.com/mssql/server:2022-latest
+  347  docker pull mcr.microsoft.com/mssql/server:2022-CU12-ubuntu-20.04
+  348  docker pull alpine
+  349  docker pull mcr.microsoft.com/mssql/server:2022-CU12-ubuntu-20.04
+  350  docker pull mcr.microsoft.com/mssql/server:2019-latest
+  351  docker pull mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04
+  352  docker pull mcr.microsoft.com/mssql/server:2019-latest
+  353  docker-compose up --build
+  354  docker-h
+  355  docker -h
+  356  wsl.exe -l -v
+  357  docker pull mcr.microsoft.com/mssql/server:2019-latest
+  358  docker pull --platform=linux/amd64 mcr.microsoft.com/mssql/server:2019-latest
+  359  curl -I https://mcr.microsoft.com/v2/mssql/server/manifests/2022-latest
+  360  curl -I https://mcr.microsoft.com/v2/mssql/server/manifests/2019-latest
+  361  docker info | grep -i 'Server'
+  362  docker pull mcr.microsoft.com/mssql/server:2017-latest
+  363  docker pull postgres
+  364  docker pull mcr.microsoft.com/mssql/server:2017-latest
+  365  docker-compose up --build
+  366  docker-compose --help
+  367  docker compose --help
+  368  docker-compose --help
+  369  docker compose --help
+  370  exit
+  371  cd infrastructure/docker
+  372  docker-compose logs -f celery-beat
+  373  uv run python infrastructure/postgres/initialize_db.py 
+  374  curl -X POST http://localhost:8000/api/system/recovery
+  375  PYTHONPATH=. uv run python -c "from src.services.recovery_service import RecoveryService; rs = RecoveryService(); print(rs.trigger_manual_recovery())"
+  376  curl -X POST http://localhost:8000/api/system/recovery
+  377  docker-compose up -d flower
+  378  cd infrastructure/docker
+  379  docker-compose up -d flower
+  380  docker-compose up -d 
+  381  docker ps -a
+  382  docker ps
+  383  docker compose down 
+  384  docker-compose up -d 
+  385  docker ps
+  386  docker-compose build
+  387  docker-compose down
+  388  docker-compose build
+  389  sudo chmod -R 755 data/
+  390  sudo chmod -R 755 ./../../data/
+  391  sudo chmod -R 755 ./../data/
+  392  docker-compose build
+  393  docker-compose up -d 
+  394  docker ps 
+  395  curl -X POST http://localhost:8000/api/analyses/from-yaml   -H "Content-Type: application/json"   -d @- <<EOF
+  396  {
+  397    "yaml_content": {
+  398      "analysis": {
+  399        "name": "Production Analysis",
+  400        "configurations": [
+  401          {
+  402            "name": "Config1",
+  403            "model": "model1",
+  404            "parameters": {}
+  405          }
+  406        ]
+  407      }
+  408    },
+  409    "auto_submit": true
+  410  }
+  411  EOF
+  412  curl -X POST http://localhost:8001/mock/workflows   -H "Content-Type: application/json"   -d '{
+  413      "analysis_id": 1,
+  414      "configuration_id": 1,
+  415      "model_name": "test_model",
+  416      "parameters": {"test": "value"}
+  417    }'
+  418  curl http://localhost:8001/mock/workflows/WF-xxx/status
+  419  curl http://localhost:8001/mock/workflows/WF-523c2aa3-2e5d-4004-ab28-ba3fdc160b9d/status
+  420  curl http://localhost:8001/mock/stats
+  421  curl -X GET http://localhost:8010/api/analyses/
+  422  curl -X GET http://localhost:8000/api/analyses/   -H "X-API-Key: test-api-key-12345"
+  423  curl -X GET http://localhost:8010/api/analyses/
+  424  curl -X GET http://localhost:8000/api/analyses/   -H "X-API-Key: test-api-key-12345"
+  425  echo "API_KEY=docker-api-key-secure-123" >> .env
+  426  docker-compose down
+  427  docker-compose buils
+  428  docker-compose build
+  429  sudo chmod -R +r /home/avenugopal/maas-engine/data
+  430  docker-compose build
+  431  sudo chmod -R 777 ~/maas-engine/data ~/maas-engine/logs
+  432  docker-compose build
+  433  docker-compose up -d 
+  434  cd ..
+  435  docker ps
+  436  docker exec -it ls /app/config
+  437  docker exec -it cat /app/config/test_analysis.yaml
+  438  docker exec -it irp-app ls /app/config
+  439  docker exec -it irp-app python src/initiator.py -h
+  440  docker exec -it irp-app python src/initiator.py /app/config/test_analysis.yaml --submit
+  441  docker exec -it ls /app/config
+  442  docker exec -it irp-app ls /app/config
+  443  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  444  docker-compose logs -f celery-worker | grep -i "submitting job"
+  445  docker-compose logs -f celery-worker
+  446  docker-compose logs celery-worker
+  447  docker-compose down
+  448  cd infrastructure/docker
+  449  docker-compose down
+  450  docker-compose build
+  451  sudo chmod -R 777 ~/maas-engine/data ~/maas-engine/logs
+  452  docker-compose build
+  453  docker-compose up -d 
+  454  cd ..
+  455  docker exec -it irp-app ls /app/config
+  456  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  457  docker-compose logs -f celery-worker
+  458  docker exec -it irp-postgres psql -U irp_user -d irp_db -c "SELECT id, name, status FROM irp_analysis ORDER BY id DESC LIMIT 1;"
+  459  docker logs -f celery-worker
+  460  docker ps 
+  461  cd infrastructure/docker
+  462  docker-compose logs -f celery-worker
+  463  docker exec -it irp-postgres psql -U irp_user -d irp_db -c "SELECT id, name, status FROM irp_analysis ORDER BY id DESC LIMIT 1;"
+  464  docker exec -it irp-app netstat -tulpn | grep 8001
+  465  docker exec -it irp-app netstat -tulpn 
+  466  docker-compose down 
+  467  docker-compose up -d 
+  468  docker exec -it irp-postgres psql -U irp_user -d irp_db -c "SELECT id, name, status FROM irp_analysis ORDER BY id DESC LIMIT 1;"
+  469  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  470  docker-compose logs -f celery-worker
+  471  docker-compose down 
+  472  docker-compose up -d 
+  473  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  474  docker exec -it irp-postgres psql -U irp_user -d irp_db -c "SELECT id, name, status FROM irp_analysis ORDER BY id DESC LIMIT 1;"
+  475  docker logs -f celery-worker
+  476  docker-compose logs -f celery-worker
+  477  docker-compose down 
+  478  docker-compose up -d 
+  479  sudo chmod -R 777 ~/maas-engine/data ~/maas-engine/logs
+  480  docker-compose up -d 
+  481  docker-compose logs -f celery-worker
+  482  docker exec -it irp-postgres psql -U irp_user -d irp_db -c "SELECT id, name, status FROM irp_analysis ORDER BY id DESC LIMIT 1;"
+  483  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  484  docker exec -it irp-postgres psql -U irp_user -d irp_db -c "SELECT id, name, status FROM irp_analysis ORDER BY id DESC LIMIT 1;"
+  485  docker-compose logs -f celery-worker
+  486  docker-compose down 
+  487  docker-compose up -d 
+  488  docker exec -it irp-postgres psql -U irp_user -d irp_db -c "SELECT id, name, status FROM irp_analysis ORDER BY id DESC LIMIT 1;"
+  489  docker-compose down 
+  490  docker-compose up -d 
+  491  docker-compose down 
+  492  docker-compose up -d 
+  493  docker-compose logs -f celery-worker
+  494  docker-compose down 
+  495  docker-compose up -d 
+  496  docker-compose logs -f celery-worker
+  497  docker-compose down 
+  498  docker-compose up -d 
+  499  docker-compose logs -f celery-worker
+  500  docker-compose up -d 
+  501  docker-compose down 
+  502  docker-compose up -d 
+  503  docker-compose logs -f celery-worker
+  504  docker-compose down 
+  505  docker-compose up -d 
+  506  docker-compose logs -f celery-worker
+  507  docker-compose down 
+  508  docker-compose up -d 
+  509  docker-compose logs -f celery-worker
+  510  celery -A src.celery_app.celery call src.tasks.batch_tasks.check_all_batch
+  511  docker exec -it irp-app python -c "from src.tasks.batch_tasks import check_all_batch; check_all_batch.apply()"
+  512  docker-compose logs -f celery-worker
+  513  docker-compose down 
+  514  sudo chmod -R 777 ~/maas-engine/data ~/maas-engine/logs
+  515  sudo chmod -R 777 ~/maas-engine/data 
+  516  docker-compose up -d --build
+  517  docker-compose down 
+  518  docker-compose up -d --build
+  519  sudo chmod -R 777 ~/maas-engine/data 
+  520  docker-compose up -d --build
+  521  docker-compose logs -f celery-worker
+  522  docker-compose down 
+  523  docker-compose up -d --build
+  524  sudo chmod -R 777 ~/maas-engine/data 
+  525  docker-compose up -d --build
+  526  docker-compose logs -f celery-worker
+  527  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  528  docker exec -it irp-postgres psql -U irp_user -d irp_db -c "SELECT id, name, status FROM irp_analysis ORDER BY id DESC LIMIT 10;"
+  529  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs"
+  530  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs/"
+  531  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs/?status=queued"
+  532  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs/"
+  533  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs/?status=failed"
+  534  curl -X POST http://localhost:8000/api/jobs/86/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  535  curl -X POST http://localhost:8000/api/jobs/87/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  536  curl -X POST http://localhost:8000/api/jobs/85/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  537  curl -X POST http://localhost:8000/api/jobs/84/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  538  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/analysis/57"
+  539  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/analysis"
+  540  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/analysis/"
+  541  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/analyses/"
+  542  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/analyses/57"
+  543  curl -X DELETE http://localhost:8000/api/analysis/57/   -H "X-API-Key: docker-api-key-secure-123"
+  544  curl -X GET http://localhost:8000/api/analysis/57   -H "X-API-Key: docker-api-key-secure-123"
+  545  curl -X DELETE http://localhost:8000/api/analyses/57/   -H "X-API-Key: docker-api-key-secure-123"
+  546  curl -X GET http://localhost:8000/api/analyses/57/   -H "X-API-Key: docker-api-key-secure-123"
+  547  curl -X GET http://localhost:8000/api/analyses/   -H "X-API-Key: docker-api-key-secure-123"[B
+  548  curl -X GET http://localhost:8000/api/analyses/57/   -H "X-API-Key: docker-api-key-secure-123"
+  549  curl -X GET http://localhost:8000/api/analyses/57   -H "X-API-Key: docker-api-key-secure-123"
+  550  curl -X DELETE http://localhost:8000/api/analyses/57   -H "X-API-Key: docker-api-key-secure-123"
+  551  curl -i -X DELETE http://localhost:8000/api/analyses/57   -H "X-API-Key: docker-api-key-secure-123"
+  552  curl -i -X DELETE http://localhost:8000/api/analyses/57   -H "X-API-Key: docker-api-key-secure-123"
+  553  curl -X GET http://localhost:8000/api/analyses/57   -H "X-API-Key: docker-api-key-secure-123"
+  554  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  555  curl -X POST http://localhost:8000/api/jobs/92/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  556  curl -X GET http://localhost:8000/api/batch/57   -H "X-API-Key: docker-api-key-secure-123"
+  557  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  558  docker exec -it irp-app ls
+  559  docker exec -it irp-app ls infrastructure/postgres
+  560  docker exec -it irp-app ls
+  561  docker exec -it irp-app ls scripts
+  562  docker exec -it irp-app scripts/docker_entrypoint.sh
+  563  sudo chmod 777 -r scripts/
+  564  sudo chmod 777 -R scripts/
+  565  docker exec -it irp-app scripts/docker_entrypoint.sh
+  566  ls -l scripts/docker_entrypoint.sh
+  567  docker exec -it irp-app sh scripts/docker_entrypoint.sh
+  568  docker-compose build irp-app
+  569  docker exec -it irp-app sh scripts/docker_entrypoint.sh
+  570  docker exec -it irp-app ls python infrastructure/postgres/initialize_db.py
+  571  docker exec -it irp-app python infrastructure/postgres/initialize_db.py
+  572  docker exec -it irp-app sh scripts/docker_entrypoint.sh
+  573  docker exec -it irp-app python infrastructure/postgres/initialize_db.py
+  574  docker exec -it irp-app python src/initiator.py /app/config/sample_analysis.yaml --submit
+  575  curl -X POST http://localhost:8000/api/analysis   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  576      "yaml_content": {
+  577        "analysis": {
+  578          "name": "Authenticated API Test",
+  579          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  580        }
+  581      },
+  582      "auto_submit": true
+  583    }'[B
+  584  curl -X POST http://localhost:8000/api/batch   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  585      "yaml_content": {
+  586        "analysis": {
+  587          "name": "Authenticated API Test",
+  588          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  589        }
+  590      },
+  591      "auto_submit": true
+  592    }'
+  593  curl -X POST http://localhost:8000/api/batch/   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  594      "yaml_content": {
+  595        "analysis": {
+  596          "name": "Authenticated API Test",
+  597          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  598        }
+  599      },
+  600      "auto_submit": true
+  601    }'
+  602  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  603      "yaml_content": {
+  604        "analysis": {
+  605          "name": "Authenticated API Test",
+  606          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  607        }
+  608      },
+  609      "auto_submit": true
+  610    }'
+  611  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  612      "yaml_content": {
+  613        "analysis": {
+  614          "name": "Authenticated API Test",
+  615          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  616        }
+  617      },
+  618      "auto_submit": true
+  619    }'
+  620  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  621      "yaml_content": {
+  622        "batch": {
+  623          "name": "Authenticated API Test",
+  624          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  625        }
+  626      },
+  627      "auto_submit": true
+  628    }'
+  629  git push -f origin feature/batch_generalization
+  630  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  631      "yaml_content": {
+  632        "batch": {
+  633          "name": "Authenticated API Test",
+  634          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  635        }
+  636      },
+  637      "auto_submit": true
+  638    }'
+  639  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  640      "yaml_content": {
+  641        "batch": {
+  642          "name": "Authenticated API Test",
+  643          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  644        }
+  645      },
+  646      "auto_submit": true
+  647    }'
+  648  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  649      "yaml_content": {
+  650        "batch": {
+  651          "name": "Authenticated API Test #2",
+  652          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  653        }
+  654      },
+  655      "auto_submit": true
+  656    }'
+  657  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  658      "yaml_content": {
+  659        "batch": {
+  660          "name": "Authenticated API Test #2A",
+  661          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  662        }
+  663      },
+  664      "auto_submit": true
+  665    }'
+  666  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  667      "yaml_content": {
+  668        "batch": {
+  669          "name": "Authenticated API Test #2B",
+  670          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  671        }
+  672      },
+  673      "auto_submit": true
+  674    }'
+  675  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs/?status=failed"
+  676  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs"
+  677  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs/"
+  678  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs/1"
+  679  curl -X POST http://localhost:8000/api/jobs/6/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  680  curl -X POST http://localhost:8000/api/jobs/6/resubmit   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  681  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch"
+  682  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch/"
+  683  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch/1"
+  684  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  685      "yaml_content": {
+  686        "batch": {
+  687          "name": "Authenticated API Test #3",
+  688          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  689        }
+  690      },
+  691      "auto_submit": true
+  692    }'
+  693  curl -X POST http://localhost:8000/api/batch/new   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  694      "yaml_content": {
+  695        "batch": {
+  696          "name": "Authenticated API Test #3",
+  697          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  698        }
+  699      },
+  700      "auto_submit": true
+  701    }'[B
+  702  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch/1"
+  703  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch"
+  704  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch/"
+  705  curl -X POST http://localhost:8000/api/jobs/6/resubmit   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  706  curl -X POST http://localhost:8000/api/jobs/6/resubmit   -H "X-AP7-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  707  curl -X POST http://localhost:8000/api/jobs/7/resubmit   -H "X-AP7-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  708  curl -X POST http://localhost:8000/api/jobs/7/resubmit   -H "X-AP7-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}[B
+  709  curl -X POST http://localhost:8000/api/jobs/7/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  710  curl -X POST http://localhost:8000/api/jobs/7/resubmit   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  711  docker exec -it irp-app python -c "from src.tasks.batch_tasks import check_all_batch; check_all_batch.apply()"
+  712  docker exec -it irp-app python -c "from src.tasks.batch_tasks import check_all_batch; check_all_batch.delay()"
+  713  http://localhost:8000/api/batch/1/progress
+  714  docker exec -it irp-worker python -c "from src.tasks.batch_tasks import check_all_batch; check_all_batch.apply()"
+  715  docker exec -it irp-app python -c "from src.tasks.batch_tasks import check_all_batch; check_all_batch.delay()"
+  716  docker exec -it irp-worker celery -A src.tasks.celery_app.celery call src.tasks.batch_tasks.check_all_batch
+  717  uv run python src/db/migrate_phase1.py
+  718  uv run python src/db/migrate_phase1.py --verify
+  719  curl -X POST http://localhost:8000/api/jobs/11/resubmit   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  720  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch"
+  721  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch/"
+  722  chmod +x infrastructure/dockerfiles/entrypoint.sh
+  723  sudo chmod +x infrastructure/dockerfiles/entrypoint.sh
+  724  echo "=========================================="
+  725  echo "     __   __   "
+  726  echo "  _ |__| /  \  "
+  727  echo " |_) || | || | "
+  728  echo " |  |__| \__\\\\ "
+  729  echo " "
+  730  echo "Starting IRP Application"
+  731  echo "=========================================="
+  732  http://localhost:8000/api/batch/1/progress
+  733  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch"
+  734  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/batch/"
+  735  docker exec -it irp-app python src/recovery.py monitor
+  736  docker exec -it irp-app python src/recovery.py status
+  737  docker exec -it irp-app python src/recovery.py health
+  738  docker exec -it irp-app python -c "
+  739  import sys
+  740  sys.path.insert(0, '/app')
+  741  from src.clients import WorkflowClientFactory, WorkflowStatus
+  742  print('✅ Imports successful')
+  743  from src.clients.mock_client import MockWorkflowClientSync
+  744  print('✅ Mock client imported')
+  745  print(f'Available clients: {WorkflowClientFactory.list_clients()}')
+  746  "
+  747  docker exec -it irp-app ls -la src/clients/
+  748  docker exec -it irp-app python -c "
+  749  import sys
+  750  sys.path.insert(0, '/app')
+  751  from src.clients import WorkflowClientFactory, WorkflowStatus
+  752  print('✅ Imports successful')
+  753  from src.clients.mock_client import MockWorkflowClientSync
+  754  print('✅ Mock client imported')
+  755  print(f'Available clients: {WorkflowClientFactory.list_clients()}')
+  756  "
+  757  docker exec -it irp-app python -c "
+  758  from src.clients import WorkflowClientFactory, WorkflowStatus
+  759  print('✅ Imports successful')
+  760  "
+  761  docker exec -it irp-app grep -A 10 "class WorkflowStatusResponse" src/clients/workflow_client.py
+  762  docker exec -it irp-app ls -la src/clients/
+  763  docker exec -it irp-app python -c "
+  764  # Read the file
+  765  with open('src/clients/workflow_client.py', 'r') as f:
+  766      content = f.read()
+  767  # Fix the WorkflowStatusResponse dataclass
+  768  # Move required fields before optional ones
+  769  fixed_content = content.replace(
+  770      '''@dataclass
+  771  class WorkflowStatusResponse:
+  772      \"\"\"Standard workflow status response.\"\"\"
+  773      workflow_id: str
+  774      status: WorkflowStatus
+  775      progress_percentage: Optional[int] = None
+  776      message: Optional[str] = None
+  777      result_data: Optional[Dict[str, Any]] = None
+  778      updated_at: datetime
+  779      estimated_completion: Optional[datetime] = None
+  780      error_details: Optional[Dict[str, Any]] = None''',
+  781      '''@dataclass
+  782  class WorkflowStatusResponse:
+  783      \"\"\"Standard workflow status response.\"\"\"
+  784      workflow_id: str
+  785      status: WorkflowStatus
+  786      updated_at: datetime
+  787      progress_percentage: Optional[int] = None
+  788      message: Optional[str] = None
+  789      result_data: Optional[Dict[str, Any]] = None
+  790      estimated_completion: Optional[datetime] = None
+  791      error_details: Optional[Dict[str, Any]] = None'''
+  792  )
+  793  # Write the fixed content
+  794  with open('src/clients/workflow_client.py', 'w') as f:
+  795      f.write(fixed_content)
+  796      
+  797  print('✅ Fixed WorkflowStatusResponse dataclass')
+  798  "
+  799  docker exec -it irp-app python -c "
+  800  from src.clients import WorkflowClientFactory, WorkflowStatus
+  801  print('✅ Imports successful')
+  802  "
+  803  docker exec -it irp-app python -c "
+  804  from src.clients.mock_client import MockWorkflowClientSync
+  805  print('✅ Mock client imported')
+  806  from src.clients import WorkflowClientFactory
+  807  clients = WorkflowClientFactory.list_clients()
+  808  print(f'Available clients: {clients}')
+  809  "
+  810  docker exec -it irp-app python -c "
+  811  from src.clients.mock_client import MockWorkflowClientSync
+  812  from src.clients import WorkflowSubmissionRequest, WorkflowStatus
+  813  # Create mock client
+  814  client = MockWorkflowClientSync(deterministic=True)
+  815  # Create and submit a test workflow
+  816  request = WorkflowSubmissionRequest(
+  817      batch_id=1,
+  818      configuration_id=1,
+  819      model_name='test_model',
+  820      parameters={'test': 'value'}
+  821  )
+  822  response = client.submit_workflow(request)
+  823  print(f'✅ Workflow submitted: {response.workflow_id}')
+  824  print(f'   Status: {response.status}')
+  825  # Check status
+  826  status = client.get_workflow_status(response.workflow_id)
+  827  print(f'✅ Status retrieved: {status.status}')
+  828  "
+  829  docker exec -it irp-app python -c "
+  830  from src.clients.mock_client import MockWorkflowClientSync
+  831  from src.clients import WorkflowSubmissionRequest
+  832  client = MockWorkflowClientSync(deterministic=True)
+  833  request = WorkflowSubmissionRequest(
+  834      batch_id=1,
+  835      configuration_id=1,
+  836      model_name='test',
+  837      parameters={}
+  838  )
+  839  response = client.submit_workflow(request)
+  840  print(f'Success! Workflow ID: {response.workflow_id}')
+  841  "
+  842  docker exec -it irp-app python test_iteration_b1.py
+  843  ls[A
+  844  docker cp test_iteration_b1.py irp-app:/app/test_iteration_b1.py
+  845  docker exec -it irp-app python test_iteration_b1.py
+  846  docker-compose up -d
+  847  docker 
+  848  curl -X POST http://localhost:8000/api/jobs/8/resubmit   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  849  docker-compose down 
+  850  docker-compose up -d --build 
+  851  sudo chmod -R 777 ~/maas-engine/data 
+  852  docker-compose up -d --build 
+  853  docker ps 
+  854  docker compose up 
+  855  docker-compose down 
+  856  docker compose up -d --build 
+  857  sudo chmod -R 777 ~/maas-engine/data 
+  858  docker compose up -d --build 
+  859  docker-compose down 
+  860  docker-compose up
+  861  curl -X POST http://localhost:8000/api/analyses/from-yaml   -H "Content-Type: application/json"   -d '{
+  862      "yaml_content": {
+  863        "analysis": {
+  864          "name": "API Test",
+  865          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  866        }
+  867      },
+  868      "auto_submit": false
+  869    }'
+  870  curl -X POST http://localhost:8000/api/analyses/from-yaml   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  871      "yaml_content": {
+  872        "analysis": {
+  873          "name": "Authenticated API Test",
+  874          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  875        }
+  876      },
+  877      "auto_submit": true
+  878    }'
+  879  curl -H "X-API-Key: docker-api-key-secure-123"   "http://localhost:8000/api/jobs/?status=failed"
+  880  curl -X POST http://localhost:8000/api/jobs/57/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json"
+  881  curl -X POST http://localhost:8000/api/jobs/57/retry   -H "X-API-Key: doc69/r[Bpi-key-secure-123"   -H "Content-Type: application/json" -d {}
+  882  curl -X POST http://localhost:8000/api/jobs/69/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  883  curl -X POST http://localhost:8000/api/analyses/from-yaml \localhost:8000/api/analyses/from-yaml   -H "Content-Type: application/json"   -d '{
+  884      "yaml_content": {
+  885        "analysis": {
+  886          "name": "Authenticated API Test",
+  887          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  888        }
+  889      },
+  890      "auto_submit": true
+  891    }'
+  892  curl -X POST http://localhost:8000/api/analyses/from-yaml \localhost:8000/api/analyses/from-yaml   -H "Content-Type: application/json"   -H "X-API-Key: docker-api-key-secure-123"   -d '{
+  893      "yaml_content": {
+  894        "analysis": {
+  895          "name": "Authenticated API Test",
+  896          "configurations": [{"name": "Config1", "model": "model1", "parameters": {}}]
+  897        }
+  898      },
+  899      "auto_submit": true
+  900    }'
+  901  docker-compose logs -f irp-app
+  902  cd infrastructure/docker
+  903  docker-compose logs -f irp-app
+  904  docker ps 
+  905  docker-compose logs -f app
+  906  curl -X POST http://localhost:8000/api/jobs/71/retry   -H "X-API-Key: docker-api-key-secure-123"   -H "Content-Type: application/json" -d {}
+  907  watch -n 2 'curl -s -H "X-API-Key: docker-api-key-secure-123" http://localhost:8000/api/system/stats | jq'
+  908  watch -n 2 'curl -s -H "X-API-Key: docker-api-key-secure-123" http://localhost:8000/api/system/stats'
+  909  docker-compose logs -f app
+  910  docker-compose build irp-app
+  911  docker-compose down
+  912  docker-compose up -d 
+  913  docker-compose logs -f app
+  914  docker-compose down
+  915  docker-compose build 
+  916  sudo chmod -R 777 ~/maas-engine/data ~/maas-engine/logs ~/maas-engine/scripts/
+  917  docker-compose build 
+  918  docker-compose up -d 
+  919  docker-compose logs -f app
+  920  docker-compose down
+  921  docker-compose up -d 
+  922  docker-compose logs -f app
+  923  docker-compose down
+  924  docker-compose up -d 
+  925  docker-compose logs -f app
+  926  docker-compose up -d 
+  927  docker-compose down
+  928  docker-compose up -d 
+  929  docker-compose logs -f app
+  930  docker-compose down
+  931  docker-compose up -d 
+  932  docker-compose logs -f app
+  933  docker-compose up -d 
+  934  docker-compose down
+  935  docker-compose up -d 
+  936  docker-compose logs -f app
+  937  docker-compose down
+  938  docker-compose up -d 
+  939  docker-compose logs -f app
+  940  docker-compose down
+  941  docker-compose up -d 
+  942  docker-compose logs -f app
+  943  docker-compose logs -f irp-beat
+  944  docker-compose logs -f beat
+  945  docker-compose logs -f 
+  946  docker-compose down
+  947  docker-compose up -d 
+  948  docker-compose logs -f 
+  949  docker-compose down
+  950  docker-compose up -d 
+  951  docker-compose logs -f 
+  952  docker-compose down
+  953  docker-compose up -d 
+  954  docker-compose logs -f 
+  955  docker-compose down
+  956  docker-compose up -d 
+  957  docker-compose logs -f 
+  958  docker-compose logs -f app
+  959  docker-compose down
+  960  docker-compose up -d 
+  961  docker-compose logs -f app
+  962  docker-compose down
+  963  docker-compose up -d 
+  964  docker-compose logs -f app
+  965  docker-compose down
+  966  docker-compose up -d 
+  967  docker-compose logs -f app
+  968  docker-compose down
+  969  docker-compose up -d 
+  970  docker-compose logs -f app
+  971  docker-compose down
+  972  docker-compose up -d 
+  973  docker-compose logs -f app
+  974  docker-compose down
+  975  docker-compose up -d 
+  976  docker-compose logs -f app
+  977  docker-compose down
+  978  docker-compose up -d 
+  979  docker-compose logs -f app
+  980  docker-compose down
+  981  docker-compose up -d 
+  982  docker-compose logs -f app
+  983  docker-compose down
+  984  docker-compose up -d 
+  985  docker-compose logs -f app
+  986  docker-compose down
+  987  docker-compose up -d 
+  988  docker-compose logs -f app
+  989  docker-compose down
+  990  docker-compose up -d 
+  991  docker-compose logs -f app
+  992  docker-compose down
+  993  docker-compose up -d 
+  994  docker-compose logs -f app
+  995  docker-compose down
+  996  docker-compose up -d --build
+  997  sudo chmod -R 777 ~/maas-engine/data ~/maas-engine/logs ~/maas-engine/scripts/
+  998  docker-compose up -d --build
+  999  docker-compose logs -f app
+ 1000  cd ~
+ 1001  find . -name *9a2dcb33*
+ 1002  pwd
+ 1003  ./start.sh 
+ 1004  docker -h
+ 1005  ./start.sh 
+ 1006  ./stop
+ 1007  ls 
+ 1008  ./stop.sh
+ 1009  docker-compose up --build -d
+ 1010  ls
+ 1011  cat /tmp/jupyterlab-debug-bf17ytqr.log
+ 1012  docker-compose up --build -d
+ 1013  docker ps
+ 1014  docker it postgres
+ 1015  docker -h
+ 1016  docker exec -it irp-postgres
+ 1017  docker exec -it irp-postgres bash
+ 1018  docker exec -it irp-jupyter bash
+ 1019  docker exec -it jupyter bash
+ 1020  docker ps 
+ 1021  docker exec -it irp-notebook bash
+ 1022  docker-compose up --build -d
+ 1023  docker inspect irp-notebook | grep -A5 Mounts
+ 1024  docker inspect irp-notebook 
+ 1025  docker-compose up --build -d
+ 1026  docker exec -it irp-notebook bash
+ 1027  docker-compose up --build -d
+ 1028  docker exec -it irp-notebook bash
+ 1029  docker compose down -v
+ 1030  docker-compose up --build -d
+ 1031  docker compose down -v
+ 1032  docker-compose up --build -d
+ 1033  docker compose down -v
+ 1034  docker-compose up --build -d
+ 1035  docker compose down -v
+ 1036  docker-compose up --build -d
+ 1037  docker compose down -v
+ 1038  docker-compose up --build -d
+ 1039  docker exec -it irp-notebook bash -c "ps aux | grep scheduler"
+ 1040  docker exec -it irp-notebook bash -c "find /home/jovyan/.jupyter -name '*.log'"
+ 1041  docker exec -it irp-notebook bash -c "ls -la /home/jovyan/jobs"
+ 1042  docker exec -it irp-notebook bash -c "find /home/jovyan/jobs -name '*3e705362-9dcd*'"
+ 1043  docker exec -it irp-notebook bash -c "ls -la /home/jovyan/jobs/process_notebook-3e705362-9dcd-4ff6-a765-2868111860b9"
+ 1044  docker exec -it irp-notebook bash -c "jupyter serverextension list"
+ 1045  docker exec -it irp-notebook bash -c "grep -r 'scheduler' /home/jovyan/.jupyter/"
+ 1046  docker exec -it irp-notebook bash -c "jupyter --version"
+ 1047  docker exec -it irp-notebook bash -c "cat /home/jovyan/.jupyter/jupyter_notebook_*.log"
+ 1048  docker exec -it irp-notebook bash -c "echo 'c.SchedulerApp.output_dir = \"/home/jovyan/jobs\"' >> /home/jovyan/.jupyter/jupyter_scheduler_config.py"
+ 1049  docker exec -it irp-notebook bash -c "echo 'c.ServerApp.contents_manager_class = \"jupyter_server.services.contents.largefilemanager.LargeFileManager\"' >> /home/jovyan/.jupyter/jupyter_scheduler_config.py"
+ 1050  docker exec -it irp-notebook bash -c "echo 'c.SchedulerApp.root_url_path = \"/scheduler\"' >> /home/jovyan/.jupyter/jupyter_scheduler_config.py"
+ 1051  docker exec -it -u root irp-notebook bash -c "echo 'c.SchedulerApp.output_dir = \"/home/jovyan/jobs\"' >> /home/jovyan/.jupyter/jupyter_scheduler_config.py"
+ 1052  docker exec -it -u root irp-notebook bash -c "echo 'c.ServerApp.contents_manager_class = \"jupyter_server.services.contents.largefilemanager.LargeFileManager\"' >> /home/jovyan/.jupyter/jupyter_scheduler_config.py"
+ 1053  docker exec -it -u root irp-notebook bash -c "echo 'c.SchedulerApp.root_url_path = \"/scheduler\"' >> /home/jovyan/.jupyter/jupyter_scheduler_config.py"
+ 1054  docker exec -it -u root irp-notebook bash -c "chown jovyan:users /home/jovyan/.jupyter/jupyter_scheduler_config.py"
+ 1055  docker restart irp-notebook
+ 1056  docker exec -it -u root irp-notebook bash -c "mkdir -p /workspace/.job_files && ln -sf /home/jovyan/jobs /workspace/.job_files/jobs && chown -R jovyan:users /workspace/.job_files"
+ 1057  docker restart irp-notebook
+ 1058  docker compose down -v
+ 1059  docker compose up --build -d 
+ 1060  docker compose down -v
+ 1061  docker compose up --build -d 
+ 1062  docker compose down -v
+ 1063  docker compose up --build -d 
+ 1064  docker exec -it -u root irp-notebook bash -c "ln -s /home/jovyan/jobs /workspace/job_files && chown -R jovyan:users /workspace/job_files"
+ 1065  docker compose down -v
+ 1066  docker compose up --build -d 
+ 1067  docker compose down -v
+ 1068  docker compose up --build -d 
+ 1069  docker exec -it -u root irp-notebook bash -c "rm -rf /home/jovyan/jobs && ln -sf /home/jovyan/.local/share/jupyter/scheduler_staging_area /home/jovyan/jobs"
+ 1070  docker compose down -v
+ 1071  docker compose up --build -d 
+ 1072  docker compose down -v
+ 1073  ./.venv/bin/activate 
+ 1074  copilot-debug ./.venv/bin/activate
+ 1075  docker compose up --build -d 
+ 1076  docker compose down -v
+ 1077  docker compose up --build -d 
+ 1078  docker compose down -v
+ 1079  docker compose up --build -d 
+ 1080  docker compose down -v
+ 1081  docker compose up --build -d 
+ 1082  docker compose down -v
+ 1083  docker compose up --build -d 
+ 1084  docker compose down -v
+ 1085  docker ps -a
+ 1086  docker compose up --build -d 
+ 1087  docker ps -a
+ 1088  docker compose down -v
+ 1089  docker volumes list
+ 1090  docker volumes 
+ 1091  docker volume 
+ 1092  docker volume ls -a
+ 1093  docker volume ls
+ 1094  docker image ls 
+ 1095  docker rm dd6258749657
+ 1096  docker -h
+ 1097  docker del dd6258749657
+ 1098  docker delete dd6258749657
+ 1099  docker compose up --build -d 
+ 1100  git rebase origin/main
+ 1101  git status 
+ 1102  git fetch origin
+ 1103  git log origin/job_scheduling --oneline -n 3
+ 1104  git log job_scheduling --oneline -n 3
+ 1105  git rebase origin/main
+ 1106  git status 
+ 1107  pit pull 
+ 1108  git pull 
+ 1109  git pull --rebase origin job_scheduling
+ 1110  git pull origin main
+ 1111  docker ps -a
+ 1112  docker compose down -v 
+ 1113  docker compose up --build -d 
+ 1114  docker compose down -v 
+ 1115  docker compose up --build -d 
+ 1116  docker compose down -v 
+ 1117  docker compose up --build -d 
+ 1118  docker compose down -v 
+ 1119  docker compose up --build -d 
+ 1120  git checkout main
+ 1121  git status 
+ 1122  get status 
+ 1123  git status 
+ 1124  git checkout main
+ 1125  git pull
+ 1126  python -c "import site; print(site.getsitepackages()[0])"
+ 1127  pwd
+ 1128  cd workspace/
+ 1129  ls
+ 1130  pwd
+ 1131  echo "/home/avenugopal/irp-notebook-framework/workspace" > /path/to/venv/lib/python3.11/site-packages/workspace.pth
+ 1132  cd ..
+ 1133  source .venv/bin/activate
+ 1134  python -c "import site; print(site.getsitepackages()[0])"
+ 1135  ls /home/avenugopal/irp-notebook-framework/.venv/lib/python3.12/site-packages
+ 1136  cat /home/avenugopal/irp-notebook-framework/.venv/lib/python3.12/site-packages/workspace.pth
+ 1137  python -c "import site; print(site.getsitepackages()[0])"
+ 1138  ls /home/avenugopal/irp-notebook-framework/.venv/lib/python3.12/site-packages/*.pth
+ 1139  echo "$(pwd)/workspace" > $(python -c "import site; print(site.getsitepackages()[0])")/workspace.pth
+ 1140  pip install -r requirements.txt 
+ 1141  export DB_SERVER=localhost
+ 1142  sudo apt update
+ 1143  sudo apt install -y curl dirmngr apt-transport-https lsb-release ca-certificates
+ 1144  curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+ 1145  sudo rm /etc/apt/sources.list.d/kubernetes.list
+ 1146  curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+ 1147  source .venv/bin/activate
+ 1148  python workspace/tests/test_database.py
+ 1149  source ./run_tests.sh 
+ 1150  export DB_SERVER=localhost DB_PORT=5432 DB_NAME=irp_db DB_USER=irp_user DB_PASSWORD=irp_pass && python -c "
+ 1151  import sys
+ 1152  sys.path.insert(0, 'workspace')
+ 1153  from helpers.database import test_connection
+ 1154  print('Connection:', 'SUCCESS' if test_connection() else 'FAILED')
+ 1155  " 2>&1
+ 1156  source ./run_tests.sh 
+ 1157  clear
+ 1158  source ./run_tests.sh 
+ 1159  cd irp-notebook-framework/
+ 1160  tree
+ 1161  code .
+ 1162  cd ..
+ 1163  md -h
+ 1164  mkdir jupyter-sheduler-test
+ 1165  cd jupyter-sheduler-test/
+ 1166  python -m venv .venv 
+ 1167  python3 -m venv .venv 
+ 1168  ./.venv/bin/activate
+ 1169  chmod 777 .venv/bin/activate
+ 1170  ./.venv/bin/activate
+ 1171  ./.venv/bin/activate.sh
+ 1172  ls .venv/bin/
+ 1173  ./.venv/bin/activate.csh
+ 1174  chmod 777 .venv/bin/activate.csh
+ 1175  ./.venv/bin/activate.csh
+ 1176  chmod 777 .venv/bin/activate.fish
+ 1177  ./.venv/bin/activate.fish
+ 1178  rm -rf .venv/
+ 1179  ls 
+ 1180  which python
+ 1181  which python3
+ 1182  /usr/bin/python3
+ 1183  /usr/python3
+ 1184  /usr/bin/python3 -m venv .venv
+ 1185  ls -la .venv/
+ 1186  ls -la .venv/bin/
+ 1187  chmod 777 .venv/bin/activate
+ 1188  ./.venv/bin/activate 
+ 1189  cd ..
+ 1190  rm -rf jupyter-sheduler-test/
+ 1191  ls
+ 1192  cd irp-notebook-framework/
+ 1193  ./.venv/bin/activate
+ 1194  chmod 777 .venv/bin/activate
+ 1195  ./.venv/bin/activate
+ 1196  cat .venv/bin/activate
+ 1197  which python
+ 1198  which python3
+ 1199  sudo apt update
+ 1200  sudo apt install -y python3 python3-venv python3-pip
+ 1201  sudo apt install -y python-is-python3
+ 1202  which python
+ 1203  which python3
+ 1204  ls -la
+ 1205  rm -rf .venv
+ 1206  python -m venv .venv 
+ 1207  ./.venv/bin/activate
+ 1208  chmod 777 .venv/bin/activate
+ 1209  ./.venv/bin/activate
+ 1210  python -V
+ 1211  source .venv/bin/activate
+ 1212  pip install jupyterlab
+ 1213  pip install jupyter_scheduler
+ 1214  jupyter lab 
+ 1215  pip install jupyter_scheduler
+ 1216  jupyter lab 
+ 1217  source ./run_tests.sh 
+ 1218  git status
+ 1219  git push -f
+ 1220  source ./run_tests.sh 
+ 1221  clear
+ 1222  source ./run_tests.sh 
+ 1223  source ./document.sh 
+ 1224  chmod +x generate_docs.sh && ls -lh generate_docs.sh
+ 1225  cd ..
+ 1226  chmod +x generate_docs.sh && ls -lh generate_docs.sh
+ 1227  source ./generate_docs.sh 
+ 1228  history > cmds.txt
+ 1229  ls /home/avenugopal/irp-notebook-framework/.venv/lib/python3.12/site-packages/*.pth
+ 1230  source ./run_tests.sh 
+ 1231  docker compose down -v
+ 1232  docker compose up --build -d 
+ 1233  docker compose down -v
+ 1234  docker compose up --build -d 
+ 1235  git status 
+ 1236  git checkout main
+ 1237  git pull
+ 1238  source ./run_tests.sh 
+ 1239  docker exec irp-postgres psql -U irp_user -d irp_db -c "\l"
+ 1240  source ./run_tests.sh 
+ 1241  source ./run_tests.sh --preserve
+ 1242  source ./test.sh --preserve
+ 1243  clear
+ 1244  source ./test.sh --preserve
+ 1245  git pull
+ 1246  git fetch origin
+ 1247  git pull --no-rebase origin main
+ 1248  Dgit log -online -3
+ 1249  git log -online -3
+ 1250  git log --oneline -3
+ 1251  git log --oneline -4
+ 1252  git log --oneline -5
+ 1253  git log --oneline -10
+ 1254  git status 
+ 1255  git push
+ 1256  source ./start.sh 
+ 1257  -f env
+ 1258  ls 
+ 1259  ls -la
+ 1260  source ./start.sh 
+ 1261  /bin/python
+ 1262  source ./test.sh -s -v --preserve
+ 1263  history > cmds.txt
