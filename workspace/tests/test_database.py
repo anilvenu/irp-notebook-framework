@@ -5,6 +5,7 @@ This test file demonstrates and validates database functionality including:
 - bulk_insert with JSONB support
 - Error handling and transaction rollback
 - Performance comparisons
+- Numpy type conversion for psycopg2 compatibility
 
 All tests run in the 'test_database' schema (auto-managed by test_schema fixture).
 
@@ -22,7 +23,9 @@ from helpers.database import (
     bulk_insert,
     execute_query,
     execute_insert,
-    DatabaseError
+    execute_command,
+    DatabaseError,
+    _convert_params_to_native_types
 )
 
 
@@ -292,3 +295,208 @@ def test_multiple_jsonb_columns(test_schema):
     retrieved_data = df.iloc[0]['configuration_data']
     assert retrieved_data['nested']['level1']['level2']['value'] == 42, \
         "Nested JSONB data should be preserved"
+
+
+# ============================================================================
+# Numpy Type Conversion Tests
+# ============================================================================
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_numpy_int64():
+    """Test conversion of numpy.int64 to Python int"""
+    import numpy as np
+
+    params = (np.int64(42), np.int64(100), np.int64(-5))
+    result = _convert_params_to_native_types(params)
+
+    # Verify conversion
+    assert result == (42, 100, -5)
+    assert all(isinstance(val, int) for val in result)
+    assert all(not isinstance(val, np.integer) for val in result)
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_numpy_float64():
+    """Test conversion of numpy.float64 to Python float"""
+    import numpy as np
+
+    params = (np.float64(3.14), np.float64(2.718), np.float64(0.0))
+    result = _convert_params_to_native_types(params)
+
+    # Verify conversion
+    assert result == (3.14, 2.718, 0.0)
+    assert all(isinstance(val, float) for val in result)
+    assert all(not isinstance(val, np.floating) for val in result)
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_numpy_bool():
+    """Test conversion of numpy.bool_ to Python bool"""
+    import numpy as np
+
+    params = (np.bool_(True), np.bool_(False), np.bool_(True))
+    result = _convert_params_to_native_types(params)
+
+    # Verify conversion
+    assert result == (True, False, True)
+    assert all(isinstance(val, bool) for val in result)
+    assert all(not isinstance(val, np.bool_) for val in result)
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_numpy_str():
+    """Test conversion of numpy.str_ to Python str"""
+    import numpy as np
+
+    params = (np.str_('hello'), np.str_('world'), np.str_('test'))
+    result = _convert_params_to_native_types(params)
+
+    # Verify conversion
+    assert result == ('hello', 'world', 'test')
+    assert all(isinstance(val, str) for val in result)
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_mixed_types():
+    """Test conversion with mixed numpy and Python types"""
+    import numpy as np
+
+    params = (
+        np.int64(42),
+        'native_string',
+        np.float64(3.14),
+        None,
+        123,  # native int
+        True,  # native bool
+        np.bool_(False)
+    )
+    result = _convert_params_to_native_types(params)
+
+    # Verify conversion - numpy types converted, Python types unchanged
+    assert result[0] == 42 and isinstance(result[0], int)
+    assert result[1] == 'native_string' and isinstance(result[1], str)
+    assert result[2] == 3.14 and isinstance(result[2], float)
+    assert result[3] is None
+    assert result[4] == 123 and isinstance(result[4], int)
+    assert result[5] is True and isinstance(result[5], bool)
+    assert result[6] is False and isinstance(result[6], bool)
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_empty_tuple():
+    """Test conversion with empty tuple"""
+    params = ()
+    result = _convert_params_to_native_types(params)
+
+    assert result == ()
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_none():
+    """Test conversion with None params"""
+    result = _convert_params_to_native_types(None)
+
+    assert result is None
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_preserves_complex_types():
+    """Test that complex Python types (dict, list) pass through unchanged"""
+    params = (
+        {'key': 'value'},
+        [1, 2, 3],
+        {'nested': {'data': 42}},
+    )
+    result = _convert_params_to_native_types(params)
+
+    # Should be unchanged
+    assert result == params
+    assert isinstance(result[0], dict)
+    assert isinstance(result[1], list)
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_various_numpy_int_types():
+    """Test conversion of various numpy integer types"""
+    import numpy as np
+
+    params = (
+        np.int8(8),
+        np.int16(16),
+        np.int32(32),
+        np.int64(64),
+    )
+    result = _convert_params_to_native_types(params)
+
+    # All should be converted to Python int
+    assert result == (8, 16, 32, 64)
+    assert all(type(val) == int for val in result)
+
+
+@pytest.mark.unit
+def test_convert_params_to_native_types_with_various_numpy_float_types():
+    """Test conversion of various numpy float types"""
+    import numpy as np
+
+    params = (
+        np.float32(1.5),
+        np.float64(2.5),
+    )
+    result = _convert_params_to_native_types(params)
+
+    # All should be converted to Python float
+    assert len(result) == 2
+    assert all(type(val) == float for val in result)
+    assert abs(result[0] - 1.5) < 0.0001
+    assert abs(result[1] - 2.5) < 0.0001
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_numpy_int64_in_real_database_operation(test_schema):
+    """
+    Integration test: Verify numpy.int64 values work in real database operations.
+
+    This simulates the common scenario where:
+    1. execute_query() returns DataFrame with numpy types
+    2. Those values are passed to execute_command() or execute_insert()
+    3. The conversion happens automatically
+    """
+    import numpy as np
+
+    # Create a cycle
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('numpy_test_cycle', 'ACTIVE'),
+        schema=test_schema
+    )
+
+    # Query it back - DataFrame returns numpy.int64
+    df = execute_query(
+        "SELECT id FROM irp_cycle WHERE cycle_name = %s",
+        ('numpy_test_cycle',),
+        schema=test_schema
+    )
+
+    # This is numpy.int64, not Python int
+    retrieved_id = df.iloc[0]['id']
+    assert isinstance(retrieved_id, (np.integer, np.int64))
+
+    # Now use that numpy.int64 value in an UPDATE command
+    # This should work without explicit conversion (handled internally)
+    rows = execute_command(
+        "UPDATE irp_cycle SET status = %s WHERE id = %s",
+        ('ARCHIVED', retrieved_id),  # retrieved_id is numpy.int64
+        schema=test_schema
+    )
+
+    # Verify it worked
+    assert rows == 1
+
+    # Verify the update
+    df_check = execute_query(
+        "SELECT status FROM irp_cycle WHERE id = %s",
+        (cycle_id,),
+        schema=test_schema
+    )
+    assert df_check.iloc[0]['status'] == 'ARCHIVED'

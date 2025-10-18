@@ -713,6 +713,111 @@ def _convert_query_params(query: str, params: tuple = None):
     return modified_query, param_dict
 
 
+def _convert_params_to_native_types(params: tuple) -> tuple:
+    """
+    Convert numpy/pandas types to Python native types for psycopg2 compatibility.
+
+    This function ensures that parameter values are compatible with psycopg2,
+    which doesn't natively support numpy data types. When you query data using
+    execute_query() (returns pandas DataFrame), the column values are numpy types.
+    This function automatically converts them to Python native types.
+
+    execute_query() returns pandas DataFrame
+    DataFrame columns use numpy types (numpy.int64, numpy.float64, etc.)
+    When you pass those values to execute_command() or execute_insert():
+    - psycopg2 receives numpy types
+    - psycopg2 doesn't know how to handle them
+    - Raises: "ProgrammingError: can't adapt type 'numpy.int64'"
+    This function converts numpy → Python types automatically
+
+    COMMON SCENARIO:
+    ----------------
+    # Query returns DataFrame with numpy types
+    df = execute_query("SELECT id FROM irp_cycle WHERE status = 'ACTIVE'")
+
+    # df['id'] values are numpy.int64, not Python int
+    for _, row in df.iterrows():
+        cycle_id = row['id']  # This is numpy.int64
+        archive_cycle(cycle_id)  # Would fail without conversion!
+
+    # This function automatically converts:
+    # numpy.int64(42) → int(42)
+    # numpy.float64(3.14) → float(3.14)
+    # numpy.bool_(True) → bool(True)
+
+    Args:
+        params: Tuple of parameter values (may contain numpy types)
+
+    Returns:
+        tuple: Same parameters converted to Python native types
+
+    Conversion Map:
+        numpy.int64, numpy.int32, etc.     → int
+        numpy.float64, numpy.float32, etc. → float
+        numpy.bool_                        → bool
+        numpy.str_                         → str
+        Python native types                → unchanged (passthrough)
+        None, dict, list, etc.             → unchanged (passthrough)
+
+    Example:
+        >>> import numpy as np
+        >>> params = (np.int64(42), np.float64(3.14), 'text', None)
+        >>> _convert_params_to_native_types(params)
+        (42, 3.14, 'text', None)
+
+        >>> # Real-world usage (happens automatically):
+        >>> df = execute_query("SELECT id FROM irp_cycle")
+        >>> cycle_id = df.iloc[0]['id']  # numpy.int64
+        >>> # When passed to execute_command, automatically converted:
+        >>> archive_cycle(cycle_id)  # Works! (converted to int internally)
+
+    Implementation Notes:
+        - Uses isinstance() to check numpy types
+        - Handles all common numpy scalar types
+        - Preserves None and other Python types unchanged
+        - Returns tuple (same as input)
+        - Performance: Negligible overhead (~microseconds for typical params)
+
+    See Also:
+        execute_command(): Uses this function to convert params
+        execute_insert(): Uses this function to convert params
+        bulk_insert(): Uses this function to convert params
+    """
+    if not params:
+        return params
+
+    try:
+        import numpy as np
+    except ImportError:
+        # NumPy not available, return params unchanged
+        # This shouldn't happen since pandas (already imported) requires numpy
+        return params
+
+    converted = []
+    for param in params:
+        # Check for numpy integer types
+        if isinstance(param, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+            converted.append(int(param))
+
+        # Check for numpy floating point types
+        elif isinstance(param, (np.floating, np.float64, np.float32)):
+            converted.append(float(param))
+
+        # Check for numpy boolean type
+        elif isinstance(param, np.bool_):
+            converted.append(bool(param))
+
+        # Check for numpy string types
+        elif isinstance(param, np.str_):
+            converted.append(str(param))
+
+        # All other types (including Python natives): pass through unchanged
+        else:
+            converted.append(param)
+
+    return tuple(converted)
+
+
 def test_connection(schema: str = 'public') -> bool:
     """
     Test database connectivity
@@ -806,6 +911,9 @@ def execute_command(query: str, params: tuple = None, schema: str = None) -> int
         # Use provided schema, or get from context
         active_schema = schema if schema is not None else get_current_schema()
 
+        # Convert numpy types to Python native types for psycopg2 compatibility
+        params = _convert_params_to_native_types(params)
+
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
 
@@ -838,6 +946,9 @@ def execute_insert(query: str, params: tuple = None, schema: str = None) -> int:
         # Add RETURNING id if not present
         if "RETURNING" not in query.upper():
             query = query + " RETURNING id"
+
+        # Convert numpy types to Python native types for psycopg2 compatibility
+        params = _convert_params_to_native_types(params)
 
         # Convert query params
         converted_query, param_dict = _convert_query_params(query, params)
@@ -894,6 +1005,9 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         # Process JSONB columns if specified
         processed_params = []
         for params in params_list:
+            # Convert numpy types to Python native types for psycopg2 compatibility
+            params = _convert_params_to_native_types(params)
+
             if jsonb_columns:
                 # Convert to list for modification
                 params_list_item = list(params)
