@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Optional
 from helpers import database as db
-from helpers.constants import NOTEBOOK_PATTERN, STAGE_PATTERN, SYSTEM_USER, CycleStatus
+from helpers.constants import NOTEBOOK_PATTERN, STAGE_PATTERN, CycleStatus
 
 
 class WorkContextError(Exception):
@@ -143,7 +143,7 @@ class WorkContext:
                     )
                 
                 # Create cycle
-                self.cycle_id = db.register_cycle(self.cycle_name, SYSTEM_USER)
+                self.cycle_id = db.register_cycle(self.cycle_name)
                 print(f"Created cycle: {self.cycle_name}")
             else:
                 self.cycle_id = cycle['id']
