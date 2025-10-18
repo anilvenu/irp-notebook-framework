@@ -41,7 +41,6 @@ def test_delete_archived_cycles(test_schema):
     assert get_cycle_by_name('cycle_3') is not None
 
 
-@pytest.mark.database
 @pytest.mark.unit
 def test_validate_cycle_name_too_short(test_schema):
     """Test cycle name validation - too short"""
@@ -49,7 +48,6 @@ def test_validate_cycle_name_too_short(test_schema):
     assert result is False
 
 
-@pytest.mark.database
 @pytest.mark.unit
 def test_validate_cycle_name_too_long(test_schema):
     """Test cycle name validation - too long"""
@@ -58,7 +56,6 @@ def test_validate_cycle_name_too_long(test_schema):
     assert result is False
 
 
-@pytest.mark.database
 @pytest.mark.unit
 def test_validate_cycle_name_invalid_pattern(test_schema):
     """Test cycle name validation - invalid characters"""
@@ -66,7 +63,6 @@ def test_validate_cycle_name_invalid_pattern(test_schema):
     assert result is False
 
 
-@pytest.mark.database
 @pytest.mark.unit
 def test_validate_cycle_name_forbidden_prefix(test_schema):
     """Test cycle name validation - forbidden prefix"""
@@ -86,7 +82,6 @@ def test_validate_cycle_name_already_exists(test_schema):
     assert result is False
 
 
-@pytest.mark.database
 @pytest.mark.unit
 def test_validate_cycle_name_valid(test_schema):
     """Test cycle name validation - valid name"""

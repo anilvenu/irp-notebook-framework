@@ -29,12 +29,14 @@ from helpers.database import (
 # SCHEMA PRECEDENCE TESTS
 # ==============================================================================
 
+@pytest.mark.unit
 def test_default_schema_is_public():
     """Test that default schema is 'public' when nothing is set"""
     reset_schema()
     assert get_current_schema() == 'public'
 
 
+@pytest.mark.unit
 def test_set_schema_changes_context(test_schema):
     """Test that set_schema() changes the current schema context"""
     # Test schema is already set by conftest, but let's test the function
@@ -47,6 +49,7 @@ def test_set_schema_changes_context(test_schema):
     set_schema(original)
 
 
+@pytest.mark.unit
 def test_reset_schema_returns_to_public(test_schema):
     """Test that reset_schema() always returns to 'public'"""
     set_schema('some_other_schema')
@@ -59,12 +62,14 @@ def test_reset_schema_returns_to_public(test_schema):
     set_schema(test_schema)
 
 
+@pytest.mark.unit
 def test_set_schema_rejects_empty_string():
     """Test that set_schema() rejects empty string"""
     with pytest.raises(ValueError, match="Schema name cannot be empty"):
         set_schema('')
 
 
+@pytest.mark.unit
 def test_set_schema_rejects_none():
     """Test that set_schema() rejects None"""
     with pytest.raises(ValueError, match="Schema name cannot be empty"):
@@ -75,6 +80,7 @@ def test_set_schema_rejects_none():
 # SCHEMA CONTEXT MANAGER TESTS
 # ==============================================================================
 
+@pytest.mark.unit
 def test_schema_context_temporary_change(test_schema):
     """Test that schema_context() temporarily changes schema"""
     # Start in test_schema (set by conftest)
@@ -88,6 +94,7 @@ def test_schema_context_temporary_change(test_schema):
     assert get_current_schema() == test_schema
 
 
+@pytest.mark.unit
 def test_schema_context_nested(test_schema):
     """Test nested schema contexts"""
     assert get_current_schema() == test_schema
@@ -108,6 +115,7 @@ def test_schema_context_nested(test_schema):
     assert get_current_schema() == test_schema
 
 
+@pytest.mark.unit
 def test_schema_context_restores_on_exception(test_schema):
     """Test that schema_context() restores schema even when exception occurs"""
     assert get_current_schema() == test_schema
@@ -123,6 +131,7 @@ def test_schema_context_restores_on_exception(test_schema):
     assert get_current_schema() == test_schema
 
 
+@pytest.mark.unit
 def test_schema_context_rejects_empty_string():
     """Test that schema_context() rejects empty string"""
     with pytest.raises(ValueError, match="Schema name cannot be empty"):
@@ -130,6 +139,7 @@ def test_schema_context_rejects_empty_string():
             pass
 
 
+@pytest.mark.unit
 def test_schema_context_rejects_none():
     """Test that schema_context() rejects None"""
     with pytest.raises(ValueError, match="Schema name cannot be empty"):
@@ -141,6 +151,8 @@ def test_schema_context_rejects_none():
 # SCHEMA ISOLATION TESTS
 # ==============================================================================
 
+@pytest.mark.database
+@pytest.mark.integration
 def test_schema_isolation_between_operations(test_schema):
     """Test that operations in different schemas are isolated"""
     # Create a second test schema for isolation testing
@@ -191,6 +203,8 @@ def test_schema_isolation_between_operations(test_schema):
         set_schema(test_schema)
 
 
+@pytest.mark.database
+@pytest.mark.integration
 def test_explicit_schema_parameter_overrides_context(test_schema):
     """Test that explicit schema= parameter overrides context on execute_ functions"""
     # Create a second schema to test context vs explicit override
@@ -236,6 +250,8 @@ def test_explicit_schema_parameter_overrides_context(test_schema):
         set_schema(test_schema)
 
 
+@pytest.mark.database
+@pytest.mark.integration
 def test_schema_context_with_explicit_override(test_schema):
     """Test that explicit schema parameter works within schema_context on execute_ functions"""
     # Create second schema for testing
@@ -275,6 +291,7 @@ def test_schema_context_with_explicit_override(test_schema):
 # ENVIRONMENT VARIABLE TESTS
 # ==============================================================================
 
+@pytest.mark.unit
 def test_get_schema_from_env_default():
     """Test that get_schema_from_env() returns 'public' when not set"""
     # Temporarily unset DB_SCHEMA if it exists
@@ -290,6 +307,7 @@ def test_get_schema_from_env_default():
             os.environ['DB_SCHEMA'] = original
 
 
+@pytest.mark.unit
 def test_get_schema_from_env_reads_variable(test_schema):
     """Test that get_schema_from_env() reads DB_SCHEMA environment variable"""
     # Set DB_SCHEMA temporarily
@@ -310,6 +328,8 @@ def test_get_schema_from_env_reads_variable(test_schema):
 # INTEGRATION TESTS
 # ==============================================================================
 
+@pytest.mark.database
+@pytest.mark.integration
 def test_complete_schema_precedence_flow(test_schema):
     """
     Test complete schema precedence: explicit > context > env > default
@@ -382,6 +402,8 @@ def test_complete_schema_precedence_flow(test_schema):
         set_schema(original_context)
 
 
+@pytest.mark.database
+@pytest.mark.integration
 def test_schema_context_in_practical_use_case(test_schema):
     """
     Test a practical use case: Running tests in isolated schema
@@ -436,6 +458,7 @@ def test_schema_context_in_practical_use_case(test_schema):
 # EDGE CASES
 # ==============================================================================
 
+@pytest.mark.unit
 def test_multiple_set_schema_calls(test_schema):
     """Test multiple consecutive set_schema calls"""
     set_schema('schema1')
@@ -451,6 +474,7 @@ def test_multiple_set_schema_calls(test_schema):
     set_schema(test_schema)
 
 
+@pytest.mark.unit
 def test_schema_context_same_schema(test_schema):
     """Test schema_context with same schema as current"""
     set_schema(test_schema)
@@ -464,6 +488,7 @@ def test_schema_context_same_schema(test_schema):
     assert get_current_schema() == test_schema
 
 
+@pytest.mark.unit
 def test_schema_special_characters():
     """Test schema names with underscores and numbers"""
     # These should all work

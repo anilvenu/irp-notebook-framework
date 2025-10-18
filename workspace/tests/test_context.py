@@ -56,6 +56,7 @@ def create_test_notebook_path(cycle_name: str, stage_num: int, stage_name: str,
 class TestPathParsing:
     """Test that WorkContext correctly parses notebook paths"""
 
+    @pytest.mark.unit
     def test_parse_valid_path_basic(self, test_schema):
         """Test parsing of a basic valid notebook path"""
         # Pre-create cycle to avoid register_cycle issue
@@ -73,6 +74,7 @@ class TestPathParsing:
         assert context.step_num == 1
         assert context.step_name == 'Initialize'
 
+    @pytest.mark.unit
     def test_parse_valid_path_with_numbers(self, test_schema):
         """Test parsing path with numbers in names"""
         cycle_id = register_cycle('Analysis_2025_Q1')
@@ -89,6 +91,7 @@ class TestPathParsing:
         assert context.step_num == 5
         assert context.step_name == 'Step_5_Analysis'
 
+    @pytest.mark.unit
     def test_parse_valid_path_with_underscores(self, test_schema):
         """Test parsing path with underscores in names"""
         cycle_id = register_cycle('Q4_Final_Review')
@@ -105,6 +108,7 @@ class TestPathParsing:
         assert context.step_num == 10
         assert context.step_name == 'Validate_All_Results'
 
+    @pytest.mark.unit
     def test_parse_extracts_cycle_from_active_prefix(self, test_schema):
         """Test that cycle name is extracted from Active_ prefix"""
         cycle_id = register_cycle('MyCycle')
@@ -116,6 +120,7 @@ class TestPathParsing:
 
         assert context.cycle_name == 'MyCycle'
 
+    @pytest.mark.unit
     def test_parse_handles_double_digit_numbers(self, test_schema):
         """Test parsing with double-digit stage and step numbers"""
         cycle_id = register_cycle('BigCycle')
@@ -137,6 +142,7 @@ class TestPathParsing:
 class TestErrorHandling:
     """Test that WorkContext properly handles invalid paths"""
 
+    @pytest.mark.unit
     def test_error_on_missing_active_prefix(self, test_schema):
         """Test error when path doesn't contain Active_ prefix"""
         path = "/workspace/TestCycle/Stage_1_Test/Step_01_Init.ipynb"
@@ -144,6 +150,7 @@ class TestErrorHandling:
         with pytest.raises(WorkContextError, match="not in an active cycle directory"):
             WorkContext(notebook_path=path)
 
+    @pytest.mark.unit
     def test_error_on_missing_stage_directory(self, test_schema):
         """Test error when stage directory is missing or invalid"""
         # Missing Stage_ prefix
@@ -152,6 +159,7 @@ class TestErrorHandling:
         with pytest.raises(WorkContextError, match="Cannot find stage directory"):
             WorkContext(notebook_path=path)
 
+    @pytest.mark.unit
     def test_error_on_invalid_stage_format(self, test_schema):
         """Test error when stage directory has invalid format"""
         # Stage without number
@@ -160,6 +168,7 @@ class TestErrorHandling:
         with pytest.raises(WorkContextError, match="Cannot find stage directory"):
             WorkContext(notebook_path=path)
 
+    @pytest.mark.unit
     def test_error_on_invalid_notebook_filename(self, test_schema):
         """Test error when notebook filename doesn't match pattern"""
         cycle_id = register_cycle('TestCycleForInvalidNotebookFilename')
@@ -170,6 +179,7 @@ class TestErrorHandling:
         with pytest.raises(WorkContextError, match="Invalid notebook filename format"):
             WorkContext(notebook_path=path)
 
+    @pytest.mark.unit
     def test_error_on_non_ipynb_extension(self, test_schema):
         """Test error when file is not .ipynb"""
         cycle_id = register_cycle('TestCycleForNonIpynb')
@@ -180,6 +190,8 @@ class TestErrorHandling:
         with pytest.raises(WorkContextError, match="Invalid notebook filename format"):
             WorkContext(notebook_path=path)
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_error_on_archived_cycle(self, test_schema):
         """Test error when cycle exists but is archived"""
         # Create and archive a cycle
@@ -193,6 +205,8 @@ class TestErrorHandling:
         with pytest.raises(WorkContextError, match="is ARCHIVED, not active"):
             WorkContext(notebook_path=path)
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_error_on_active_cycle_mismatch(self, test_schema):
         """Test error when different active cycle exists"""
         # Create first active cycle
@@ -216,6 +230,8 @@ class TestErrorHandling:
 class TestDatabaseIntegration:
     """Test WorkContext database operations"""
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_creates_database_entries_for_new_cycle(self, test_schema):
         """Test that WorkContext creates cycle, stage, and step in database"""
         # First, ensure no other active cycles exist that would conflict
@@ -247,6 +263,8 @@ class TestDatabaseIntegration:
         # Cleanup
         archive_cycle(context.cycle_id)
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_uses_existing_cycle(self, test_schema):
         """Test that WorkContext uses existing cycle if available"""
         # Pre-create cycle
@@ -264,6 +282,8 @@ class TestDatabaseIntegration:
         # Cleanup
         archive_cycle(cycle_id)
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_creates_multiple_stages_in_same_cycle(self, test_schema):
         """Test creating multiple stages in the same cycle"""
         cycle_id = register_cycle('MultiStageCycle')
@@ -288,6 +308,8 @@ class TestDatabaseIntegration:
         # Cleanup
         archive_cycle(cycle_id)
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_creates_multiple_steps_in_same_stage(self, test_schema):
         """Test creating multiple steps in the same stage"""
         cycle_id = register_cycle('MultiStepCycle')
@@ -313,6 +335,8 @@ class TestDatabaseIntegration:
         # Cleanup
         archive_cycle(cycle_id)
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_idempotent_context_creation(self, test_schema):
         """Test that creating context multiple times for same path is idempotent"""
         cycle_id = register_cycle('IdempotentCycle')
@@ -341,6 +365,7 @@ class TestDatabaseIntegration:
 class TestWorkContextMethods:
     """Test WorkContext public methods"""
 
+    @pytest.mark.unit
     def test_get_info_returns_all_fields(self, test_schema):
         """Test that get_info() returns complete dictionary"""
         cycle_id = register_cycle('InfoTestCycle')
@@ -371,6 +396,7 @@ class TestWorkContextMethods:
         assert info['step_name'] == 'TestStep'
         assert 'InfoTestCycle' in info['notebook_path']
 
+    @pytest.mark.unit
     def test_repr_contains_key_info(self, test_schema):
         """Test __repr__ contains cycle, stage, and step info"""
         cycle_id = register_cycle('ReprTestCycle')
@@ -387,6 +413,7 @@ class TestWorkContextMethods:
         assert 'stage=1' in repr_str
         assert 'step=2' in repr_str
 
+    @pytest.mark.unit
     def test_str_human_readable_format(self, test_schema):
         """Test __str__ returns human-readable format"""
         cycle_id = register_cycle('StrTestCycle')
@@ -414,6 +441,7 @@ class TestWorkContextMethods:
 class TestConvenienceFunction:
     """Test get_context() convenience function"""
 
+    @pytest.mark.unit
     def test_get_context_creates_work_context(self, test_schema):
         """Test that get_context() returns WorkContext instance"""
         cycle_id = register_cycle('ConvenienceTestCycle')
@@ -427,6 +455,7 @@ class TestConvenienceFunction:
         assert isinstance(context, WorkContext)
         assert context.cycle_name == 'ConvenienceTestCycle'
 
+    @pytest.mark.unit
     def test_get_context_with_path_parameter(self, test_schema):
         """Test get_context() accepts explicit path"""
         cycle_id = register_cycle('PathTestCycle')
@@ -449,6 +478,7 @@ class TestConvenienceFunction:
 class TestEdgeCases:
     """Test edge cases and special scenarios"""
 
+    @pytest.mark.unit
     def test_cycle_name_with_special_characters(self, test_schema):
         """Test cycle names with underscores and hyphens"""
         cycle_id = register_cycle('Test_Cycle-2025')
@@ -461,6 +491,7 @@ class TestEdgeCases:
 
         assert context.cycle_name == 'Test_Cycle-2025'
 
+    @pytest.mark.unit
     def test_stage_name_with_multiple_underscores(self, test_schema):
         """Test stage names with multiple underscores"""
         cycle_id = register_cycle('TestCycleManyUnderscoresInStage')
@@ -473,6 +504,7 @@ class TestEdgeCases:
 
         assert context.stage_name == 'Stage_With_Many_Parts'
 
+    @pytest.mark.unit
     def test_step_name_with_multiple_underscores(self, test_schema):
         """Test step names with multiple underscores"""
         cycle_id = register_cycle('TestCycleStepWithManyUnderscores')
@@ -485,6 +517,7 @@ class TestEdgeCases:
 
         assert context.step_name == 'Step_Name_With_Parts'
 
+    @pytest.mark.unit
     def test_path_with_absolute_linux_path(self, test_schema):
         """Test with absolute Linux-style path"""
         cycle_id = register_cycle('LinuxTestCycle')
@@ -495,6 +528,7 @@ class TestEdgeCases:
 
         assert context.cycle_name == 'LinuxTestCycle'
 
+    @pytest.mark.unit
     def test_path_stores_as_pathlib_path(self, test_schema):
         """Test that notebook_path is stored as Path object"""
         cycle_id = register_cycle('PathStoreTestCycle')
@@ -507,6 +541,7 @@ class TestEdgeCases:
 
         assert isinstance(context.notebook_path, Path)
 
+    @pytest.mark.unit
     def test_single_digit_step_number(self, test_schema):
         """Test that single digit step numbers work"""
         cycle_id = register_cycle('SingleDigitCycle')
@@ -526,6 +561,8 @@ class TestEdgeCases:
 class TestSchemaIsolation:
     """Test that WorkContext respects schema context"""
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_context_respects_schema_context(self, test_schema):
         """Test that WorkContext works with schema_context"""
         # Create cycle in test schema
@@ -543,6 +580,8 @@ class TestSchemaIsolation:
             assert context.cycle_name == 'SchemaTestCycle'
             assert context.cycle_id is not None
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_contexts_isolated_between_schemas(self, test_schema):
         """Test that contexts in different schemas are isolated"""
         # Create isolation schema

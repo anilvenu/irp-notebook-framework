@@ -30,6 +30,7 @@ from helpers.constants import (
 # DB_CONFIG TESTS
 # ==============================================================================
 
+@pytest.mark.unit
 def test_db_config_from_environment():
     """Test that DB_CONFIG correctly loads from environment variables set in test.sh"""
     # test.sh sets these environment variables:
@@ -46,12 +47,14 @@ def test_db_config_from_environment():
     assert DB_CONFIG['password'] == 'test_pass', "DB_CONFIG['password'] should match DB_PASSWORD env var"
 
 
+@pytest.mark.unit
 def test_db_config_port_defaults_to_5432():
     """Test that DB_PORT defaults to 5432 if not set"""
     # Note: In actual test run, DB_PORT is set, but we're documenting the default behavior
     assert DB_CONFIG['port'] == 5432, "Port should be 5432 (standard PostgreSQL port)"
 
 
+@pytest.mark.unit
 def test_db_config_types():
     """Test that DB_CONFIG values have correct types"""
     assert isinstance(DB_CONFIG['host'], str), "host should be string"
@@ -61,6 +64,7 @@ def test_db_config_types():
     assert isinstance(DB_CONFIG['password'], str), "password should be string"
 
 
+@pytest.mark.unit
 def test_db_config_no_none_values():
     """Test that no DB_CONFIG values are None in test environment"""
     for key, value in DB_CONFIG.items():
@@ -71,6 +75,7 @@ def test_db_config_no_none_values():
 # _missing_config VALIDATION TESTS
 # ==============================================================================
 
+@pytest.mark.unit
 def test_missing_config_validation_would_catch_missing_vars():
     """
     Test that _missing_config validation logic catches missing variables
@@ -100,6 +105,7 @@ def test_missing_config_validation_would_catch_missing_vars():
     assert 'database' not in missing, "database is not missing"
 
 
+@pytest.mark.unit
 def test_missing_config_allows_port_to_be_none():
     """Test that port is excluded from required variables (it has a default)"""
     test_config = {
@@ -122,6 +128,7 @@ def test_missing_config_allows_port_to_be_none():
 class TestStatusClassCompleteness:
     """Test that all status classes have complete all() methods"""
 
+    @pytest.mark.unit
     def test_cycle_status_all_includes_all_values(self):
         """Test CycleStatus.all() includes all status values"""
         # Get all class attributes that are status values (uppercase constants)
@@ -140,6 +147,7 @@ class TestStatusClassCompleteness:
             assert status in all_method_result, \
                 f"CycleStatus.all() should include {status}"
 
+    @pytest.mark.unit
     def test_step_status_all_includes_all_values(self):
         """Test StepStatus.all() includes all status values"""
         all_statuses = [
@@ -157,6 +165,7 @@ class TestStatusClassCompleteness:
             assert status in all_method_result, \
                 f"StepStatus.all() should include {status}"
 
+    @pytest.mark.unit
     def test_batch_status_all_includes_all_values(self):
         """Test BatchStatus.all() includes all status values"""
         all_statuses = [
@@ -174,6 +183,7 @@ class TestStatusClassCompleteness:
             assert status in all_method_result, \
                 f"BatchStatus.all() should include {status}"
 
+    @pytest.mark.unit
     def test_configuration_status_all_includes_all_values(self):
         """Test ConfigurationStatus.all() includes all status values"""
         all_statuses = [
@@ -191,6 +201,7 @@ class TestStatusClassCompleteness:
             assert status in all_method_result, \
                 f"ConfigurationStatus.all() should include {status}"
 
+    @pytest.mark.unit
     def test_job_status_all_includes_all_values(self):
         """Test JobStatus.all() includes all status values"""
         all_statuses = [
@@ -277,6 +288,8 @@ def get_database_enum_values(enum_type_name: str, test_schema: str) -> list:
 class TestStatusClassDatabaseAlignment:
     """Test that Python status classes match database enum types"""
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_cycle_status_matches_database(self, test_schema):
         """Test CycleStatus values match cycle_status_enum in database"""
         config = STATUS_ENUM_MAP['CycleStatus']
@@ -292,6 +305,8 @@ class TestStatusClassDatabaseAlignment:
             assert status in db_values, \
                 f"CycleStatus.{status} not found in database enum"
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_step_status_matches_database(self, test_schema):
         """Test StepStatus values match step_status_enum in database"""
         config = STATUS_ENUM_MAP['StepStatus']
@@ -302,6 +317,8 @@ class TestStatusClassDatabaseAlignment:
         assert set(python_values) == set(db_values), \
             f"StepStatus.all() should match database enum {config['enum_type']}"
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_batch_status_matches_database(self, test_schema):
         """Test BatchStatus values match batch_status_enum in database"""
         config = STATUS_ENUM_MAP['BatchStatus']
@@ -312,6 +329,8 @@ class TestStatusClassDatabaseAlignment:
         assert set(python_values) == set(db_values), \
             f"BatchStatus.all() should match database enum {config['enum_type']}"
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_configuration_status_matches_database(self, test_schema):
         """Test ConfigurationStatus values match configuration_status_enum in database"""
         config = STATUS_ENUM_MAP['ConfigurationStatus']
@@ -322,6 +341,8 @@ class TestStatusClassDatabaseAlignment:
         assert set(python_values) == set(db_values), \
             f"ConfigurationStatus.all() should match database enum {config['enum_type']}"
 
+    @pytest.mark.database
+    @pytest.mark.integration
     def test_job_status_matches_database(self, test_schema):
         """Test JobStatus values match job_status_enum in database"""
         config = STATUS_ENUM_MAP['JobStatus']
@@ -340,6 +361,7 @@ class TestStatusClassDatabaseAlignment:
 class TestNotebookPattern:
     """Test NOTEBOOK_PATTERN regex for extracting stage/step from notebook filenames"""
 
+    @pytest.mark.unit
     def test_notebook_pattern_valid_filenames(self):
         """Test NOTEBOOK_PATTERN matches valid notebook filenames"""
         # Pattern: r'Step_(\d+)_(.+)\.ipynb'
@@ -361,6 +383,7 @@ class TestNotebookPattern:
             assert match.group(2) == expected_name, \
                 f"Step name should be {expected_name} for {filename}"
 
+    @pytest.mark.unit
     def test_notebook_pattern_invalid_filenames(self):
         """Test NOTEBOOK_PATTERN rejects invalid filenames"""
         invalid_cases = [
@@ -378,6 +401,7 @@ class TestNotebookPattern:
             match = re.match(NOTEBOOK_PATTERN, filename)
             assert match is None, f"Should NOT match invalid filename: {filename}"
 
+    @pytest.mark.unit
     def test_notebook_pattern_extracts_groups_correctly(self):
         """Test that pattern extracts both capture groups"""
         filename = 'Step_05_Data_Processing.ipynb'
@@ -396,6 +420,7 @@ class TestNotebookPattern:
 class TestStagePattern:
     """Test STAGE_PATTERN regex for extracting stage information"""
 
+    @pytest.mark.unit
     def test_stage_pattern_valid_names(self):
         """Test STAGE_PATTERN matches valid stage names"""
         # Pattern: r'Stage_(\d+)_(.+)'
@@ -416,6 +441,7 @@ class TestStagePattern:
             assert match.group(2) == expected_name, \
                 f"Stage name should be {expected_name} for {stage_name}"
 
+    @pytest.mark.unit
     def test_stage_pattern_invalid_names(self):
         """Test STAGE_PATTERN rejects invalid stage names"""
         invalid_cases = [
@@ -438,6 +464,7 @@ class TestStagePattern:
 class TestCycleNameValidation:
     """Test CYCLE_NAME_RULES valid_pattern regex"""
 
+    @pytest.mark.unit
     def test_cycle_name_valid_pattern_matches_correct_format(self):
         """Test valid_pattern matches correct cycle name format"""
         # Pattern: r'^Analysis-20\d{2}-Q[1-4](-[\w-]+)?$'
@@ -460,6 +487,7 @@ class TestCycleNameValidation:
             match = re.match(pattern, name)
             assert match is not None, f"Should match valid cycle name: {name}"
 
+    @pytest.mark.unit
     def test_cycle_name_valid_pattern_rejects_invalid_format(self):
         """Test valid_pattern rejects invalid cycle name format"""
         pattern = CYCLE_NAME_RULES['valid_pattern']
@@ -483,6 +511,7 @@ class TestCycleNameValidation:
             match = re.match(pattern, name)
             assert match is None, f"Should NOT match invalid cycle name: {name}"
 
+    @pytest.mark.unit
     def test_cycle_name_rules_min_length(self):
         """Test CYCLE_NAME_RULES min_length constraint"""
         min_length = CYCLE_NAME_RULES['min_length']
@@ -492,6 +521,7 @@ class TestCycleNameValidation:
         assert len('Analysis-2025-Q1') >= min_length, \
             "Valid cycle names should meet min_length requirement"
 
+    @pytest.mark.unit
     def test_cycle_name_rules_max_length(self):
         """Test CYCLE_NAME_RULES max_length constraint"""
         max_length = CYCLE_NAME_RULES['max_length']
@@ -501,6 +531,7 @@ class TestCycleNameValidation:
         assert len('Analysis-2025-Q1-with-very-long-suffix-name') < max_length, \
             "Normal cycle names should fit within max_length"
 
+    @pytest.mark.unit
     def test_cycle_name_rules_forbidden_prefixes(self):
         """Test CYCLE_NAME_RULES forbidden_prefixes"""
         forbidden = CYCLE_NAME_RULES['forbidden_prefixes']
@@ -518,6 +549,7 @@ class TestCycleNameValidation:
             has_forbidden = any(name.startswith(prefix) for prefix in forbidden)
             assert has_forbidden, f"Should detect forbidden prefix in: {name}"
 
+    @pytest.mark.unit
     def test_cycle_name_rules_example_is_valid(self):
         """Test that CYCLE_NAME_RULES example is actually valid"""
         example = CYCLE_NAME_RULES['example']
@@ -540,6 +572,7 @@ class TestCycleNameValidation:
 class TestConstantsIntegration:
     """Integration tests for constants working together"""
 
+    @pytest.mark.unit
     def test_step_status_terminal_subset_of_all(self):
         """Test that StepStatus.terminal() is a subset of all()"""
         all_statuses = StepStatus.all()
@@ -549,6 +582,7 @@ class TestConstantsIntegration:
             assert status in all_statuses, \
                 f"Terminal status {status} should be in all()"
 
+    @pytest.mark.unit
     def test_job_status_ready_for_submit_subset_of_all(self):
         """Test that JobStatus.ready_for_submit() is a subset of all()"""
         all_statuses = JobStatus.all()
@@ -558,6 +592,7 @@ class TestConstantsIntegration:
             assert status in all_statuses, \
                 f"Ready status {status} should be in all()"
 
+    @pytest.mark.unit
     def test_notebook_and_stage_patterns_consistent(self):
         """Test that notebook and stage patterns use consistent format"""
         # Both should use Stage_XX_Name format
