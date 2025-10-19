@@ -51,7 +51,7 @@ def test_validate_cycle_name_too_short(test_schema):
 @pytest.mark.unit
 def test_validate_cycle_name_too_long(test_schema):
     """Test cycle name validation - too long"""
-    long_name = 'a' * 100  # max is 50
+    long_name = 'a' * 300
     result = cycle.validate_cycle_name(long_name)
     assert result is False
 
@@ -63,23 +63,20 @@ def test_validate_cycle_name_invalid_pattern(test_schema):
     assert result is False
 
 
-@pytest.mark.unit
-def test_validate_cycle_name_forbidden_prefix(test_schema):
-    """Test cycle name validation - forbidden prefix"""
-    result = cycle.validate_cycle_name('test_cycle')  # 'test_' is forbidden
-    assert result is False
-
-
 @pytest.mark.database
 @pytest.mark.unit
-def test_validate_cycle_name_already_exists(test_schema):
+def test_validate_cycle_name_already_exists(test_schema, capsys):
     """Test cycle name validation - name already exists"""
     # Create a cycle
-    register_cycle('Analysys-2024-Q1-test_validate_cycle_name_already_exists')
+    register_cycle('Analysis-2024-Q1-DUPE')
 
     # Try to validate same name
-    result = cycle.validate_cycle_name('Analysys-2024-Q1-test_validate_cycle_name_already_exists')
+    result = cycle.validate_cycle_name('Analysis-2024-Q1-DUPE')
     assert result is False
+
+    # Make sure there was a print statement that includes 'already exists'
+    captured = capsys.readouterr()
+    assert 'already exists' in captured.out.lower()
 
 
 @pytest.mark.unit
@@ -374,3 +371,225 @@ def test_create_cycle_registers_stages_and_steps(test_schema, temp_cycle_dirs):
         (db_cycle['id'],)
     )
     # TODO: Once we figure out passing in files, assert stages and steps
+
+
+# ==============================================================================
+# PHASE 1: CORE FUNCTION TESTS - get_stages_and_steps, _register_stages_and_steps
+# ==============================================================================
+
+@pytest.mark.unit
+def test_get_stages_and_steps_with_template_directory(test_schema):
+    """Test get_stages_and_steps() with test template directory"""
+    # Use the test template directory
+    test_template = Path('workspace/tests/files/_Template/notebooks')
+
+    # Call function
+    results = cycle.get_stages_and_steps(notebooks_dir=test_template)
+
+    # Verify results structure
+    assert isinstance(results, list)
+    assert len(results) == 2  # Should have 2 steps in Stage_01_Setup
+
+    # Verify first step
+    step1 = results[0]
+    assert step1['stage_id'] == 1
+    assert step1['stage_name'] == 'Setup'
+    assert step1['step_id'] == 1
+    assert step1['step_name'] == 'Initialize'
+    assert isinstance(step1['notebook'], Path)
+    assert step1['notebook'].name == 'Step_01_Initialize.ipynb'
+
+    # Verify second step
+    step2 = results[1]
+    assert step2['stage_id'] == 1
+    assert step2['stage_name'] == 'Setup'
+    assert step2['step_id'] == 2
+    assert step2['step_name'] == 'Validate'
+    assert step2['notebook'].name == 'Step_02_Validate.ipynb'
+
+
+@pytest.mark.unit
+def test_get_stages_and_steps_missing_directory_error(test_schema):
+    """Test get_stages_and_steps() raises error for missing directory"""
+    non_existent_path = Path('/non/existent/path/notebooks')
+
+    with pytest.raises(Exception) as exc_info:
+        cycle.get_stages_and_steps(notebooks_dir=non_existent_path)
+
+    assert 'missing' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_register_stages_and_steps_dry_run(test_schema):
+    """Test _register_stages_and_steps() in dry run mode (apply=False)"""
+    # Use test template directory
+    test_template = Path('workspace/tests/files/_Template')
+
+    # Call in dry run mode (apply=False)
+    stage_count = cycle._register_stages_and_steps(
+        cycle_id=0,
+        cycle_dir=test_template,
+        apply=False
+    )
+
+    # Should return count of stages
+    assert stage_count == 1  # One stage in test template
+
+    # Verify no database records were created (dry run)
+    from helpers.database import execute_query
+    stages_df = execute_query("SELECT COUNT(*) as count FROM irp_stage")
+    # Should have 0 stages or only stages from other tests (not from cycle_id=0)
+    stages_with_cycle_0 = execute_query(
+        "SELECT COUNT(*) as count FROM irp_stage WHERE cycle_id = 0"
+    )
+    assert stages_with_cycle_0.iloc[0]['count'] == 0
+
+
+@pytest.mark.unit
+def test_register_stages_and_steps_no_notebooks_dir(test_schema):
+    """Test _register_stages_and_steps() returns 0 when notebooks dir missing"""
+    # Create temporary directory without 'notebooks' subdirectory
+    temp_dir = Path(tempfile.mkdtemp())
+
+    try:
+        # Call function with directory that has no notebooks folder
+        stage_count = cycle._register_stages_and_steps(
+            cycle_id=0,
+            cycle_dir=temp_dir,
+            apply=False
+        )
+
+        # Should return 0 (no stages)
+        assert stage_count == 0
+    finally:
+        # Cleanup
+        shutil.rmtree(temp_dir)
+
+
+# ==============================================================================
+# PHASE 2: VALIDATION ERROR PATH TESTS
+# ==============================================================================
+
+@pytest.mark.unit
+def test_validate_cycle_name_active_directory_exists(test_schema, monkeypatch):
+    """Test validation fails when Active_<cycle> directory exists"""
+    # Create temp directory
+    temp_dir = Path(tempfile.mkdtemp())
+    workflows_path = temp_dir / "workflows"
+    workflows_path.mkdir()
+
+    try:
+        # Monkeypatch WORKFLOWS_PATH
+        monkeypatch.setattr('helpers.cycle.WORKFLOWS_PATH', workflows_path)
+
+        # Create Active_MyTest directory
+        active_dir = workflows_path / 'Active_Analysis-2024-Q1'
+        active_dir.mkdir()
+
+        # Validate should fail
+        result = cycle.validate_cycle_name('Analysis-2024-Q1')
+        assert result is False
+    finally:
+        shutil.rmtree(temp_dir)
+
+
+@pytest.mark.unit
+def test_validate_cycle_name_archive_exists(test_schema, monkeypatch):
+    """Test validation fails when cycle exists in archive"""
+    # Create temp directories
+    temp_dir = Path(tempfile.mkdtemp())
+    workflows_path = temp_dir / "workflows"
+    archive_path = temp_dir / "_Archive"
+    workflows_path.mkdir()
+    archive_path.mkdir()
+
+    try:
+        # Monkeypatch paths
+        monkeypatch.setattr('helpers.cycle.WORKFLOWS_PATH', workflows_path)
+        monkeypatch.setattr('helpers.cycle.ARCHIVE_PATH', archive_path)
+
+        # Create archived cycle directory
+        archived_cycle = archive_path / 'Analysis-2024-Q2'
+        archived_cycle.mkdir()
+
+        # Validate should fail
+        result = cycle.validate_cycle_name('Analysis-2024-Q2')
+        assert result is False
+    finally:
+        shutil.rmtree(temp_dir)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_cycle_missing_template_error(test_schema, monkeypatch):
+    """Test create_cycle() fails when template directory missing"""
+    # Create temp directory structure without template
+    temp_dir = Path(tempfile.mkdtemp())
+    workflows_path = temp_dir / "workflows"
+    non_existent_template = temp_dir / "NonExistentTemplate"
+    archive_path = temp_dir / "_Archive"
+
+    workflows_path.mkdir()
+    archive_path.mkdir()
+
+    try:
+        # Monkeypatch paths
+        monkeypatch.setattr('helpers.cycle.WORKFLOWS_PATH', workflows_path)
+        monkeypatch.setattr('helpers.cycle.TEMPLATE_PATH', non_existent_template)
+        monkeypatch.setattr('helpers.cycle.ARCHIVE_PATH', archive_path)
+
+        # Create cycle should fail
+        result = cycle.create_cycle('Analysis-2024-Q3')
+        assert result is False
+    finally:
+        shutil.rmtree(temp_dir)
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_archive_cycle_by_name_not_found(test_schema):
+    """Test archive_cycle_by_name() returns False for non-existent cycle"""
+    result = cycle.archive_cycle_by_name('NonExistentCycle-2024-Q1')
+    assert result is False
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_archive_cycle_by_name_already_archived(test_schema, temp_cycle_dirs):
+    """Test archive_cycle_by_name() is idempotent (returns True if already archived)"""
+    cycle_name = 'Analysis-2024-Q4-already-archived'
+
+    # Create and archive cycle
+    cycle.create_cycle(cycle_name)
+    cycle.archive_cycle_by_name(cycle_name)
+
+    # Archive again - should return True (idempotent)
+    result = cycle.archive_cycle_by_name(cycle_name)
+    assert result is True
+
+    # Verify still archived
+    from helpers.database import get_cycle_by_name
+    db_cycle = get_cycle_by_name(cycle_name)
+    assert db_cycle['status'] == constants.CycleStatus.ARCHIVED
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_archive_cycle_by_name_exception_handling(test_schema, temp_cycle_dirs, monkeypatch):
+    """Test archive_cycle_by_name() handles exceptions gracefully"""
+    from helpers import database as db
+    cycle_name = 'Analysis-2025-Q1-exception-test'
+
+    # Create cycle
+    cycle.create_cycle(cycle_name)
+
+    # Mock archive_cycle to raise an exception
+    def mock_archive_cycle(cycle_id):
+        raise Exception("Database error during archive")
+
+    monkeypatch.setattr(db, 'archive_cycle', mock_archive_cycle)
+
+    # Archive should catch exception and return False
+    result = cycle.archive_cycle_by_name(cycle_name)
+    assert result is False

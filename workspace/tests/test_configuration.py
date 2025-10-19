@@ -407,3 +407,100 @@ def test_configuration_transformer_custom_registration():
     assert len(result) == 2, "Should return 2 job configs"
     assert result[0] == {'value': 20}, "First job should have doubled value"
     assert result[1] == {'value': 30}, "Second job should have tripled value"
+
+
+# ============================================================================
+# Tests - Error Cases and Edge Conditions
+# ============================================================================
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_read_configuration_not_found(test_schema):
+    """Test read_configuration with non-existent configuration ID"""
+    # Try to read configuration that doesn't exist
+    with pytest.raises(ConfigurationError, match="Configuration with id 99999 not found"):
+        read_configuration(99999, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_update_configuration_status_invalid_status(test_schema):
+    """Test update_configuration_status with invalid/bogus status"""
+    cycle_id = create_test_cycle(test_schema, 'test-bogus-status')
+
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps({'test': 'data'}),
+         ConfigurationStatus.NEW, datetime.now()),
+        schema=test_schema
+    )
+
+    # Try to update with bogus status
+    with pytest.raises(ConfigurationError, match="Invalid status: BOGUS"):
+        update_configuration_status(config_id, 'BOGUS', schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_load_configuration_file_not_found(test_schema):
+    """Test load_configuration_file with non-existent file path"""
+    cycle_id = create_test_cycle(test_schema, 'test-file-not-found')
+
+    # Try to load configuration with non-existent path
+    with pytest.raises(ConfigurationError, match="Configuration file not found"):
+        load_configuration_file(
+            cycle_id=cycle_id,
+            excel_config_path='/non/existent/path/config.xlsx',
+            register=True,
+            schema=test_schema
+        )
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_load_configuration_file_not_excel(test_schema):
+    """Test load_configuration_file with file that is not really Excel"""
+    cycle_id = create_test_cycle(test_schema, 'test-not-excel')
+
+    # Create a text file with .xlsx extension
+    fake_excel_path = Path(__file__).parent / 'files/Not_an_Excel.xlsx'
+    fake_excel_path.parent.mkdir(exist_ok=True)
+
+    with open(fake_excel_path, 'w') as f:
+        f.write("This is not an Excel file, just plain text!")
+
+    try:
+        # Try to load the fake Excel file
+        with pytest.raises(ConfigurationError, match="Failed to read Excel file"):
+            load_configuration_file(
+                cycle_id=cycle_id,
+                excel_config_path=str(fake_excel_path),
+                register=True,
+                schema=test_schema
+            )
+    finally:
+        # Clean up
+        if fake_excel_path.exists():
+            fake_excel_path.unlink()
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_load_configuration_without_register(test_schema):
+    """Test load_configuration_file with register=False"""
+    cycle_id = create_test_cycle(test_schema, 'test-no-register')
+
+    # Create a valid test Excel file path
+    if not Path(TEST_EXCEL_PATH).exists():
+        pytest.skip("Test Excel file not found")
+
+    # Try to load without registering (dry-run mode)
+    with pytest.raises(ConfigurationError, match="validated successfully but not registered"):
+        load_configuration_file(
+            cycle_id=cycle_id,
+            excel_config_path=TEST_EXCEL_PATH,
+            register=False,
+            schema=test_schema
+        )

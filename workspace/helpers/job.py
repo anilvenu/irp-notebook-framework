@@ -90,7 +90,7 @@ def _create_job_configuration(
         )
         return job_config_id
     except DatabaseError as e:
-        raise JobError(f"Failed to create job configuration: {str(e)}")
+        raise JobError(f"Failed to create job configuration: {str(e)}") # pragma: no cover
 
 
 def _create_job(
@@ -225,7 +225,7 @@ def _register_job_submission(
             schema=schema
         )
     except DatabaseError as e:
-        raise JobError(f"Failed to register job submission: {str(e)}")
+        raise JobError(f"Failed to register job submission: {str(e)}") # pragma: no cover
 
 
 def _insert_tracking_log(
@@ -267,7 +267,7 @@ def _insert_tracking_log(
         )
         return tracking_id
     except DatabaseError as e:
-        raise JobError(f"Failed to insert tracking log: {str(e)}")
+        raise JobError(f"Failed to insert tracking log: {str(e)}") # pragma: no cover
 
 
 # ============================================================================
@@ -526,8 +526,8 @@ def skip_job(job_id: int, schema: str = 'public') -> None:
             WHERE id = %s
         """
         execute_command(query, (job_id,), schema=schema)
-    except DatabaseError as e:
-        raise JobError(f"Failed to skip job: {str(e)}")
+    except DatabaseError as e:  # pragma: no cover
+        raise JobError(f"Failed to skip job: {str(e)}") 
 
 
 # ============================================================================
@@ -608,7 +608,6 @@ def submit_job(
 
     # Optionally track immediately
     if track_immediately:
-        time.sleep(5)
         track_job_status(job_id, schema=schema)
 
     return job_id

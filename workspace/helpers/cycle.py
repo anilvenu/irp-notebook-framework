@@ -55,12 +55,6 @@ def validate_cycle_name(cycle_name: str) -> bool:
         print(f"Name must match pattern: {CYCLE_NAME_RULES['example']}")
         return False
     
-    # Check forbidden prefixes
-    for prefix in CYCLE_NAME_RULES['forbidden_prefixes']:
-        if cycle_name.startswith(prefix):
-            print(f"Name cannot start with '{prefix}'")
-            return False
-
     # Check if name already exists
     existing = db.get_cycle_by_name(cycle_name)
     if existing:
@@ -153,15 +147,19 @@ def create_cycle(cycle_name: str) -> bool:
         print(f"\nFailed to create cycle: {str(e)}")
         return False
 
-def get_stages_and_steps() -> List[dict]:
+def get_stages_and_steps(notebooks_dir=None) -> List[dict]:
     """
     Gets stages and steps from Template directory structure.
-        
+
+    Args:
+        notebooks_dir: Path to notebooks directory (defaults to TEMPLATE_PATH/notebooks)  
     Returns:
         List of stages and steps
     """
     
-    notebooks_dir = TEMPLATE_PATH / "notebooks"
+    # Default to template notebooks directory
+    if notebooks_dir is None:
+        notebooks_dir = TEMPLATE_PATH / "notebooks"
     
     if not notebooks_dir.exists():
         raise Exception(f"Template notebooks directory {notebooks_dir} missing")

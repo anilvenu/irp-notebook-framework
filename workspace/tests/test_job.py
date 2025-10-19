@@ -497,3 +497,301 @@ def test_job_error_resubmit_override_no_reason(test_schema):
             job_configuration_data={'new': 'config'},
             schema=test_schema
         )
+
+
+# ==============================================================================
+# PHASE 3: VALIDATION ERROR PATH TESTS - Private Functions
+# ==============================================================================
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_job_configuration_invalid_batch_id(test_schema):
+    """Test _create_job_configuration() with invalid batch_id"""
+    from helpers.job import _create_job_configuration
+
+    # Test with batch_id = 0
+    with pytest.raises(JobError) as exc_info:
+        _create_job_configuration(
+            batch_id=0,
+            configuration_id=1,
+            job_configuration_data={'test': 'data'},
+            schema=test_schema
+        )
+    assert 'invalid batch_id' in str(exc_info.value).lower()
+
+    # Test with negative batch_id
+    with pytest.raises(JobError):
+        _create_job_configuration(
+            batch_id=-1,
+            configuration_id=1,
+            job_configuration_data={'test': 'data'},
+            schema=test_schema
+        )
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_job_configuration_invalid_configuration_id(test_schema):
+    """Test _create_job_configuration() with invalid configuration_id"""
+    from helpers.job import _create_job_configuration
+
+    with pytest.raises(JobError) as exc_info:
+        _create_job_configuration(
+            batch_id=1,
+            configuration_id=0,
+            job_configuration_data={'test': 'data'},
+            schema=test_schema
+        )
+    assert 'invalid configuration_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_job_configuration_invalid_data_type(test_schema):
+    """Test _create_job_configuration() with invalid data type"""
+    from helpers.job import _create_job_configuration
+
+    with pytest.raises(JobError) as exc_info:
+        _create_job_configuration(
+            batch_id=1,
+            configuration_id=1,
+            job_configuration_data="not a dict",  # Should be dict
+            schema=test_schema
+        )
+    assert 'must be a dictionary' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_job_invalid_batch_id_private(test_schema):
+    """Test _create_job() with invalid batch_id"""
+    from helpers.job import _create_job
+
+    # Test with batch_id = 0
+    with pytest.raises(JobError):
+        _create_job(batch_id=0, job_configuration_id=1, schema=test_schema)
+
+    # Test with negative batch_id
+    with pytest.raises(JobError):
+        _create_job(batch_id=-1, job_configuration_id=1, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_job_invalid_job_config_id_private(test_schema):
+    """Test _create_job() with invalid job_configuration_id"""
+    from helpers.job import _create_job
+
+    with pytest.raises(JobError):
+        _create_job(batch_id=1, job_configuration_id=0, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_job_invalid_parent_job_id(test_schema):
+    """Test _create_job() with invalid parent_job_id"""
+    from helpers.job import _create_job
+
+    with pytest.raises(JobError):
+        _create_job(
+            batch_id=1,
+            job_configuration_id=1,
+            parent_job_id=0,
+            schema=test_schema
+        )
+
+
+# ==============================================================================
+# PHASE 4: SUBMISSION AND TRACKING ERROR PATH TESTS
+# ==============================================================================
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_register_job_submission_invalid_job_id(test_schema):
+    """Test _register_job_submission() with invalid job_id"""
+    from helpers.job import _register_job_submission
+    from datetime import datetime
+
+    with pytest.raises(JobError) as exc_info:
+        _register_job_submission(
+            job_id=-1,
+            workflow_id='WF-123',
+            request={'test': 'request'},
+            response={'test': 'response'},
+            submitted_ts=datetime.now(),
+            schema=test_schema
+        )
+    assert 'invalid job_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_register_job_submission_invalid_workflow_id(test_schema):
+    """Test _register_job_submission() with invalid workflow_id"""
+    from helpers.job import _register_job_submission
+    from datetime import datetime
+
+    # Test with None workflow_id
+    with pytest.raises(JobError) as exc_info:
+        _register_job_submission(
+            job_id=1,
+            workflow_id=None,
+            request={'test': 'request'},
+            response={'test': 'response'},
+            submitted_ts=datetime.now(),
+            schema=test_schema
+        )
+    assert 'invalid workflow_id' in str(exc_info.value).lower()
+
+    # Test with empty string workflow_id
+    with pytest.raises(JobError):
+        _register_job_submission(
+            job_id=1,
+            workflow_id='',
+            request={'test': 'request'},
+            response={'test': 'response'},
+            submitted_ts=datetime.now(),
+            schema=test_schema
+        )
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_insert_tracking_log_invalid_job_id(test_schema):
+    """Test _insert_tracking_log() with invalid job_id"""
+    from helpers.job import _insert_tracking_log
+
+    with pytest.raises(JobError) as exc_info:
+        _insert_tracking_log(
+            job_id=-1,
+            workflow_id='WF-123',
+            job_status=JobStatus.RUNNING,
+            tracking_data={'status': 'running'},
+            schema=test_schema
+        )
+    assert 'invalid job_id' in str(exc_info.value).lower()
+
+
+# ==============================================================================
+# PHASE 5: CRUD AND BUSINESS LOGIC ERROR PATH TESTS
+# ==============================================================================
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_read_job_json_parsing_submission_request(test_schema):
+    """Test read_job() parses JSON submission_request field"""
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_json_parse')
+
+    # Create and submit job
+    job_id = create_job(
+        batch_id, config_id,
+        job_configuration_data={'test': 'data'},
+        schema=test_schema
+    )
+    submit_job(job_id, schema=test_schema)
+
+    # Read job - submission_request should be parsed from JSON to dict
+    job = read_job(job_id, schema=test_schema)
+
+    # Verify JSON was parsed
+    assert isinstance(job['submission_request'], dict)
+    assert 'job_id' in job['submission_request']
+    assert isinstance(job['submission_response'], dict)
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_get_job_config_invalid_job_id(test_schema):
+    """Test get_job_config() with invalid job_id"""
+    with pytest.raises(JobError) as exc_info:
+        get_job_config(job_id=-1, schema=test_schema)
+    assert 'invalid job_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_job_invalid_batch_id_validation(test_schema):
+    """Test create_job() public function validates batch_id"""
+    # Test with batch_id = 0
+    with pytest.raises(JobError) as exc_info:
+        create_job(
+            batch_id=0,
+            configuration_id=1,
+            job_configuration_data={'test': 'data'},
+            schema=test_schema
+        )
+    assert 'invalid batch_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_job_invalid_configuration_id(test_schema):
+    """Test create_job() public function validates configuration_id"""
+    with pytest.raises(JobError) as exc_info:
+        create_job(
+            batch_id=1,
+            configuration_id=-1,
+            job_configuration_data={'test': 'data'},
+            schema=test_schema
+        )
+    assert 'invalid configuration_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_job_invalid_existing_config_id(test_schema):
+    """Test create_job() validates existing job_configuration_id"""
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_invalid_config_id')
+
+    with pytest.raises(JobError) as exc_info:
+        create_job(
+            batch_id=batch_id,
+            configuration_id=config_id,
+            job_configuration_id=-1,  # Invalid
+            schema=test_schema
+        )
+    assert 'invalid job_configuration_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_skip_job_invalid_id(test_schema):
+    """Test skip_job() with invalid job_id"""
+    with pytest.raises(JobError) as exc_info:
+        skip_job(job_id=-1, schema=test_schema)
+    assert 'invalid job_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_skip_job_not_found(test_schema):
+    """Test skip_job() with non-existent job"""
+    with pytest.raises(JobError):
+        skip_job(job_id=999999, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_submit_job_invalid_id(test_schema):
+    """Test submit_job() with invalid job_id"""
+    with pytest.raises(JobError) as exc_info:
+        submit_job(job_id=-1, schema=test_schema)
+    assert 'invalid job_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_track_job_status_invalid_id(test_schema):
+    """Test track_job_status() with invalid job_id"""
+    with pytest.raises(JobError) as exc_info:
+        track_job_status(job_id=-1, schema=test_schema)
+    assert 'invalid job_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_resubmit_job_invalid_id(test_schema):
+    """Test resubmit_job() with invalid job_id"""
+    with pytest.raises(JobError) as exc_info:
+        resubmit_job(job_id=-1, schema=test_schema)
+    assert 'invalid job_id' in str(exc_info.value).lower()

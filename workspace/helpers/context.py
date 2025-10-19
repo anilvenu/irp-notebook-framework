@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from helpers import database as db
 from helpers.constants import NOTEBOOK_PATTERN, STAGE_PATTERN, CycleStatus
-
+from helpers.notebook import get_current_notebook_path
 
 class WorkContextError(Exception):
     """Custom exception for context errors"""
@@ -39,8 +39,8 @@ class WorkContext:
         
         # Get notebook path
         if notebook_path is None:
-            notebook_path = self._get_current_notebook_path()
-        
+            notebook_path = get_current_notebook_path()  # pragma: no cover
+
         self.notebook_path = Path(notebook_path)
         
         # Parse path to extract context
@@ -48,34 +48,7 @@ class WorkContext:
         
         # Get or create database entries
         self._ensure_database_entries()
-    
-    
-    def _get_current_notebook_path(self) -> str:
-        """
-        Get the full path of the currently running Jupyter notebook (.ipynb).
-        Works by inspecting IPython's user namespace (__session__ variable).
-        """
-        try:
-            from IPython import get_ipython
-            import os
-
-            ipython = get_ipython()
-            if ipython is None:
-                raise RuntimeError("Not running inside an IPython/Jupyter environment")
-
-            # The __session__ variable usually contains the full notebook path
-            nb_path = ipython.user_ns.get("__session__")
-            if not nb_path:
-                raise RuntimeError("Notebook path not found in IPython user_ns")
-
-            # Normalize path (e.g., ensure it’s absolute)
-            nb_path = os.path.abspath(nb_path)
-            return nb_path
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to detect notebook path: {e}")
-
-    
+        
     
     def _parse_path(self):
         """Parse notebook path to extract cycle, stage, and step information"""

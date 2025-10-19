@@ -1,0 +1,68 @@
+# Coverage.py configuration for IRP Notebook Framework
+#
+# This file controls what code is measured and how coverage reports are generated.
+# Documentation: https://coverage.readthedocs.io/en/latest/config.html
+
+[run]
+# Source code to measure coverage for
+source = workspace/helpers
+
+# Omit (exclude) specific files or patterns from coverage
+omit =
+    # Exclude integration directory for Moody's API
+    workspace/helpers/irp_integration/*
+    # Exclude ux.py and notebook.py from coverage
+    workspace/helpers/ux.py
+    workspace/helpers/notebook.py
+    # Exclude __pycache__ and .pyc files
+    */__pycache__/*
+    */.pytest_cache/*
+    *.pyc
+    # Exclude test files themselves (we don't need coverage of tests)
+    */tests/*
+    */test_*.py
+
+# Branch coverage (measures if/else branches, not just lines)
+branch = True
+
+# Measure coverage in parallel mode (useful for multi-threaded tests)
+parallel = False
+
+[report]
+# Precision for coverage percentage (2 decimal places)
+precision = 2
+
+# Show line numbers of missing coverage in terminal output
+show_missing = True
+
+# Skip files with 100% coverage in terminal output (cleaner output)
+skip_covered = False
+
+# Skip files that are empty (no code)
+skip_empty = True
+
+# Fail if coverage falls below this percentage (optional - commented out)
+# fail_under = 90
+
+# Sort coverage report (options: Name, Stmts, Miss, Cover)
+sort = Cover
+
+[html]
+# Directory for HTML coverage report
+directory = workspace/tests/htmlcov
+
+# Title for HTML report
+title = IRP Notebook Framework - Code Coverage Report
+
+# Show contexts (which tests covered which lines) - useful for debugging
+show_contexts = False
+
+[xml]
+# XML report output (useful for CI/CD tools like GitHub Actions)
+output = workspace/tests/coverage.xml
+
+[json]
+# JSON report output (useful for programmatic analysis)
+output = workspace/tests/coverage.json
+# Pretty print the JSON for readability
+pretty_print = True

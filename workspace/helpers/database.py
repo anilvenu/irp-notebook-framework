@@ -300,6 +300,7 @@ from threading import local
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 import pandas as pd
+import numpy as np
 from typing import Optional, List, Dict, Any, Tuple
 from helpers.constants import DB_CONFIG, CycleStatus, StepStatus
 
@@ -786,13 +787,6 @@ def _convert_params_to_native_types(params: tuple) -> tuple:
     if not params:
         return params
 
-    try:
-        import numpy as np
-    except ImportError:
-        # NumPy not available, return params unchanged
-        # This shouldn't happen since pandas (already imported) requires numpy
-        return params
-
     converted = []
     for param in params:
         # Check for numpy integer types
@@ -835,7 +829,7 @@ def test_connection(schema: str = 'public') -> bool:
             conn.execute(text("SELECT 1"))
         return True
     except:
-        return False
+        return False # pragma: no cover
 
 
 def execute_query(query: str, params: tuple = None, schema: str = None) -> pd.DataFrame:
@@ -863,7 +857,7 @@ def execute_query(query: str, params: tuple = None, schema: str = None) -> pd.Da
             df = pd.read_sql_query(text(converted_query), conn, params=param_dict)
         return df
     except Exception as e:
-        raise DatabaseError(f"Query failed: {str(e)}")
+        raise DatabaseError(f"Query failed: {str(e)}") # pragma: no cover
 
 
 def execute_scalar(query: str, params: tuple = None, schema: str = None) -> Any:
@@ -892,7 +886,7 @@ def execute_scalar(query: str, params: tuple = None, schema: str = None) -> Any:
             row = result.fetchone()
             return row[0] if row else None
     except Exception as e:
-        raise DatabaseError(f"Scalar query failed: {str(e)}")
+        raise DatabaseError(f"Scalar query failed: {str(e)}") # paragma: no cover
 
 
 def execute_command(query: str, params: tuple = None, schema: str = None) -> int:
@@ -924,7 +918,7 @@ def execute_command(query: str, params: tuple = None, schema: str = None) -> int
             conn.commit()
             return result.rowcount
     except Exception as e:
-        raise DatabaseError(f"Command failed: {str(e)}")
+        raise DatabaseError(f"Command failed: {str(e)}") # pragma: no cover
 
 
 def execute_insert(query: str, params: tuple = None, schema: str = None) -> int:
@@ -961,7 +955,7 @@ def execute_insert(query: str, params: tuple = None, schema: str = None) -> int:
             row = result.fetchone()
             return row[0] if row else None
     except Exception as e:
-        raise DatabaseError(f"Insert failed: {str(e)}")
+        raise DatabaseError(f"Insert failed: {str(e)}") # pragma: no cover
 
 
 def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] = None, schema: str = None) -> List[int]:

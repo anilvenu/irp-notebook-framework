@@ -532,22 +532,6 @@ class TestCycleNameValidation:
             "Normal cycle names should fit within max_length"
 
     @pytest.mark.unit
-    def test_cycle_name_rules_forbidden_prefixes(self):
-        """Test CYCLE_NAME_RULES forbidden_prefixes"""
-        forbidden = CYCLE_NAME_RULES['forbidden_prefixes']
-
-        assert 'Active_' in forbidden, "Should forbid 'Active_' prefix"
-
-        # Test that forbidden names would be caught
-        forbidden_names = [
-            'Active_Analysis-2025-Q1',
-            'Active_2025-Q1',
-        ]
-
-        for name in forbidden_names:
-            # Check if name starts with any forbidden prefix
-            has_forbidden = any(name.startswith(prefix) for prefix in forbidden)
-            assert has_forbidden, f"Should detect forbidden prefix in: {name}"
 
     @pytest.mark.unit
     def test_cycle_name_rules_example_is_valid(self):

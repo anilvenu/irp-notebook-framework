@@ -316,3 +316,189 @@ def test_step_module_uses_context(test_schema, mock_context):
 
     # This proves Step class is using context correctly
     assert test_schema != 'public'
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_checkpoint_without_run_id(test_schema, mock_context):
+    """Test that checkpoint raises error if step not started"""
+    cycle_id = register_cycle('test_cycle_checkpoint_err')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # First run and complete the step
+    step1 = Step(context)
+    step1.complete()
+
+    # Create a second Step instance (already executed)
+    step2 = Step(context)
+
+    # Manually clear run_id to simulate not started
+    step2.run_id = None
+
+    # Checkpoint should raise error
+    with pytest.raises(StepError, match="Step not started"):
+        step2.checkpoint({'data': 'test'})
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_complete_without_run_id(test_schema, mock_context):
+    """Test that complete raises error if step not started"""
+    cycle_id = register_cycle('test_cycle_complete_err')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # First run and complete the step
+    step1 = Step(context)
+    step1.complete()
+
+    # Create a second Step instance (already executed)
+    step2 = Step(context)
+
+    # Manually clear run_id to simulate not started
+    step2.run_id = None
+
+    # Complete should raise error
+    with pytest.raises(StepError, match="Step not started"):
+        step2.complete()
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_skip_without_run_id(test_schema, mock_context):
+    """Test that skip raises error if step not started"""
+    cycle_id = register_cycle('test_cycle_skip_err')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # First run and complete the step
+    step1 = Step(context)
+    step1.complete()
+
+    # Create a second Step instance (already executed)
+    step2 = Step(context)
+
+    # Manually clear run_id to simulate not started
+    step2.run_id = None
+
+    # Skip should raise error
+    with pytest.raises(StepError, match="Step not started"):
+        step2.skip("test reason")
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_fail_without_run_id(test_schema, mock_context):
+    """Test that fail handles case when step never started"""
+    cycle_id = register_cycle('test_cycle_fail_no_run')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # First run and complete the step
+    step1 = Step(context)
+    step1.complete()
+
+    # Create a second Step instance (already executed)
+    step2 = Step(context)
+
+    # Manually clear run_id to simulate not started
+    step2.run_id = None
+
+    # Fail should handle this gracefully (just logs, doesn't raise)
+    step2.fail("test error message")
+    # No exception should be raised
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_get_last_output_failed_run(test_schema, mock_context):
+    """Test get_last_output returns None for failed run"""
+    cycle_id = register_cycle('test_cycle_output_failed')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # Run and fail
+    step1 = Step(context)
+    step1.fail("Something went wrong")
+
+    # Get last output should return None for failed run
+    step2 = Step(context)
+    last_output = step2.get_last_output()
+
+    assert last_output is None
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_get_last_output_no_run(test_schema, mock_context):
+    """Test get_last_output returns None when no run exists"""
+    cycle_id = register_cycle('test_cycle_no_run')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # Don't run the step, just create context
+    step = Step(context)
+
+    # Since we auto-started, complete it first
+    step.complete()
+
+    # Now create a new step for a different step_id
+    step_id_2 = get_or_create_step(stage_id, 2, 'Process Data')
+    context.step_id = step_id_2
+
+    step2 = Step(context)
+    # Complete this one too
+    step2.complete()
+
+    # Now create step3 for a new step that has no completed runs
+    step_id_3 = get_or_create_step(stage_id, 3, 'Final Data')
+    context.step_id = step_id_3
+    step3 = Step(context)
+    step3.fail("error")  # Fail it instead of completing
+
+    # Get last output should return None
+    last_output = step3.get_last_output()
+    assert last_output is None
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_context_manager_manual_start(test_schema, mock_context):
+    """Test Step context manager when already manually started"""
+    cycle_id = register_cycle('test_cycle_manual_start')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    step = Step(context)
+    # Step is already started via __init__
+
+    # Using context manager should not start again
+    with step as s:
+        assert s.run_id is not None
+        s.log("Processing")
+
+    # Should auto-complete
+    last_run = get_last_step_run(step_id)
+    assert last_run['status'] == StepStatus.COMPLETED

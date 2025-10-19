@@ -388,3 +388,375 @@ def test_batch_error_unknown_type(test_schema):
 
     with pytest.raises(BatchError):
         create_batch('nonexistent_type', config_id, step_id, schema=test_schema)
+
+
+# ============================================================================
+# Tests - Quick Wins: Invalid Inputs and Error Paths
+# ============================================================================
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_batch_invalid_configuration_id(test_schema):
+    """Test create_batch with invalid configuration_id"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_invalid_config')
+
+    # Test with 0
+    with pytest.raises(BatchError, match="Invalid configuration_id"):
+        create_batch('default', 0, step_id, schema=test_schema)
+
+    # Test with negative
+    with pytest.raises(BatchError, match="Invalid configuration_id"):
+        create_batch('default', -1, step_id, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_batch_invalid_batch_type(test_schema):
+    """Test create_batch with invalid batch_type"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_invalid_type')
+
+    # Empty string
+    with pytest.raises(BatchError, match="Invalid batch_type"):
+        create_batch('', config_id, step_id, schema=test_schema)
+
+    # Whitespace only
+    with pytest.raises(BatchError, match="Invalid batch_type"):
+        create_batch('   ', config_id, step_id, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_batch_configuration_wrong_status(test_schema):
+    """Test create_batch when configuration has wrong status"""
+    from helpers.database import execute_command
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_wrong_status')
+
+    # Set config to ERROR status
+    execute_command(
+        "UPDATE irp_configuration SET status = %s WHERE id = %s",
+        (ConfigurationStatus.ERROR, config_id),
+        schema=test_schema
+    )
+
+    with pytest.raises(BatchError, match="has invalid status"):
+        create_batch('default', config_id, step_id, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_batch_configuration_new_status(test_schema):
+    """Test create_batch when configuration has NEW status (not VALID/ACTIVE)"""
+    from helpers.database import execute_command
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_new_status')
+
+    # Set config to NEW status
+    execute_command(
+        "UPDATE irp_configuration SET status = %s WHERE id = %s",
+        (ConfigurationStatus.NEW, config_id),
+        schema=test_schema
+    )
+
+    with pytest.raises(BatchError, match="has invalid status"):
+        create_batch('default', config_id, step_id, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_batch_no_step_id_lookup(test_schema):
+    """Test create_batch with step_id=None (triggers lookup)"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_no_step')
+
+    # Since _lookup_step_id returns None, this should fail
+    with pytest.raises(BatchError, match="step_id is required"):
+        create_batch('default', config_id, step_id=None, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_batch_invalid_step_id(test_schema):
+    """Test create_batch with invalid step_id values"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_invalid_step')
+
+    # Test with 0
+    with pytest.raises(BatchError, match="Invalid step_id"):
+        create_batch('default', config_id, step_id=0, schema=test_schema)
+
+    # Test with negative
+    with pytest.raises(BatchError, match="Invalid step_id"):
+        create_batch('default', config_id, step_id=-5, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_batch_transformer_exception(test_schema):
+    """Test create_batch when transformer raises exception"""
+    from helpers.configuration import ConfigurationTransformer
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_transformer_exc')
+
+    # Register a transformer that raises exception
+    @ConfigurationTransformer.register('test_error_transformer')
+    def transform_error(config):
+        raise ValueError("Transformer failed!")
+
+    with pytest.raises(BatchError, match="Transformer failed"):
+        create_batch('test_error_transformer', config_id, step_id, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_batch_transformer_returns_empty(test_schema):
+    """Test create_batch when transformer returns empty list"""
+    from helpers.configuration import ConfigurationTransformer
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_empty_transformer')
+
+    # Register a transformer that returns empty list
+    @ConfigurationTransformer.register('test_empty_transformer')
+    def transform_empty(config):
+        return []
+
+    with pytest.raises(BatchError, match="returned no job configurations"):
+        create_batch('test_empty_transformer', config_id, step_id, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_submit_batch_configuration_error_status(test_schema):
+    """Test submit_batch when configuration has ERROR status"""
+    from helpers.database import execute_command
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_submit_error')
+    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+
+    # Set config to ERROR status
+    execute_command(
+        "UPDATE irp_configuration SET status = %s WHERE id = %s",
+        (ConfigurationStatus.ERROR, config_id),
+        schema=test_schema
+    )
+
+    with pytest.raises(BatchError, match="Must be VALID or ACTIVE to submit"):
+        submit_batch(batch_id, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_submit_batch_cycle_not_active(test_schema):
+    """Test submit_batch when cycle is not ACTIVE"""
+    from helpers.database import execute_command
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_cycle_archived')
+    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+
+    # Archive the cycle
+    execute_command(
+        "UPDATE irp_cycle SET status = %s WHERE id = %s",
+        ('ARCHIVED', cycle_id),
+        schema=test_schema
+    )
+
+    with pytest.raises(BatchError, match="Must be ACTIVE to submit"):
+        submit_batch(batch_id, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_get_batch_jobs_with_json_parsing(test_schema):
+    """Test get_batch_jobs parses JSON fields correctly"""
+    from helpers.database import execute_command
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_json_parse')
+    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+
+    # Get jobs
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    assert len(jobs) > 0
+
+    # Manually update job to have JSON strings
+    execute_command(
+        "UPDATE irp_job SET submission_request = %s, submission_response = %s WHERE id = %s",
+        (json.dumps({'test': 'request'}), json.dumps({'test': 'response'}), jobs[0]['id']),
+        schema=test_schema
+    )
+
+    # Fetch and verify parsing
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    assert jobs[0]['submission_request'] == {'test': 'request'}
+    assert jobs[0]['submission_response'] == {'test': 'response'}
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_get_batch_job_configurations_with_skipped_filter(test_schema):
+    """Test get_batch_job_configurations with skipped filter"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_config_skip')
+    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+
+    # Get all configs
+    all_configs = get_batch_job_configurations(batch_id, schema=test_schema)
+    assert len(all_configs) == 1
+
+    # Get non-skipped configs
+    non_skipped = get_batch_job_configurations(batch_id, skipped=False, schema=test_schema)
+    assert len(non_skipped) == 1
+
+    # Get skipped configs (should be empty)
+    skipped_configs = get_batch_job_configurations(batch_id, skipped=True, schema=test_schema)
+    assert len(skipped_configs) == 0
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_get_batch_job_configurations_json_parsing(test_schema):
+    """Test get_batch_job_configurations parses JSON correctly"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_config_json')
+    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+
+    # Get job configurations
+    job_configs = get_batch_job_configurations(batch_id, schema=test_schema)
+
+    # Verify that job_configuration_data is parsed as dict
+    assert len(job_configs) > 0
+    assert isinstance(job_configs[0]['job_configuration_data'], dict)
+
+
+# ============================================================================
+# Tests - Must-Dos: Critical Business Logic
+# ============================================================================
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_recon_batch_with_error_jobs(test_schema):
+    """Test recon_batch with ERROR status jobs"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_error')
+    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, schema=test_schema)
+
+    # Mark job as ERROR
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    update_job_status(jobs[0]['id'], JobStatus.ERROR, schema=test_schema)
+
+    result = recon_batch(batch_id, schema=test_schema)
+    assert result == BatchStatus.ERROR
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_recon_batch_all_skipped(test_schema):
+    """Test recon_batch with all jobs skipped"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_skipped')
+    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, schema=test_schema)
+
+    # Skip all jobs
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    for job in jobs:
+        skip_job(job['id'], schema=test_schema)
+
+    # Recon should handle this gracefully
+    result = recon_batch(batch_id, schema=test_schema)
+
+
+    # Assert irp_batch_recon_log record created
+    log_records = execute_query(
+        "SELECT * FROM irp_batch_recon_log WHERE batch_id = %s ORDER BY recon_ts DESC LIMIT 1",
+        (batch_id,),
+        schema=test_schema
+    )
+    # Print the recon_result field from the log record without truncation
+    if not log_records.empty:
+        log_record = log_records.iloc[0]
+
+    # With all jobs skipped and one config not skipped, should be ACTIVE
+    assert result == BatchStatus.ACTIVE
+    assert not log_record.empty
+    assert log_record['recon_result'] == BatchStatus.ACTIVE
+    assert log_record['recon_summary']['total_configs'] == 1
+    assert log_record['recon_summary']['non_skipped_configs'] == 1
+    assert log_record['recon_summary']['unfulfilled_configs'] == 1
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_recon_batch_empty_batch(test_schema):
+    """Test recon_batch with batch that has no jobs"""
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_empty_batch')
+
+    # Create batch manually without jobs
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, 'default', BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    # Recon should handle empty batch
+    result = recon_batch(batch_id, schema=test_schema)
+
+    # Assert irp_batch_recon_log record created
+    log_records = execute_query(
+        "SELECT * FROM irp_batch_recon_log WHERE batch_id = %s ORDER BY recon_ts DESC LIMIT 1",
+        (batch_id,),
+        schema=test_schema
+    )
+    if not log_records.empty:
+        log_record = log_records.iloc[0]
+
+    # With no non-skipped configs and no non-skipped jobs, should be ACTIVE
+    assert result == BatchStatus.ACTIVE
+    assert not log_record.empty
+    assert log_record['recon_result'] == BatchStatus.ACTIVE
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_recon_batch_mixed_job_states(test_schema):
+    """Test recon_batch with mixed job states (some finished, some in progress)"""
+    # Create multi-job batch
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_mixed_states', 'ACTIVE'),
+        schema=test_schema
+    )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+
+    config_data = {
+        'jobs': [
+            {'job_id': 1, 'param': 'A'},
+            {'job_id': 2, 'param': 'B'},
+            {'job_id': 3, 'param': 'C'}
+        ]
+    }
+
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps(config_data),
+         ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+
+    batch_id = create_batch('multi_job', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, schema=test_schema)
+
+    # Set different job states
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    update_job_status(jobs[0]['id'], JobStatus.FINISHED, schema=test_schema)
+    update_job_status(jobs[1]['id'], JobStatus.RUNNING, schema=test_schema)
+    # jobs[2] stays SUBMITTED
+
+    # Recon - should be ACTIVE (not all finished)
+    result = recon_batch(batch_id, schema=test_schema)
+    assert result == BatchStatus.ACTIVE
