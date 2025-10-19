@@ -502,3 +502,208 @@ def test_step_context_manager_manual_start(test_schema, mock_context):
     # Should auto-complete
     last_run = get_last_step_run(step_id)
     assert last_run['status'] == StepStatus.COMPLETED
+
+
+# ============================================================================
+# Tests - Negative Test Coverage (Exception Paths)
+# ============================================================================
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_start_already_executed_without_force(test_schema, mock_context):
+    """Test that start raises error when step already executed without force flag"""
+    cycle_id = register_cycle('test_cycle_start_error')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # First execution
+    step1 = Step(context)
+    step1.complete()
+
+    # Second execution - manually set executed flag and try to start without force
+    step2 = Step(context)
+    assert step2.executed is True
+
+    # Try to call start() without force - should raise StepError (Line 100)
+    with pytest.raises(StepError, match="Cannot execute step"):
+        step2.start(force=False)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_start_database_failure(test_schema, mock_context, monkeypatch):
+    """Test that start handles database failure when creating step run"""
+    cycle_id = register_cycle('test_cycle_start_db_fail')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # First complete a step
+    step1 = Step(context)
+    step1.complete()
+
+    # Mock create_step_run to fail
+    from helpers import database as db
+    original_create = db.create_step_run
+
+    def failing_create(*args, **kwargs):
+        raise Exception("Database connection lost")
+
+    monkeypatch.setattr(db, 'create_step_run', failing_create)
+
+    # Create a new step that hasn't been executed
+    step_id_2 = get_or_create_step(stage_id, 2, 'Process Data')
+    context.step_id = step_id_2
+
+    # This should fail during __init__ -> start() (Lines 117-118)
+    with pytest.raises(StepError, match="Failed to start step run"):
+        step2 = Step(context)
+
+    # Restore
+    monkeypatch.setattr(db, 'create_step_run', original_create)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_fail_database_update_failure(test_schema, mock_context, monkeypatch, capsys):
+    """Test that fail handles database update failure gracefully"""
+    cycle_id = register_cycle('test_cycle_fail_db_error')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    step = Step(context)
+
+    # Mock update_step_run to fail
+    from helpers import database as db
+    original_update = db.update_step_run
+
+    def failing_update(*args, **kwargs):
+        raise Exception("Database write failed")
+
+    monkeypatch.setattr(db, 'update_step_run', failing_update)
+
+    # Call fail - should catch exception and print error (Lines 241-242)
+    step.fail("Test error message")
+
+    # Restore
+    monkeypatch.setattr(db, 'update_step_run', original_update)
+
+    # Verify error message was printed
+    captured = capsys.readouterr()
+    assert "Failed to update step status" in captured.out
+    assert "Database write failed" in captured.out
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_skip_database_update_failure(test_schema, mock_context, monkeypatch, capsys):
+    """Test that skip handles database update failure gracefully"""
+    cycle_id = register_cycle('test_cycle_skip_db_error')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    step = Step(context)
+
+    # Mock update_step_run to fail
+    from helpers import database as db
+    original_update = db.update_step_run
+
+    def failing_update(*args, **kwargs):
+        raise Exception("Database write failed")
+
+    monkeypatch.setattr(db, 'update_step_run', failing_update)
+
+    # Call skip - should catch exception and print error (Lines 267-268)
+    step.skip("Skipping for test")
+
+    # Restore
+    monkeypatch.setattr(db, 'update_step_run', original_update)
+
+    # Verify error message was printed
+    captured = capsys.readouterr()
+    assert "Failed to skip step" in captured.out
+    assert "Database write failed" in captured.out
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_context_manager_entry_without_run_id(test_schema, mock_context):
+    """Test Step context manager __enter__ starts step when run_id is None"""
+    cycle_id = register_cycle('test_cycle_ctx_entry')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # First execution
+    step1 = Step(context)
+    step1.complete()
+
+    # Second execution - step is already executed, so __init__ won't auto-start
+    step2 = Step(context)
+    assert step2.executed is True
+    assert step2.run_id is None  # Not auto-started
+
+    # Using context manager should trigger start in __enter__ (Line 285)
+    # But since executed=True, it will fail
+    with pytest.raises(StepError, match="Cannot execute step"):
+        with step2 as s:
+            pass
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_context_manager_exit_no_exception_with_run_id(test_schema, mock_context):
+    """Test Step context manager __exit__ complete path when no exception"""
+    cycle_id = register_cycle('test_cycle_ctx_exit_ok')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # Use context manager - should auto-complete on success (Lines 293-294)
+    with Step(context) as step:
+        step.log("Processing data")
+        assert step.run_id is not None
+
+    # Verify step was completed
+    last_run = get_last_step_run(step_id)
+    assert last_run['status'] == StepStatus.COMPLETED
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_step_context_manager_exit_with_exception_and_run_id(test_schema, mock_context):
+    """Test Step context manager __exit__ fail path when exception occurs"""
+    cycle_id = register_cycle('test_cycle_ctx_exit_fail')
+    stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
+    step_id = get_or_create_step(stage_id, 1, 'Load Data')
+
+    context = mock_context()
+    context.step_id = step_id
+
+    # Use context manager with exception (Lines 297-298)
+    try:
+        with Step(context) as step:
+            assert step.run_id is not None
+            raise ValueError("Intentional test error")
+    except ValueError:
+        pass  # Expected - exception is re-raised (Line 301)
+
+    # Verify step was failed
+    last_run = get_last_step_run(step_id)
+    assert last_run['status'] == StepStatus.FAILED
+    assert "Intentional test error" in last_run['error_message']
