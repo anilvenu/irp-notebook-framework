@@ -159,7 +159,7 @@ def get_stages_and_steps(notebooks_dir=None) -> List[dict]:
     
     # Default to template notebooks directory
     if notebooks_dir is None:
-        notebooks_dir = TEMPLATE_PATH / "notebooks"
+        notebooks_dir = TEMPLATE_PATH / "notebooks" # pragma: no cover
     
     if not notebooks_dir.exists():
         raise Exception(f"Template notebooks directory {notebooks_dir} missing")
@@ -172,7 +172,7 @@ def get_stages_and_steps(notebooks_dir=None) -> List[dict]:
         # Parse stage info
         match = re.match(STAGE_PATTERN, stage_dir.name)
         if not match:
-            continue
+            continue # pragma: no cover
         
         stage_num = int(match.group(1))
         stage_name = match.group(2)
@@ -184,7 +184,7 @@ def get_stages_and_steps(notebooks_dir=None) -> List[dict]:
             # Parse step info
             match = re.match(NOTEBOOK_PATTERN, step_file.name)
             if not match:
-                continue
+                continue # pragma: no cover
             step_num = int(match.group(1))
             step_name = match.group(2)
             
@@ -227,7 +227,7 @@ def _register_stages_and_steps(cycle_id: int, cycle_dir: Path, apply=False) -> i
         # Parse stage info
         match = re.match(STAGE_PATTERN, stage_dir.name)
         if not match:
-            continue
+            continue # pragma: no cover
         
         stage_num = int(match.group(1))
         stage_name = match.group(2)
@@ -245,7 +245,7 @@ def _register_stages_and_steps(cycle_id: int, cycle_dir: Path, apply=False) -> i
             # Parse step info
             match = re.match(NOTEBOOK_PATTERN, step_file.name)
             if not match:
-                continue
+                continue # pragma: no cover
             step_num = int(match.group(1))
             step_name = match.group(2)
             

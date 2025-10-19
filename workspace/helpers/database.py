@@ -828,8 +828,8 @@ def test_connection(schema: str = 'public') -> bool:
             _set_search_path(conn, schema)
             conn.execute(text("SELECT 1"))
         return True
-    except:
-        return False # pragma: no cover
+    except: 
+        return False 
 
 
 def execute_query(query: str, params: tuple = None, schema: str = None) -> pd.DataFrame:
@@ -1317,7 +1317,7 @@ def delete_cycle(cycle_id: int) -> bool:
         DELETE FROM irp_cycle
         WHERE id = %s
     """
-    rows = execute_command(query, (cycle_id))
+    rows = execute_command(query, (cycle_id,)) # It needs to be a tuple
     return rows > 0
 
 
