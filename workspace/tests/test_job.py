@@ -27,11 +27,11 @@ from helpers.job import (
     update_job_status,
     get_job_config,
     create_job,  # CRUD function - takes job_configuration_id
-    create_job_with_config_atomically,  # Atomic wrapper - takes job_configuration_data
+    create_job_with_config,  # Atomic wrapper - takes job_configuration_data
     skip_job,
     submit_job,
     track_job_status,
-    resubmit_job_atomically as resubmit_job,
+    resubmit_job as resubmit_job,
     JobError
 )
 from helpers.constants import JobStatus, ConfigurationStatus
@@ -127,7 +127,7 @@ def test_update_job_status(test_schema):
     """Test updating job status"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_update_status')
 
-    job_id = create_job_with_config_atomically(
+    job_id = create_job_with_config(
         batch_id, config_id,
         job_configuration_data={'test': 'data'},
         schema=test_schema
@@ -159,7 +159,7 @@ def test_create_job_with_new_config(test_schema):
     # Create job with new configuration
     job_config_data = {'param_a': 'value_a', 'param_b': 123}
 
-    job_id = create_job_with_config_atomically(
+    job_id = create_job_with_config(
         batch_id=batch_id,
         configuration_id=config_id,
         job_configuration_data=job_config_data,
@@ -183,7 +183,7 @@ def test_create_job_with_existing_config(test_schema):
 
     # Create first job with new config
     job_config_data = {'param': 'value'}
-    job1_id = create_job_with_config_atomically(
+    job1_id = create_job_with_config(
         batch_id=batch_id,
         configuration_id=config_id,
         job_configuration_data=job_config_data,
@@ -221,13 +221,13 @@ def test_create_job_validation_neither_param(test_schema):
 @pytest.mark.database
 @pytest.mark.unit
 def test_create_job_validation_both_params(test_schema):
-    """Test create_job_with_config_atomically - requires job_configuration_data"""
+    """Test create_job_with_config - requires job_configuration_data"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_validation_both')
 
-    # create_job_with_config_atomically() requires job_configuration_data parameter
+    # create_job_with_config() requires job_configuration_data parameter
     # Calling it without will cause TypeError (missing required argument)
     with pytest.raises(TypeError):
-        create_job_with_config_atomically(
+        create_job_with_config(
             batch_id=batch_id,
             configuration_id=config_id,
             schema=test_schema
@@ -244,7 +244,7 @@ def test_skip_job(test_schema):
     """Test skipping a job"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_skip')
 
-    job_id = create_job_with_config_atomically(
+    job_id = create_job_with_config(
         batch_id, config_id,
         job_configuration_data={'test': 'data'},
         schema=test_schema
@@ -272,7 +272,7 @@ def test_submit_job(test_schema):
     """Test submitting a job"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_submit')
 
-    job_id = create_job_with_config_atomically(
+    job_id = create_job_with_config(
         batch_id, config_id,
         job_configuration_data={'test': 'data'},
         schema=test_schema
@@ -299,7 +299,7 @@ def test_submit_job_force_resubmit(test_schema):
     """Test force resubmitting a job"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_force_submit')
 
-    job_id = create_job_with_config_atomically(
+    job_id = create_job_with_config(
         batch_id, config_id,
         job_configuration_data={'test': 'data'},
         schema=test_schema
@@ -329,7 +329,7 @@ def test_track_job_status(test_schema):
     """Test tracking job status"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_track')
 
-    job_id = create_job_with_config_atomically(
+    job_id = create_job_with_config(
         batch_id, config_id,
         job_configuration_data={'test': 'data'},
         schema=test_schema
@@ -369,7 +369,7 @@ def test_resubmit_job_without_override(test_schema):
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_no_override')
 
     # Create and submit original job
-    original_job_id = create_job_with_config_atomically(
+    original_job_id = create_job_with_config(
         batch_id, config_id,
         job_configuration_data={'original': 'config'},
         schema=test_schema
@@ -402,7 +402,7 @@ def test_resubmit_job_with_override(test_schema):
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_override')
 
     # Create original job
-    original_job_id = create_job_with_config_atomically(
+    original_job_id = create_job_with_config(
         batch_id, config_id,
         job_configuration_data={'original': 'config'},
         schema=test_schema
@@ -466,7 +466,7 @@ def test_job_error_not_found(test_schema):
 def test_job_error_invalid_status(test_schema):
     """Test error handling for invalid status"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_error')
-    job_id = create_job_with_config_atomically(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
+    job_id = create_job_with_config(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
 
     with pytest.raises(JobError):
         update_job_status(job_id, 'INVALID_STATUS', schema=test_schema)
@@ -477,7 +477,7 @@ def test_job_error_invalid_status(test_schema):
 def test_job_error_track_without_submission(test_schema):
     """Test error handling for tracking unsubmitted job"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_track_error')
-    job_id = create_job_with_config_atomically(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
+    job_id = create_job_with_config(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
 
     with pytest.raises(JobError):
         track_job_status(job_id, schema=test_schema)
@@ -488,7 +488,7 @@ def test_job_error_track_without_submission(test_schema):
 def test_job_error_resubmit_override_no_reason(test_schema):
     """Test error handling for resubmit with override but no reason"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_error')
-    job_id = create_job_with_config_atomically(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
+    job_id = create_job_with_config(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
 
     with pytest.raises(JobError):
         resubmit_job(
@@ -682,7 +682,7 @@ def test_read_job_json_parsing_submission_request(test_schema):
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_json_parse')
 
     # Create and submit job
-    job_id = create_job_with_config_atomically(
+    job_id = create_job_with_config(
         batch_id, config_id,
         job_configuration_data={'test': 'data'},
         schema=test_schema
@@ -710,10 +710,10 @@ def test_get_job_config_invalid_job_id(test_schema):
 @pytest.mark.database
 @pytest.mark.integration
 def test_create_job_invalid_batch_id_validation(test_schema):
-    """Test create_job_with_config_atomically() validates batch_id"""
+    """Test create_job_with_config() validates batch_id"""
     # Test with batch_id = 0
     with pytest.raises(JobError) as exc_info:
-        create_job_with_config_atomically(
+        create_job_with_config(
             batch_id=0,
             configuration_id=1,
             job_configuration_data={'test': 'data'},
@@ -725,9 +725,9 @@ def test_create_job_invalid_batch_id_validation(test_schema):
 @pytest.mark.database
 @pytest.mark.integration
 def test_create_job_invalid_configuration_id(test_schema):
-    """Test create_job_with_config_atomically() validates configuration_id"""
+    """Test create_job_with_config() validates configuration_id"""
     with pytest.raises(JobError) as exc_info:
-        create_job_with_config_atomically(
+        create_job_with_config(
             batch_id=1,
             configuration_id=-1,
             job_configuration_data={'test': 'data'},

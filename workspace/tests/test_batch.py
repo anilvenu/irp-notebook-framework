@@ -31,7 +31,7 @@ from helpers.batch import (
     recon_batch,
     BatchError
 )
-from helpers.job import create_job_with_config_atomically as create_job, update_job_status, skip_job
+from helpers.job import create_job_with_config as create_job, update_job_status, skip_job
 from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus
 
 

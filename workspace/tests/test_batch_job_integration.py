@@ -31,7 +31,7 @@ from helpers.batch import (
 from helpers.job import (
     submit_job,
     track_job_status,
-    resubmit_job_atomically as resubmit_job,
+    resubmit_job,
     update_job_status,
     read_job,
     skip_job,

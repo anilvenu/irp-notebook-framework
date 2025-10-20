@@ -331,7 +331,7 @@ def test_transaction_rollback_batch_creation_on_error(test_schema):
 @pytest.mark.integration
 def test_transaction_atomic_job_resubmission(test_schema):
     """Test that job resubmission (create new job + skip old job) is atomic"""
-    from helpers.job import create_job_with_config_atomically, resubmit_job_atomically, read_job
+    from helpers.job import create_job_with_config, resubmit_job, read_job
     from helpers.constants import ConfigurationStatus
     import json
 
@@ -371,7 +371,7 @@ def test_transaction_atomic_job_resubmission(test_schema):
 
     # Create original job
     job_config_data = {'original': 'config'}
-    original_job_id = create_job_with_config_atomically(
+    original_job_id = create_job_with_config(
         batch_id=batch_id,
         configuration_id=config_id,
         job_configuration_data=job_config_data,
@@ -380,7 +380,7 @@ def test_transaction_atomic_job_resubmission(test_schema):
 
     # Resubmit with override
     override_config = {'overridden': 'config', 'reason': 'testing'}
-    new_job_id = resubmit_job_atomically(
+    new_job_id = resubmit_job(
         job_id=original_job_id,
         job_configuration_data=override_config,
         override_reason='Testing transaction atomicity',
@@ -401,7 +401,7 @@ def test_transaction_atomic_job_resubmission(test_schema):
 @pytest.mark.integration
 def test_transaction_create_job_with_new_configuration(test_schema):
     """Test that creating job with new configuration is atomic"""
-    from helpers.job import create_job_with_config_atomically
+    from helpers.job import create_job_with_config
     from helpers.constants import ConfigurationStatus
     import json
 
@@ -454,7 +454,7 @@ def test_transaction_create_job_with_new_configuration(test_schema):
 
     # Create job with new configuration (should be atomic)
     job_config_data = {'job_specific': 'config'}
-    job_id = create_job_with_config_atomically(
+    job_id = create_job_with_config(
         batch_id=batch_id,
         configuration_id=config_id,
         job_configuration_data=job_config_data,

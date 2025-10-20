@@ -431,7 +431,7 @@ def get_job_config(job_id: int, schema: str = 'public') -> Dict[str, Any]:
 # JOB WORKFLOW OPERATIONS (Layer 3)
 # ============================================================================
 
-def create_job_with_config_atomically(
+def create_job_with_config(
     batch_id: int,
     configuration_id: int,
     job_configuration_data: Dict[str, Any],
@@ -706,7 +706,7 @@ def track_job_status(
 # JOB RESUBMISSION (Layer 3)
 # ============================================================================
 
-def resubmit_job_atomically(
+def resubmit_job(
     job_id: int,
     job_configuration_data: Optional[Dict[str, Any]] = None,
     override_reason: Optional[str] = None,
