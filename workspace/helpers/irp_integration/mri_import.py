@@ -1,4 +1,5 @@
 from .client import Client
+from .constants import CREATE_AWS_BUCKET, CREATE_MAPPING, EXECUTE_IMPORT
 import boto3, base64, requests, json, os
 
 class MRIImportManager:
@@ -6,7 +7,7 @@ class MRIImportManager:
         self.client = client
 
     def create_aws_bucket(self) -> requests.Response:
-        return self.client.request('POST', '/riskmodeler/v1/storage')
+        return self.client.request('POST', CREATE_AWS_BUCKET)
     
     def get_file_credentials(self, bucket_url: str, filename: str, filesize: int, type: str) -> dict:
         data = {
@@ -62,7 +63,7 @@ class MRIImportManager:
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
 
-        return self.client.request('POST', f"/riskmodeler/v1/imports/createmapping/{bucket_id}", json=data)    
+        return self.client.request('POST', CREATE_MAPPING.format(bucket_id=bucket_id), json=data)    
     
     def execute_mri_import(self, edm_name: str, portfolio_id: int, bucket_id: int, accounts_file_id: int, locations_file_id: int, mapping_file_id: int):
         data = {
@@ -79,7 +80,7 @@ class MRIImportManager:
             "appendLocations": False
         }
         
-        response = self.client.execute_workflow('POST', '/riskmodeler/v1/imports', json=data)
+        response = self.client.execute_workflow('POST', EXECUTE_IMPORT, json=data)
         return response.json()
     
     def get_file_size_kb(self, file_path: str):

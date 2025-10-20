@@ -1,4 +1,5 @@
 from .client import Client
+from .constants import GET_CURRENCIES, GET_TAGS, CREATE_TAG
 
 class ReferenceDataManager:
 
@@ -10,7 +11,7 @@ class ReferenceDataManager:
             "fields": "code,name",
             "limit": 1000
         }
-        response = self.client.request('GET', '/riskmodeler/v1/domains/Client/tablespace/UserConfig/entities/currency/values', params=params)
+        response = self.client.request('GET', GET_CURRENCIES, params=params)
         return response.json()
     
     def get_tag_by_name(self, tag_name: str) -> dict:
@@ -18,12 +19,12 @@ class ReferenceDataManager:
             "isActive": True,
             "filter": f"TAGNAME = '{tag_name}'"
         }
-        response = self.client.request('GET', '/data-store/referencedata/v1/tags', params=params)
+        response = self.client.request('GET', GET_TAGS, params=params)
         return response.json()
     
     def create_tag(self, tag_name: str):
         data = {"tagName": tag_name}
-        response = self.client.request('POST', '/data-store/referencedata/v1/tags', json=data)
+        response = self.client.request('POST', CREATE_TAG, json=data)
         return {"id": response.headers['location'].split('/')[-1]}
     
     def get_tag_ids_from_tag_names(self, tag_names: list) -> list:

@@ -1,4 +1,5 @@
 from .client import Client
+from .constants import GET_TREATIES, CREATE_TREATY, ASSIGN_TREATY_LOBS, GET_TREATY_TYPES, GET_TREATY_ATTACHMENT_BASES, GET_TREATY_ATTACHMENT_LEVELS
 
 class TreatyManager:
 
@@ -10,7 +11,7 @@ class TreatyManager:
             "datasource": edm_name,
             "limit": 1000
         }
-        response = self.client.request('GET', '/riskmodeler/v1/treaties', params=params)
+        response = self.client.request('GET', GET_TREATIES, params=params)
         return response.json()
     
     def get_treaty_types_by_edm(self, edm_name: str) -> dict:
@@ -19,7 +20,7 @@ class TreatyManager:
             "datasource": edm_name,
             "limit": 1000
         }
-        response = self.client.request('GET', '/riskmodeler/v1/domains/RMS/tablespace/System/entities/TreatyType/values', params=params)
+        response = self.client.request('GET', GET_TREATY_TYPES, params=params)
         return response.json()
     
     def get_treaty_attachment_bases_by_edm(self, edm_name: str) -> dict:
@@ -28,7 +29,7 @@ class TreatyManager:
             "datasource": edm_name,
             "limit": 1000
         }
-        response = self.client.request('GET', '/riskmodeler/v1/domains/RMS/tablespace/System/entities/AttachBasis/values', params=params)
+        response = self.client.request('GET', GET_TREATY_ATTACHMENT_BASES, params=params)
         return response.json()
 
     def get_treaty_attachment_levels_by_edm(self, edm_name: str) -> dict:
@@ -37,12 +38,12 @@ class TreatyManager:
             "datasource": edm_name,
             "limit": 1000
         }
-        response = self.client.request('GET', '/riskmodeler/v1/domains/RMS/tablespace/System/entities/AttachLevel/values', params=params)
+        response = self.client.request('GET', GET_TREATY_ATTACHMENT_LEVELS, params=params)
         return response.json()
 
     def create_treaty(self, edm_name: str, treaty_data: dict) -> dict:
         params = {"datasource": edm_name}
-        response = self.client.request('POST', '/riskmodeler/v1/treaties', params=params, json=treaty_data)
+        response = self.client.request('POST', CREATE_TREATY, params=params, json=treaty_data)
         return {'id': response.headers['location'].split('/')[-1]}
     
     def assign_lobs(self, edm_name: str, treaty_id: int, lob_ids: list) -> dict:
@@ -56,5 +57,5 @@ class TreatyManager:
                 "path": f"/{treaty_id}/lob"
             }
             data.append(item)
-        response = self.client.request('POST', '/riskmodeler/v1/treaties/lob/batch', params=params, json=data)
+        response = self.client.request('POST', ASSIGN_TREATY_LOBS, params=params, json=data)
         return response.json()

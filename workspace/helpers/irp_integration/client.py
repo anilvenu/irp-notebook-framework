@@ -1,6 +1,7 @@
 import requests, time, os
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from .constants import GET_WORKFLOWS
 
 class Client:
 
@@ -92,7 +93,7 @@ class Client:
         while True:
             print(f"Polling batch workflow ids: {','.join(str(item) for item in workflow_ids)}")
             params = {'ids': ','.join(str(item) for item in workflow_ids)}
-            response = self.request('GET', f"/riskmodeler/v1/workflows", params=params)
+            response = self.request('GET', GET_WORKFLOWS, params=params)
 
             all_completed = True
             for workflow in response.json().get('workflows', []):
@@ -108,7 +109,7 @@ class Client:
                 raise TimeoutError(f"Batch workflows did not complete within {timeout} seconds.")
             time.sleep(interval)
 
-    def execute_workflow(self, method, path, *, params=None, json=None, headers=None, timeout=None, stream=False) -> requests.Response:
+    def execute_workflow(self, method, path, *, params=None, json=None, headers={}, timeout=None, stream=False) -> requests.Response:
         print("Submitting workflow request...")
         response = self.request(method, path, params=params, json=json, headers=headers, timeout=timeout, stream=stream)
         if response.status_code not in (201,202):
