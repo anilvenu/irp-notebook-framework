@@ -57,3 +57,6 @@ htmlcov/
 # Build
 build/
 dist/
+
+# Claude
+CLAUDE.md
