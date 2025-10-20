@@ -21,7 +21,7 @@ INSERT INTO irp_job_status_rule (skipped, status, report_status, age_calculation
 (FALSE, 'RUNNING', 'ACTIVE', 'now(UTC) - submitted_ts', 'Track Batch', FALSE),
 (FALSE, 'CANCEL_REQUESTED', 'ACTIVE', 'now(UTC) - submitted_ts', 'Track Batch', FALSE),
 (FALSE, 'CANCELLING', 'ACTIVE', 'now(UTC) - submitted_ts', 'Track Batch', FALSE),
-(FALSE, 'FINISHED', 'FINISHED', 'completed_ts - submitted_ts', 'Recon Batch', TRUE),
+(FALSE, 'FINISHED', 'FINISHED', 'completed_ts - submitted_ts', '', TRUE),
 (FALSE, 'FAILED', 'FAILED', 'completed_ts - submitted_ts', 'Resubmit OR Skip after Manual Operation on Moody''s', TRUE),
 (FALSE, 'CANCELLED', 'CANCELLED', 'completed_ts - submitted_ts', 'Skip Configuration OR Resubmit', TRUE),
 (FALSE, 'ERROR', 'ERROR', 'updated_ts - created_ts', 'Resubmit OR Skip after Manual Operation on Moody''s', TRUE),
