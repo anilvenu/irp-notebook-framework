@@ -8,7 +8,7 @@ An interactive HTML viewer for batch job data from the IRP Notebook Framework.
 ./demo/run_generator.sh
 ```
 
-Open `demo/demo.html` in your browser to view the interactive batch viewer!
+Open `index.html` in your browser to view the interactive batch viewer!
 
 ## Files
 
@@ -16,10 +16,6 @@ Open `demo/demo.html` in your browser to view the interactive batch viewer!
 - **run_generator.sh** - Runs the generator with proper environment
 - **CSV files** - Test data (cycles, stages, steps, batches, jobs, etc.)
 - **demo.html** - Generated HTML viewer (open in browser)
-
-## Test Scenarios
-
-8 batch scenarios with different job states (101-108). Default: Batch 102 (mixed statuses).
 
 ## Database Setup
 

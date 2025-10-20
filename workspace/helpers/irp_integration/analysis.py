@@ -1,5 +1,6 @@
 import json
 from .client import Client
+from .constants import GET_MODEL_PROFILES, GET_ANALYSES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME, GET_PLATFORM_ANALYSES, ANALYZE_PORTFOLIO, CREATE_ANALYSIS_GROUP
 
 class AnalysisManager:
     def __init__(self, client: Client, reference_data_manager=None):
@@ -16,27 +17,27 @@ class AnalysisManager:
 
     def get_model_profiles_by_name(self, profile_names: list) -> dict:
         params = {'name': profile_names}
-        response = self.client.request('GET', '/analysis-settings/modelprofiles', params=params)
+        response = self.client.request('GET', GET_MODEL_PROFILES, params=params)
         return response.json()
 
     def get_analysis_by_id(self, analysis_id: int) -> dict:
         params = {"q": f"id={analysis_id}"}
-        response = self.client.request('GET', '/riskmodeler/v2/analyses', params=params)
+        response = self.client.request('GET', GET_ANALYSES, params=params)
         return response.json()
     
     def get_output_profile_by_name(self, profile_name: str) -> dict:
         params = {'name': profile_name}
-        response = self.client.request('GET', '/analysis-settings/outputprofiles', params=params)
+        response = self.client.request('GET', GET_OUTPUT_PROFILES, params=params)
         return response.json()
     
     def get_event_rate_scheme_by_name(self, scheme_name: str) -> dict:
         params = {'where': f"eventRateSchemeName=\"{scheme_name}\""}
-        response = self.client.request('GET', '/data-store/referencetables/eventratescheme', params=params)
+        response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
         return response.json()
     
     def get_analyses_by_ids(self, analysis_ids: list) -> dict:
         params = {'filter': f"appAnalysisId IN ({','.join(str(id) for id in analysis_ids)})"}
-        response = self.client.request('GET', '/platform/riskdata/v1/analyses', params=params)
+        response = self.client.request('GET', GET_PLATFORM_ANALYSES, params=params)
         return response.json()
 
     def submit_analysis_job(self, 
@@ -79,7 +80,7 @@ class AnalysisManager:
 
             print(json.dumps(data, indent=2))
 
-            response = self.client.request('POST', f"/riskmodeler/v2/portfolios/{portfolio_id}/process", json=data)
+            response = self.client.request('POST', ANALYZE_PORTFOLIO.format(portfolio_id=portfolio_id), json=data)
             return int(response.headers['location'].split('/')[-1])
         return -1
     
@@ -120,7 +121,7 @@ class AnalysisManager:
             "jobName": job_name
         }
 
-        response = self.client.execute_workflow('POST', f"/riskmodeler/v2/portfolios/{portfolio_id}/process", json=data)
+        response = self.client.execute_workflow('POST', ANALYZE_PORTFOLIO.format(portfolio_id=portfolio_id), json=data)
         return response.json()
     
     def execute_analysis(self, job_name: str, edm_name: str, portfolio_id: int, analysis_profile_name: str, output_profile_name: str, event_rate_scheme_name: str, treaty_ids: list) -> dict:
@@ -171,6 +172,6 @@ class AnalysisManager:
 
         print(json.dumps(data, indent=2))
 
-        response = self.client.execute_workflow('POST', '/riskmodeler/v2/analysis-groups', json=data)
+        response = self.client.execute_workflow('POST', CREATE_ANALYSIS_GROUP, json=data)
         return response.json()
         
