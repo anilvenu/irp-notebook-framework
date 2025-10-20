@@ -6,8 +6,9 @@ This is a high-level domain class for tracking step execution.
 """
 
 import pytest
-from helpers.step import Step, StepError
-from helpers.database import register_cycle, get_or_create_stage, get_or_create_step, get_last_step_run
+from helpers.step import Step, StepError, get_or_create_step, get_last_step_run
+from helpers.cycle import register_cycle
+from helpers.stage import get_or_create_stage
 from helpers.constants import StepStatus
 
 
@@ -548,13 +549,13 @@ def test_step_start_database_failure(test_schema, mock_context, monkeypatch):
     step1.complete()
 
     # Mock create_step_run to fail
-    from helpers import database as db
-    original_create = db.create_step_run
+    from helpers import step as step_module
+    original_create = step_module.create_step_run
 
     def failing_create(*args, **kwargs):
         raise Exception("Database connection lost")
 
-    monkeypatch.setattr(db, 'create_step_run', failing_create)
+    monkeypatch.setattr(step_module, 'create_step_run', failing_create)
 
     # Create a new step that hasn't been executed
     step_id_2 = get_or_create_step(stage_id, 2, 'Process Data')
@@ -565,7 +566,7 @@ def test_step_start_database_failure(test_schema, mock_context, monkeypatch):
         step2 = Step(context)
 
     # Restore
-    monkeypatch.setattr(db, 'create_step_run', original_create)
+    monkeypatch.setattr(step_module, 'create_step_run', original_create)
 
 
 @pytest.mark.database
@@ -582,19 +583,19 @@ def test_step_fail_database_update_failure(test_schema, mock_context, monkeypatc
     step = Step(context)
 
     # Mock update_step_run to fail
-    from helpers import database as db
-    original_update = db.update_step_run
+    from helpers import step as step_module
+    original_update = step_module.update_step_run
 
     def failing_update(*args, **kwargs):
         raise Exception("Database write failed")
 
-    monkeypatch.setattr(db, 'update_step_run', failing_update)
+    monkeypatch.setattr(step_module, 'update_step_run', failing_update)
 
     # Call fail - should catch exception and print error (Lines 241-242)
     step.fail("Test error message")
 
     # Restore
-    monkeypatch.setattr(db, 'update_step_run', original_update)
+    monkeypatch.setattr(step_module, 'update_step_run', original_update)
 
     # Verify error message was printed
     captured = capsys.readouterr()
@@ -616,19 +617,19 @@ def test_step_skip_database_update_failure(test_schema, mock_context, monkeypatc
     step = Step(context)
 
     # Mock update_step_run to fail
-    from helpers import database as db
-    original_update = db.update_step_run
+    from helpers import step as step_module
+    original_update = step_module.update_step_run
 
     def failing_update(*args, **kwargs):
         raise Exception("Database write failed")
 
-    monkeypatch.setattr(db, 'update_step_run', failing_update)
+    monkeypatch.setattr(step_module, 'update_step_run', failing_update)
 
     # Call skip - should catch exception and print error (Lines 267-268)
     step.skip("Skipping for test")
 
     # Restore
-    monkeypatch.setattr(db, 'update_step_run', original_update)
+    monkeypatch.setattr(step_module, 'update_step_run', original_update)
 
     # Verify error message was printed
     captured = capsys.readouterr()

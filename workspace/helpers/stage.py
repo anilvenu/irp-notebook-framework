@@ -4,6 +4,15 @@ Stage Management Operations
 Low-level database operations for managing IRP stages.
 Stages are part of the cycle → stage → step hierarchy.
 
+ARCHITECTURE:
+-------------
+Layer 2 (CRUD): get_or_create_stage, get_stage_by_id, list_stages_for_cycle
+
+TRANSACTION BEHAVIOR:
+--------------------
+- All CRUD functions (Layer 2) never manage transactions
+- They are safe to call within or outside transaction_context()
+
 All functions use the database schema from context (see db_context.py).
 
 Usage:
@@ -25,6 +34,12 @@ class StageError(Exception):
 def get_or_create_stage(cycle_id: int, stage_num: int, stage_name: str) -> int:
     """
     Get existing stage or create new one.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
 
     Stages are identified uniquely by (cycle_id, stage_num).
     If a stage exists with the given cycle_id and stage_num, returns its ID.
@@ -64,6 +79,12 @@ def get_stage_by_id(stage_id: int) -> Optional[dict]:
     """
     Get stage information by ID.
 
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
+
     Args:
         stage_id: ID of the stage
 
@@ -87,6 +108,12 @@ def get_stage_by_id(stage_id: int) -> Optional[dict]:
 def list_stages_for_cycle(cycle_id: int):
     """
     List all stages for a cycle.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
 
     Args:
         cycle_id: ID of the cycle

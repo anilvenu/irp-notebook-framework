@@ -1,5 +1,16 @@
 """
 IRP Notebook Framework - Configuration Management
+
+ARCHITECTURE:
+-------------
+Layer 2 (CRUD): read_configuration, create_configuration, update_configuration_status
+Layer 3 (Workflow): load_configuration_file (reads Excel + creates config)
+
+TRANSACTION BEHAVIOR:
+--------------------
+- All CRUD functions (Layer 2) never manage transactions
+- They are safe to call within or outside transaction_context()
+- load_configuration_file (Layer 3) performs multiple operations but does NOT use transaction
 """
 
 import json
@@ -140,10 +151,88 @@ def transform_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [config.copy()]
 
 
+# ============================================================================
+# CONFIGURATION CRUD OPERATIONS (Layer 2)
+# ============================================================================
+
+def create_configuration(
+    cycle_id: int,
+    configuration_file_name: str,
+    configuration_data: Dict[str, Any],
+    status: str = ConfigurationStatus.NEW,
+    file_last_updated_ts: Optional[datetime] = None,
+    schema: str = 'public'
+) -> int:
+    """
+    Create a new configuration record.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
+
+    Args:
+        cycle_id: Cycle ID to associate with this configuration
+        configuration_file_name: Path/name of configuration file
+        configuration_data: Configuration data dictionary
+        status: Initial status (default: NEW)
+        file_last_updated_ts: File last modified timestamp (default: now)
+        schema: Database schema to use (default: 'public')
+
+    Returns:
+        Configuration ID
+
+    Raises:
+        ConfigurationError: If creation fails
+    """
+    # Validate status
+    if status not in ConfigurationStatus.all():
+        raise ConfigurationError(f"Invalid status: {status}. Must be one of {ConfigurationStatus.all()}")
+
+    # Validate inputs
+    if not isinstance(cycle_id, int) or cycle_id <= 0:
+        raise ConfigurationError(f"Invalid cycle_id: {cycle_id}")
+
+    if not isinstance(configuration_file_name, str) or not configuration_file_name.strip():
+        raise ConfigurationError(f"Invalid configuration_file_name: {configuration_file_name}")
+
+    # Use current timestamp if not provided
+    if file_last_updated_ts is None:
+        raise ConfigurationError("file_last_updated_ts must be provided")
+
+    # Insert configuration record
+    try:
+        query = """
+            INSERT INTO irp_configuration
+            (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        config_id = execute_insert(
+            query,
+            (
+                cycle_id,
+                configuration_file_name,
+                json.dumps(configuration_data),
+                status,
+                file_last_updated_ts
+            ),
+            schema=schema
+        )
+        return config_id
+    except DatabaseError as e:
+        raise ConfigurationError(f"Failed to create configuration: {str(e)}")
+
 
 def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]:
     """
-    Read configuration by ID
+    Read configuration by ID.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
 
     Args:
         config_id: Configuration ID
@@ -171,14 +260,20 @@ def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]
 
     # Parse JSON data if it's a string
     if isinstance(config['configuration_data'], str):
-        config['configuration_data'] = json.loads(config['configuration_data'])
+        config['configuration_data'] = json.loads(config['configuration_data']) # pragma: no cover
 
     return config
 
 
 def update_configuration_status(config_id: int, status: str, schema: str = 'public') -> bool:
     """
-    Update configuration status
+    Update configuration status.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
 
     Args:
         config_id: Configuration ID

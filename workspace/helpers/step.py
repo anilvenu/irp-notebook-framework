@@ -1,11 +1,26 @@
 """
-IRP Notebook Framework - Step Execution Tracker
+IRP Notebook Framework - Step Operations
+
+This module provides CRUD operations for steps and step runs, and manages
+step execution lifecycle through the Step class.
+
+ARCHITECTURE:
+-------------
+Layer 2 (CRUD): get_or_create_step, get_step_info, get_last_step_run,
+                create_step_run, update_step_run
+Layer 3 (Workflow): Step class (manages step execution lifecycle)
+
+TRANSACTION BEHAVIOR:
+--------------------
+- All CRUD functions (Layer 2) never manage transactions
+- They are safe to call within or outside transaction_context()
+- The Step class (Layer 3) uses individual operations (no multi-operation transactions)
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 from .context import WorkContext
-from . import database as db
+from .database import execute_query, execute_insert, execute_scalar, execute_command
 from .constants import StepStatus, SYSTEM_USER
 
 
@@ -13,6 +28,192 @@ class StepError(Exception):
     """Custom exception for step execution errors"""
     pass
 
+
+# ============================================================================
+# STEP CRUD OPERATIONS (Layer 2)
+# ============================================================================
+
+def get_or_create_step(
+    stage_id: int,
+    step_num: int,
+    step_name: str,
+    notebook_path: str = None,
+) -> int:
+    """
+    Get existing step or create new one.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
+
+    Args:
+        stage_id: ID of the parent stage
+        step_num: Step number within the stage
+        step_name: Human-readable name for the step
+        notebook_path: Path to associated notebook (optional)
+
+    Returns:
+        Step ID (existing or newly created)
+    """
+    # Try to get existing
+    query = "SELECT id FROM irp_step WHERE stage_id = %s AND step_num = %s"
+    step_id = execute_scalar(query, (stage_id, step_num))
+
+    if step_id:
+        return step_id
+
+    # Create new
+    query = """
+        INSERT INTO irp_step (stage_id, step_num, step_name, notebook_path)
+        VALUES (%s, %s, %s, %s)
+    """
+    return execute_insert(query, (stage_id, step_num, step_name, notebook_path))
+
+
+def get_step_info(step_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Get step information.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
+
+    Args:
+        step_id: ID of the step
+
+    Returns:
+        Dictionary with step information or None if not found
+    """
+    query = """
+        SELECT
+            st.id, st.step_num, st.step_name, st.notebook_path,
+            sg.stage_num, sg.stage_name,
+            c.cycle_name, c.id as cycle_id
+        FROM irp_step st
+        INNER JOIN irp_stage sg ON st.stage_id = sg.id
+        INNER JOIN irp_cycle c ON sg.cycle_id = c.id
+        WHERE st.id = %s
+    """
+    df = execute_query(query, (step_id,))
+    return df.iloc[0].to_dict() if not df.empty else None
+
+
+# ============================================================================
+# STEP RUN CRUD OPERATIONS (Layer 2)
+# ============================================================================
+
+def get_last_step_run(step_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Get the most recent run for a step.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
+
+    Args:
+        step_id: ID of the step
+
+    Returns:
+        Dictionary with step run information or None if not found
+    """
+    query = """
+        SELECT id, run_num, status, started_ts, completed_ts,
+               started_by, error_message, output_data
+        FROM irp_step_run
+        WHERE step_id = %s
+        ORDER BY run_num DESC
+        LIMIT 1
+    """
+    df = execute_query(query, (step_id,))
+    return df.iloc[0].to_dict() if not df.empty else None
+
+
+def create_step_run(step_id: int, started_by: str) -> Tuple[int, int]:
+    """
+    Create new step run.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
+
+    Args:
+        step_id: ID of the step
+        started_by: User who started the run
+
+    Returns:
+        Tuple of (run_id, run_num)
+    """
+    # Get next run number
+    query = "SELECT COALESCE(MAX(run_num), 0) + 1 FROM irp_step_run WHERE step_id = %s"
+    run_num = execute_scalar(query, (step_id,))
+
+    # Create run
+    query = """
+        INSERT INTO irp_step_run (step_id, run_num, status, started_by)
+        VALUES (%s, %s, 'ACTIVE', %s)
+    """
+    run_id = execute_insert(query, (step_id, run_num, started_by))
+
+    return run_id, run_num
+
+
+def update_step_run(
+    run_id: int,
+    status: str,
+    error_message: str = None,
+    output_data: Dict = None
+) -> bool:
+    """
+    Update step run with completion status.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
+
+    Args:
+        run_id: ID of the step run
+        status: New status (ACTIVE, COMPLETED, FAILED, SKIPPED)
+        error_message: Error message if failed (optional)
+        output_data: Output data from step execution (optional)
+
+    Returns:
+        True if updated successfully, False otherwise
+    """
+    import json
+
+    query = """
+        UPDATE irp_step_run
+        SET status = %s,
+            completed_ts = CASE WHEN %s IN ('COMPLETED', 'FAILED', 'SKIPPED') THEN NOW() ELSE completed_ts END,
+            error_message = %s,
+            output_data = %s
+        WHERE id = %s
+    """
+
+    rows = execute_command(query, (
+        status,
+        status,
+        error_message,
+        json.dumps(output_data) if output_data else None,
+        run_id
+    ))
+
+    return rows > 0
+
+
+# ============================================================================
+# STEP EXECUTION TRACKER (Layer 3)
+# ============================================================================
 
 class Step:
     """
@@ -53,10 +254,10 @@ class Step:
         
         self.context = context
         self.step_id = context.step_id
-        
+
         # Get step info
-        self.step_info = db.get_step_info(self.step_id)
-        
+        self.step_info = get_step_info(self.step_id)
+
         # Check execution eligibility
         self.executed = False
         self.status_message = ""
@@ -74,9 +275,9 @@ class Step:
     
     def _executed(self):
         """Check if step can be executed based on current state"""
-        
+
         # Get last run
-        last_run = db.get_last_step_run(self.step_id)
+        last_run = get_last_step_run(self.step_id)
         
         if not last_run:
             # Never run before - OK to execute
@@ -101,7 +302,7 @@ class Step:
         
         try:
             # Create new step run
-            self.run_id, self.run_num = db.create_step_run(
+            self.run_id, self.run_num = create_step_run(
                 self.step_id,
                 SYSTEM_USER
             )
@@ -190,7 +391,7 @@ class Step:
             }
             
             # Update database
-            db.update_step_run(
+            update_step_run(
                 self.run_id,
                 StepStatus.COMPLETED,
                 output_data=final_output
@@ -224,7 +425,7 @@ class Step:
         
         try:
             # Update database
-            db.update_step_run(
+            update_step_run(
                 self.run_id,
                 StepStatus.FAILED,
                 error_message=error_message
@@ -255,8 +456,8 @@ class Step:
         
         try:
             output_data = {'skip_reason': reason} if reason else None
-            
-            db.update_step_run(
+
+            update_step_run(
                 self.run_id,
                 StepStatus.SKIPPED,
                 output_data=output_data
@@ -270,8 +471,8 @@ class Step:
     
     def get_last_output(self) -> Optional[Dict[str, Any]]:
         """Get output data from the last completed run"""
-        
-        last_run = db.get_last_step_run(self.step_id)
+
+        last_run = get_last_step_run(self.step_id)
         
         if not last_run or last_run['status'] != StepStatus.COMPLETED:
             return None

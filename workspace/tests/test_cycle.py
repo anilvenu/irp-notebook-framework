@@ -10,7 +10,10 @@ import tempfile
 import shutil
 from pathlib import Path
 from helpers import cycle
-from helpers.database import register_cycle, execute_insert, execute_command
+from helpers.cycle import register_cycle, get_cycle_by_name
+from helpers.stage import get_or_create_stage
+from helpers.step import get_or_create_step, create_step_run, update_step_run
+from helpers.database import execute_insert, execute_command, execute_query
 from helpers import constants
 
 
@@ -35,7 +38,6 @@ def test_delete_archived_cycles(test_schema):
     assert deleted_count == 2
 
     # Verify only cycle_3 remains
-    from helpers.database import get_cycle_by_name
     assert get_cycle_by_name('cycle_1') is None
     assert get_cycle_by_name('cycle_2') is None
     assert get_cycle_by_name('cycle_3') is not None
@@ -112,8 +114,6 @@ def test_get_cycle_status(test_schema):
 @pytest.mark.integration
 def test_get_cycle_progress(test_schema):
     """Test getting cycle progress"""
-    from helpers.database import get_or_create_stage, get_or_create_step
-
     # Create a cycle with stages and steps
     cycle_id = register_cycle('progress_cycle')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
@@ -131,8 +131,6 @@ def test_get_cycle_progress(test_schema):
 @pytest.mark.integration
 def test_get_step_history(test_schema):
     """Test getting step history"""
-    from helpers.database import get_or_create_stage, get_or_create_step, create_step_run, update_step_run
-
     # Create hierarchy
     cycle_id = register_cycle('history_cycle')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
@@ -157,8 +155,6 @@ def test_get_step_history(test_schema):
 @pytest.mark.integration
 def test_get_step_history_filtered_by_stage(test_schema):
     """Test getting step history filtered by stage number"""
-    from helpers.database import get_or_create_stage, get_or_create_step, create_step_run
-
     # Create hierarchy with multiple stages
     cycle_id = register_cycle('filter_cycle')
     stage_1 = get_or_create_stage(cycle_id, 1, 'Stage1')
@@ -217,12 +213,12 @@ def temp_cycle_dirs(monkeypatch):
     template_notebooks = template_path / "notebooks"
     template_notebooks.mkdir()
 
-    # Create a sample stage directory
-    stage_dir = template_notebooks / "1-Setup"
+    # Create a sample stage directory (must match STAGE_PATTERN: Stage_NN_Name)
+    stage_dir = template_notebooks / "Stage_01_Setup"
     stage_dir.mkdir()
 
-    # Create a sample notebook file
-    notebook_file = stage_dir / "1-Initialize.ipynb"
+    # Create a sample notebook file (must match NOTEBOOK_PATTERN: Step_NN_Name.ipynb)
+    notebook_file = stage_dir / "Step_01_Initialize.ipynb"
     notebook_file.write_text('{"cells": [], "metadata": {}}')
 
     # Monkeypatch the paths in cycle.py
@@ -261,7 +257,6 @@ def test_create_cycle_with_directories(test_schema, temp_cycle_dirs):
     assert notebooks_dir.exists()
 
     # Verify database record
-    from helpers.database import get_cycle_by_name
     db_cycle = get_cycle_by_name(cycle_name)
     assert db_cycle is not None
     assert db_cycle['cycle_name'] == cycle_name
@@ -285,7 +280,6 @@ def test_create_cycle_archives_previous(test_schema, temp_cycle_dirs):
     assert result2 is True
 
     # First cycle should be archived in database
-    from helpers.database import get_cycle_by_name
     q1_cycle = get_cycle_by_name(cycle_1)
     assert q1_cycle['status'] == constants.CycleStatus.ARCHIVED
 
@@ -308,7 +302,6 @@ def test_archive_cycle_by_name(test_schema, temp_cycle_dirs):
     cycle.create_cycle(cycle_name)
 
     # Verify database
-    from helpers.database import get_cycle_by_name
     db_cycle = get_cycle_by_name(cycle_name)
     assert db_cycle['status'] == constants.CycleStatus.ACTIVE
 
@@ -321,7 +314,6 @@ def test_archive_cycle_by_name(test_schema, temp_cycle_dirs):
     assert result is True
 
     # Verify database
-    from helpers.database import get_cycle_by_name
     db_cycle = get_cycle_by_name(cycle_name)
     assert db_cycle['status'] == constants.CycleStatus.ARCHIVED
 
@@ -355,14 +347,22 @@ def test_create_cycle_registers_stages_and_steps(test_schema, temp_cycle_dirs):
     result = cycle.create_cycle('Analysis-2024-Q1-test_registers-stages-and-steps')
     assert result is True
 
-    # Verify stages were registered
-    from helpers.database import get_cycle_by_name, execute_query
+    # Verify cycle was created in database
     db_cycle = get_cycle_by_name('Analysis-2024-Q1-test_registers-stages-and-steps')
+    assert db_cycle is not None
+    assert db_cycle['cycle_name'] == 'Analysis-2024-Q1-test_registers-stages-and-steps'
+    assert db_cycle['status'] == constants.CycleStatus.ACTIVE
 
+    # Verify stages were registered
     stages_df = execute_query(
         "SELECT * FROM irp_stage WHERE cycle_id = %s ORDER BY stage_num",
         (db_cycle['id'],)
     )
+    assert len(stages_df) == 1, "Expected 1 stage to be registered"
+    assert stages_df.iloc[0]['stage_num'] == 1
+    assert stages_df.iloc[0]['stage_name'] == 'Setup'
+
+    # Verify steps were registered
     steps_df = execute_query(
         """SELECT s.* FROM irp_step s
            INNER JOIN irp_stage st ON s.stage_id = st.id
@@ -370,7 +370,10 @@ def test_create_cycle_registers_stages_and_steps(test_schema, temp_cycle_dirs):
            ORDER BY s.step_num""",
         (db_cycle['id'],)
     )
-    # TODO: Once we figure out passing in files, assert stages and steps
+    assert len(steps_df) == 1, "Expected 1 step to be registered"
+    assert steps_df.iloc[0]['step_num'] == 1
+    assert steps_df.iloc[0]['step_name'] == 'Initialize'
+    assert 'Step_01_Initialize.ipynb' in steps_df.iloc[0]['notebook_path']
 
 
 # ==============================================================================
@@ -419,52 +422,99 @@ def test_get_stages_and_steps_missing_directory_error(test_schema):
     assert 'missing' in str(exc_info.value).lower()
 
 
-@pytest.mark.database
-@pytest.mark.integration
-def test_register_stages_and_steps_dry_run(test_schema):
-    """Test _register_stages_and_steps() in dry run mode (apply=False)"""
+@pytest.mark.unit
+def test_generate_stages_and_steps_success(test_schema):
+    """Test generate_stages_and_steps() parses directory structure correctly"""
     # Use test template directory
     test_template = Path('workspace/tests/files/_Template')
 
-    # Call in dry run mode (apply=False)
-    stage_count = cycle._register_stages_and_steps(
-        cycle_id=0,
-        cycle_dir=test_template,
-        apply=False
-    )
+    # Call generate function
+    stages_steps = cycle.generate_stages_and_steps(test_template)
 
-    # Should return count of stages
-    assert stage_count == 1  # One stage in test template
+    # Should return list of dicts with stage/step info
+    assert isinstance(stages_steps, list)
+    assert len(stages_steps) == 2  # Two steps in test template
 
-    # Verify no database records were created (dry run)
-    from helpers.database import execute_query
-    stages_df = execute_query("SELECT COUNT(*) as count FROM irp_stage")
-    # Should have 0 stages or only stages from other tests (not from cycle_id=0)
-    stages_with_cycle_0 = execute_query(
-        "SELECT COUNT(*) as count FROM irp_stage WHERE cycle_id = 0"
-    )
-    assert stages_with_cycle_0.iloc[0]['count'] == 0
+    # Verify first step
+    assert stages_steps[0]['stage_num'] == 1
+    assert stages_steps[0]['stage_name'] == 'Setup'
+    assert stages_steps[0]['step_num'] == 1
+    assert stages_steps[0]['step_name'] == 'Initialize'
+    assert 'Step_01_Initialize.ipynb' in stages_steps[0]['notebook_path']
 
 
 @pytest.mark.unit
-def test_register_stages_and_steps_no_notebooks_dir(test_schema):
-    """Test _register_stages_and_steps() returns 0 when notebooks dir missing"""
+def test_generate_stages_and_steps_missing_notebooks_dir(test_schema):
+    """Test generate_stages_and_steps() raises error when notebooks dir missing"""
+    from helpers.cycle import CycleError
+
     # Create temporary directory without 'notebooks' subdirectory
     temp_dir = Path(tempfile.mkdtemp())
 
     try:
-        # Call function with directory that has no notebooks folder
-        stage_count = cycle._register_stages_and_steps(
-            cycle_id=0,
-            cycle_dir=temp_dir,
-            apply=False
-        )
+        # Should raise CycleError
+        with pytest.raises(CycleError) as exc_info:
+            cycle.generate_stages_and_steps(temp_dir)
 
-        # Should return 0 (no stages)
-        assert stage_count == 0
+        assert 'Notebooks directory not found' in str(exc_info.value)
     finally:
         # Cleanup
         shutil.rmtree(temp_dir)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_register_stages_and_steps_success(test_schema):
+    """Test register_stages_and_steps() writes to database correctly"""
+    # Create a test cycle
+    cycle_id = register_cycle('test-register-stages-steps')
+
+    # Prepare test data (as would come from generate_stages_and_steps)
+    stages_steps = [
+        {
+            'stage_num': 1,
+            'stage_name': 'Setup',
+            'step_num': 1,
+            'step_name': 'Initialize',
+            'notebook_path': '/test/Step_01_Initialize.ipynb'
+        },
+        {
+            'stage_num': 1,
+            'stage_name': 'Setup',
+            'step_num': 2,
+            'step_name': 'Validate',
+            'notebook_path': '/test/Step_02_Validate.ipynb'
+        }
+    ]
+
+    # Register stages and steps
+    stage_count = cycle.register_stages_and_steps(cycle_id, stages_steps)
+
+    # Should return 1 (one unique stage)
+    assert stage_count == 1
+
+    # Verify stage was created in database
+    stages_df = execute_query(
+        "SELECT * FROM irp_stage WHERE cycle_id = %s",
+        (cycle_id,)
+    )
+    assert len(stages_df) == 1
+    assert stages_df.iloc[0]['stage_num'] == 1
+    assert stages_df.iloc[0]['stage_name'] == 'Setup'
+
+    # Verify steps were created in database
+    steps_df = execute_query(
+        """SELECT s.* FROM irp_step s
+           INNER JOIN irp_stage st ON s.stage_id = st.id
+           WHERE st.cycle_id = %s
+           ORDER BY s.step_num""",
+        (cycle_id,)
+    )
+    assert len(steps_df) == 2
+    assert steps_df.iloc[0]['step_num'] == 1
+    assert steps_df.iloc[0]['step_name'] == 'Initialize'
+    assert steps_df.iloc[1]['step_num'] == 2
+    assert steps_df.iloc[1]['step_name'] == 'Validate'
 
 
 # ==============================================================================
@@ -569,7 +619,6 @@ def test_archive_cycle_by_name_already_archived(test_schema, temp_cycle_dirs):
     assert result is True
 
     # Verify still archived
-    from helpers.database import get_cycle_by_name
     db_cycle = get_cycle_by_name(cycle_name)
     assert db_cycle['status'] == constants.CycleStatus.ARCHIVED
 
@@ -578,17 +627,16 @@ def test_archive_cycle_by_name_already_archived(test_schema, temp_cycle_dirs):
 @pytest.mark.integration
 def test_archive_cycle_by_name_exception_handling(test_schema, temp_cycle_dirs, monkeypatch):
     """Test archive_cycle_by_name() handles exceptions gracefully"""
-    from helpers import database as db
     cycle_name = 'Analysis-2025-Q1-exception-test'
 
     # Create cycle
     cycle.create_cycle(cycle_name)
 
-    # Mock archive_cycle to raise an exception
+    # Mock archive_cycle_crud to raise an exception
     def mock_archive_cycle(cycle_id):
         raise Exception("Database error during archive")
 
-    monkeypatch.setattr(db, 'archive_cycle', mock_archive_cycle)
+    monkeypatch.setattr(cycle, 'archive_cycle_crud', mock_archive_cycle)
 
     # Archive should catch exception and return False
     result = cycle.archive_cycle_by_name(cycle_name)

@@ -6,7 +6,9 @@ Automatically detects and manages workflow context from notebook path
 import re
 from pathlib import Path
 from typing import Optional
-from helpers import database as db
+from helpers.cycle import get_cycle_by_name, get_active_cycle, register_cycle
+from helpers.stage import get_or_create_stage
+from helpers.database import DatabaseError
 from helpers.constants import NOTEBOOK_PATTERN, STAGE_PATTERN, CycleStatus
 from helpers.notebook import get_current_notebook_path
 
@@ -102,49 +104,52 @@ class WorkContext:
     
     def _ensure_database_entries(self):
         """Ensure cycle, stage, and step exist in database"""
-        
+
+        # Import here to avoid circular dependency
+        from helpers.step import get_or_create_step
+
         try:
             # Get or create cycle
-            cycle = db.get_cycle_by_name(self.cycle_name)
-            
+            cycle = get_cycle_by_name(self.cycle_name)
+
             if not cycle:
                 # Check if there's an active cycle
-                active = db.get_active_cycle()
+                active = get_active_cycle()
                 if active and active['cycle_name'] != self.cycle_name:
                     raise WorkContextError(
                         f"Active cycle '{active['cycle_name']}' exists, but notebook is in '{self.cycle_name}'"
                     )
-                
+
                 # Create cycle
-                self.cycle_id = db.register_cycle(self.cycle_name)
+                self.cycle_id = register_cycle(self.cycle_name)
                 print(f"Created cycle: {self.cycle_name}")
             else:
                 self.cycle_id = cycle['id']
-                
+
                 # Verify cycle is active
                 if cycle['status'] != CycleStatus.ACTIVE:
                     raise WorkContextError(
                         f"Cycle '{self.cycle_name}' is {cycle['status']}, not active"
                     )
-            
+
             # Get or create stage
-            self.stage_id = db.get_or_create_stage(
+            self.stage_id = get_or_create_stage(
                 self.cycle_id,
                 self.stage_num,
                 self.stage_name
             )
-            
+
             # Get or create step
-            self.step_id = db.get_or_create_step(
+            self.step_id = get_or_create_step(
                 self.stage_id,
                 self.step_num,
                 self.step_name,
                 str(self.notebook_path)
             )
-            
+
             print(f"Database entries ready (step_id={self.step_id})")
-            
-        except db.DatabaseError as e:
+
+        except DatabaseError as e:
             raise WorkContextError(f"Database error: {str(e)}")
     
     

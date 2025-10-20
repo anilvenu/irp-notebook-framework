@@ -37,10 +37,10 @@ class JobError(Exception):
 
 
 # ============================================================================
-# PRIVATE FUNCTIONS
+# JOB CONFIGURATION CRUD OPERATIONS (Layer 2)
 # ============================================================================
 
-def _create_job_configuration(
+def create_job_configuration(
     batch_id: int,
     configuration_id: int,
     job_configuration_data: Dict[str, Any],
@@ -51,6 +51,12 @@ def _create_job_configuration(
 ) -> int:
     """
     Create job configuration record.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
 
     Args:
         batch_id: Batch ID
@@ -89,11 +95,11 @@ def _create_job_configuration(
             schema=schema
         )
         return job_config_id
-    except DatabaseError as e:
+    except DatabaseError as e:  # pragma: no cover
         raise JobError(f"Failed to create job configuration: {str(e)}") # pragma: no cover
 
 
-def _create_job(
+def create_job(
     batch_id: int,
     job_configuration_id: int,
     parent_job_id: Optional[int] = None,
@@ -101,6 +107,12 @@ def _create_job(
 ) -> int:
     """
     Create job record in INITIATED status.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
 
     Args:
         batch_id: Batch ID
@@ -134,8 +146,8 @@ def _create_job(
             schema=schema
         )
         return job_id
-    except DatabaseError as e:
-        raise JobError(f"Failed to create job: {str(e)}")
+    except DatabaseError as e: # pragma: no cover
+        raise JobError(f"Failed to create job: {str(e)}")   # pragma: no cover
 
 
 def _submit_job(job_id: int, job_config: Dict[str, Any]) -> Tuple[str, Dict, Dict]:
@@ -224,7 +236,7 @@ def _register_job_submission(
              json.dumps(request), json.dumps(response), job_id),
             schema=schema
         )
-    except DatabaseError as e:
+    except DatabaseError as e: # pragma: no cover
         raise JobError(f"Failed to register job submission: {str(e)}") # pragma: no cover
 
 
@@ -266,7 +278,7 @@ def _insert_tracking_log(
             schema=schema
         )
         return tracking_id
-    except DatabaseError as e:
+    except DatabaseError as e: # pragma: no cover
         raise JobError(f"Failed to insert tracking log: {str(e)}") # pragma: no cover
 
 
@@ -416,32 +428,36 @@ def get_job_config(job_id: int, schema: str = 'public') -> Dict[str, Any]:
 
 
 # ============================================================================
-# JOB CREATION
+# JOB WORKFLOW OPERATIONS (Layer 3)
 # ============================================================================
 
-def create_job(
+def create_job_with_config_atomically(
     batch_id: int,
     configuration_id: int,
-    job_configuration_id: Optional[int] = None,
-    job_configuration_data: Optional[Dict[str, Any]] = None,
+    job_configuration_data: Dict[str, Any],
     parent_job_id: Optional[int] = None,
     validate: bool = False,
     schema: str = 'public'
 ) -> int:
     """
-    Create a new job with either existing or new job configuration.
+    Create a new job with new job configuration atomically.
+
+    LAYER: 3 (Workflow)
+
+    TRANSACTION BEHAVIOR:
+        - Uses transaction_context() to ensure atomicity
+        - Both configuration and job are created in single transaction
+        - If either fails, both are rolled back
 
     Process:
-    - Requires exactly one of: job_configuration_id OR job_configuration_data
-    - If job_configuration_id: Reuse existing configuration
-    - If job_configuration_data: Create new configuration (with optional validation)
-    - Create job in INITIATED status
+    - Creates new job configuration
+    - Creates job in INITIATED status
+    - Both operations are atomic (all-or-nothing)
 
     Args:
         batch_id: Batch ID
         configuration_id: Master configuration ID
-        job_configuration_id: Reuse existing job config (mutually exclusive with job_configuration_data)
-        job_configuration_data: Create new job config (mutually exclusive with job_configuration_id)
+        job_configuration_data: Configuration data for this specific job
         parent_job_id: Parent job ID if this is a resubmission
         validate: Whether to validate configuration data against batch type
         schema: Database schema
@@ -450,16 +466,9 @@ def create_job(
         New job ID
 
     Raises:
-        JobError: If neither or both config parameters provided
         JobError: If validation fails (when validate=True)
+        JobError: If creation fails
     """
-    # Validate exactly one of job_configuration_id or job_configuration_data is provided
-    if (job_configuration_id is None) == (job_configuration_data is None):
-        raise JobError(
-            "Must provide exactly one of: job_configuration_id or job_configuration_data. "
-            f"Got job_configuration_id={job_configuration_id}, job_configuration_data={'provided' if job_configuration_data else 'None'}"
-        )
-
     # Validate inputs
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise JobError(f"Invalid batch_id: {batch_id}")
@@ -467,26 +476,21 @@ def create_job(
     if not isinstance(configuration_id, int) or configuration_id <= 0:
         raise JobError(f"Invalid configuration_id: {configuration_id}")
 
-    # Determine which mode we're in
-    if job_configuration_id is not None:
-        # Mode 1: Reuse existing configuration
-        if not isinstance(job_configuration_id, int) or job_configuration_id <= 0:
-            raise JobError(f"Invalid job_configuration_id: {job_configuration_id}")
+    if validate:
+        # TODO: Implement validation against batch type
+        # For now, always pass validation
+        # In future: get batch_type from batch_id, call validator
+        pass
 
-        config_id = job_configuration_id
+    # Determine if this is an override
+    overridden = parent_job_id is not None
 
-    else:
-        # Mode 2: Create new configuration
-        if validate:
-            # TODO: Implement validation against batch type
-            # For now, always pass validation
-            # In future: get batch_type from batch_id, call validator
-            pass
+    # Use transaction to ensure atomicity
+    # If job creation fails, configuration is rolled back (no orphaned config)
+    from helpers.database import transaction_context
 
-        # Determine if this is an override
-        overridden = parent_job_id is not None
-
-        config_id = _create_job_configuration(
+    with transaction_context(schema=schema):
+        config_id = create_job_configuration(
             batch_id=batch_id,
             configuration_id=configuration_id,
             job_configuration_data=job_configuration_data,
@@ -496,10 +500,11 @@ def create_job(
             schema=schema
         )
 
-    # Create job
-    job_id = _create_job(batch_id, config_id, parent_job_id, schema=schema)
+        # Create job
+        job_id = create_job(batch_id, config_id, parent_job_id, schema=schema)
 
-    return job_id
+        # Both committed together at end of context
+        return job_id
 
 
 def skip_job(job_id: int, schema: str = 'public') -> None:
@@ -698,17 +703,25 @@ def track_job_status(
 
 
 # ============================================================================
-# JOB RESUBMISSION
+# JOB RESUBMISSION (Layer 3)
 # ============================================================================
 
-def resubmit_job(
+def resubmit_job_atomically(
     job_id: int,
     job_configuration_data: Optional[Dict[str, Any]] = None,
     override_reason: Optional[str] = None,
     schema: str = 'public'
 ) -> int:
     """
-    Resubmit a job with optional configuration override.
+    Resubmit a job with optional configuration override, atomically.
+
+    LAYER: 3 (Workflow)
+
+    TRANSACTION BEHAVIOR:
+        - Uses transaction_context() to ensure atomicity
+        - Creates new job (and optionally new config) + skips original job
+        - All operations are atomic (all-or-nothing)
+        - Submits new job AFTER transaction completes
 
     Process:
     1. Validate: If override data provided, reason is required
@@ -718,6 +731,7 @@ def resubmit_job(
        - Without override: Reuse original configuration
        - Set parent_job_id to original job
     4. Skip original job (only after new job created successfully)
+    5. Submit new job (after transaction commits)
 
     Args:
         job_id: Original job ID to resubmit
@@ -751,47 +765,52 @@ def resubmit_job(
 
     parent_job_id = job_id
 
-    # Create new job
-    if job_configuration_data:
-        # Override case: Create new job with override configuration
-        # Update override reason in the _create_job_configuration call
-        new_config_id = _create_job_configuration(
-            batch_id=batch_id,
-            configuration_id=configuration_id,
-            job_configuration_data=job_configuration_data,
-            skipped=False,
-            overridden=True,
-            override_reason_txt=override_reason,
-            schema=schema
-        )
+    # Use transaction to ensure atomicity:
+    # - Create new job (and optionally new config)
+    # - Skip original job
+    # If any step fails, all operations are rolled back
+    from helpers.database import transaction_context
 
-        new_job_id = _create_job(
-            batch_id=batch_id,
-            job_configuration_id=new_config_id,
-            parent_job_id=parent_job_id,
-            schema=schema
-        )
+    with transaction_context(schema=schema):
+        # Create new job
+        if job_configuration_data:
+            # Override case: Create new job with override configuration
+            new_config_id = create_job_configuration(
+                batch_id=batch_id,
+                configuration_id=configuration_id,
+                job_configuration_data=job_configuration_data,
+                skipped=False,
+                overridden=True,
+                override_reason_txt=override_reason,
+                schema=schema
+            )
 
-        # Submit the job
-        submit_job(new_job_id, schema=schema)
-        # TODO Handle submission error
-        
-    else:
-        # Reuse same config
-        job_config_id = job['job_configuration_id']
+            new_job_id = create_job(
+                batch_id=batch_id,
+                job_configuration_id=new_config_id,
+                parent_job_id=parent_job_id,
+                schema=schema
+            )
 
-        new_job_id = _create_job(
-            batch_id=batch_id,
-            job_configuration_id=job_config_id,
-            parent_job_id=parent_job_id,
-            schema=schema
-        )
+        else:
+            # Reuse same config
+            job_config_id = job['job_configuration_id']
 
-        # Submit the job
-        submit_job(new_job_id, schema=schema)
-        # TODO Handle submission error
+            new_job_id = create_job(
+                batch_id=batch_id,
+                job_configuration_id=job_config_id,
+                parent_job_id=parent_job_id,
+                schema=schema
+            )
 
-    # Skip original job after new job is created
-    skip_job(job_id, schema=schema)
+        # Skip original job (must happen within same transaction)
+        skip_job(job_id, schema=schema)
+
+        # All database operations committed together at end of context
+
+    # Submit the job AFTER transaction completes successfully
+    # Job submission involves external API call, so keep it outside transaction
+    submit_job(new_job_id, schema=schema)
+    # TODO Handle submission error
 
     return new_job_id

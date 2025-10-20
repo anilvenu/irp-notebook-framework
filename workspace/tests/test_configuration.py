@@ -24,6 +24,7 @@ from datetime import datetime
 from helpers.database import execute_insert, execute_query
 from helpers.configuration import (
     read_configuration,
+    create_configuration,
     update_configuration_status,
     load_configuration_file,
     ConfigurationError,
@@ -67,6 +68,163 @@ def create_test_cycle(test_schema, cycle_name='test_cycle'):
 # ============================================================================
 # Tests - CRUD Operations
 # ============================================================================
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_configuration_success(test_schema):
+    """Test creating a configuration successfully"""
+    cycle_id = create_test_cycle(test_schema, 'test-create')
+
+    config_data = {
+        'TAB-A': [
+            {'A-1': 'val1', 'A-2': 'data1', 'A-3': 'info1'}
+        ],
+        'TAB-B': [
+            {'B-1': 100, 'B-2': 10.5}
+        ]
+    }
+
+    # Create configuration
+    config_id = create_configuration(
+        cycle_id=cycle_id,
+        configuration_file_name='/test/config.xlsx',
+        configuration_data=config_data,
+        status=ConfigurationStatus.NEW,
+        file_last_updated_ts=datetime.now(),
+        schema=test_schema
+    )
+
+    # Verify creation
+    assert isinstance(config_id, int)
+    assert config_id > 0
+
+    # Verify it can be read back
+    config = read_configuration(config_id, schema=test_schema)
+    assert config['id'] == config_id
+    assert config['cycle_id'] == cycle_id
+    assert config['status'] == ConfigurationStatus.NEW
+    assert config['configuration_data'] == config_data
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_configuration_invalid_cycle_id(test_schema):
+    """Test create_configuration with invalid cycle_id"""
+    config_data = {'test': 'data'}
+
+    # Test with cycle_id = 0
+    with pytest.raises(ConfigurationError, match="Invalid cycle_id"):
+        create_configuration(
+            cycle_id=0,
+            configuration_file_name='/test/config.xlsx',
+            configuration_data=config_data,
+            file_last_updated_ts=datetime.now(),
+            schema=test_schema
+        )
+
+    # Test with negative cycle_id
+    with pytest.raises(ConfigurationError, match="Invalid cycle_id"):
+        create_configuration(
+            cycle_id=-1,
+            configuration_file_name='/test/config.xlsx',
+            configuration_data=config_data,
+            file_last_updated_ts=datetime.now(),
+            schema=test_schema
+        )
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_configuration_invalid_status(test_schema):
+    """Test create_configuration with invalid status"""
+    cycle_id = create_test_cycle(test_schema, 'test-invalid-status')
+
+    config_data = {'test': 'data'}
+
+    # Test with invalid status
+    with pytest.raises(ConfigurationError, match="Invalid status: BOGUS_STATUS"):
+        create_configuration(
+            cycle_id=cycle_id,
+            configuration_file_name='/test/config.xlsx',
+            configuration_data=config_data,
+            status='BOGUS_STATUS',
+            file_last_updated_ts=datetime.now(),
+            schema=test_schema
+        )
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_configuration_invalid_filename(test_schema):
+    """Test create_configuration with invalid filename"""
+    cycle_id = create_test_cycle(test_schema, 'test-invalid-filename')
+
+    config_data = {'test': 'data'}
+
+    # Test with empty filename
+    with pytest.raises(ConfigurationError, match="Invalid configuration_file_name"):
+        create_configuration(
+            cycle_id=cycle_id,
+            configuration_file_name='',
+            configuration_data=config_data,
+            file_last_updated_ts=datetime.now(),
+            schema=test_schema
+        )
+
+    # Test with whitespace-only filename
+    with pytest.raises(ConfigurationError, match="Invalid configuration_file_name"):
+        create_configuration(
+            cycle_id=cycle_id,
+            configuration_file_name='   ',
+            configuration_data=config_data,
+            file_last_updated_ts=datetime.now(),
+            schema=test_schema
+        )
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_configuration_missing_timestamp(test_schema):
+    """Test create_configuration without providing file_last_updated_ts"""
+    cycle_id = create_test_cycle(test_schema, 'test-no-timestamp')
+
+    config_data = {'test': 'data'}
+
+    # Test without providing timestamp (should raise error)
+    with pytest.raises(ConfigurationError, match="file_last_updated_ts must be provided"):
+        create_configuration(
+            cycle_id=cycle_id,
+            configuration_file_name='/test/config.xlsx',
+            configuration_data=config_data,
+            schema=test_schema
+        )
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_configuration_with_all_statuses(test_schema):
+    """Test creating configurations with all valid status values"""
+    cycle_id = create_test_cycle(test_schema, 'test-all-statuses')
+
+    config_data = {'test': 'data'}
+    timestamp = datetime.now()
+
+    # Test each valid status
+    for status in [ConfigurationStatus.NEW, ConfigurationStatus.VALID,
+                   ConfigurationStatus.ACTIVE, ConfigurationStatus.ERROR]:
+        config_id = create_configuration(
+            cycle_id=cycle_id,
+            configuration_file_name=f'/test/config_{status}.xlsx',
+            configuration_data=config_data,
+            status=status,
+            file_last_updated_ts=timestamp,
+            schema=test_schema
+        )
+
+        # Verify status
+        config = read_configuration(config_id, schema=test_schema)
+        assert config['status'] == status
+
 
 @pytest.mark.database
 @pytest.mark.unit

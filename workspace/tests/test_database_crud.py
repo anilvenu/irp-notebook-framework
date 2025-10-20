@@ -6,12 +6,15 @@ All operations use context from the test_schema fixture (no schema= parameters n
 """
 
 import pytest
-from helpers.database import (
-    register_cycle, get_cycle_by_name, get_active_cycle, archive_cycle,
-    get_or_create_stage, get_or_create_step,
-    create_step_run, update_step_run, get_last_step_run, get_step_info
+from helpers.cycle import (
+    register_cycle, get_cycle_by_name, get_active_cycle, archive_cycle_crud as archive_cycle,
+    delete_cycle, get_step_history
 )
-from helpers.stage import get_stage_by_id, list_stages_for_cycle
+from helpers.stage import get_or_create_stage, get_stage_by_id, list_stages_for_cycle
+from helpers.step import (
+    get_or_create_step, create_step_run, update_step_run,
+    get_last_step_run, get_step_info
+)
 from helpers.constants import CycleStatus, StepStatus
 
 
@@ -360,7 +363,6 @@ def test_schema_isolation(test_schema):
 @pytest.mark.unit
 def test_delete_cycle(test_schema):
     """Test permanently deleting a cycle"""
-    from helpers.database import delete_cycle
     
     # Create cycle
     cycle_id = register_cycle('test_cycle_delete')
@@ -383,7 +385,6 @@ def test_delete_cycle(test_schema):
 @pytest.mark.unit
 def test_delete_cycle_not_found(test_schema):
     """Test deleting non-existent cycle returns False"""
-    from helpers.database import delete_cycle
     
     # Try to delete a cycle that doesn't exist
     success = delete_cycle(99999)
@@ -394,7 +395,6 @@ def test_delete_cycle_not_found(test_schema):
 @pytest.mark.integration
 def test_delete_cycle_cascade(test_schema):
     """Test that deleting a cycle cascades to stages and steps"""
-    from helpers.database import delete_cycle
     
     # Create cycle with stages and steps
     cycle_id = register_cycle('test_cycle_cascade')
@@ -440,7 +440,6 @@ def test_init_database_sql_file_not_found(test_schema):
 @pytest.mark.integration
 def test_get_step_history_with_stage_and_step_num(test_schema):
     """Test get_step_history with stage_num and step_num filters"""
-    from helpers.database import get_step_history
     
     # Create test data
     cycle_id = register_cycle('test_cycle_history')

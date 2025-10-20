@@ -22,13 +22,9 @@ All tests send explicit paths to WorkContext to avoid calling _get_current_noteb
 import pytest
 from pathlib import Path
 from helpers.context import WorkContext, WorkContextError, get_context
-from helpers.database import (
-    register_cycle,
-    get_cycle_by_name,
-    archive_cycle,
-    set_schema,
-    schema_context
-)
+from helpers.cycle import register_cycle, get_cycle_by_name
+from helpers.cycle import archive_cycle_crud as archive_cycle
+from helpers.database import set_schema, schema_context, execute_query, init_database, get_engine
 from helpers.constants import CycleStatus
 
 

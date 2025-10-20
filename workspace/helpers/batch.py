@@ -5,6 +5,20 @@ This module provides functions for managing batches of Moody's workflow jobs.
 A batch represents a collection of jobs generated from a master configuration
 for a specific batch type (e.g., portfolio analysis, risk calculation).
 
+ARCHITECTURE:
+-------------
+Layer 2 (CRUD): _create_batch (private helper)
+Layer 3 (Workflow): create_batch (uses transaction for batch + jobs atomically),
+                    submit_batch, recon_batch
+
+TRANSACTION BEHAVIOR:
+--------------------
+- create_batch(): Uses transaction_context() to create batch + all jobs atomically
+  - Calls CRUD functions directly (job.create_job_configuration, job.create_job)
+  - All operations are atomic (all-or-nothing)
+- submit_batch(): No transaction needed (read-only + external API calls)
+- recon_batch(): No transaction needed (reconciliation logic)
+
 Key Features:
 - Create batches with automatic job configuration generation via transformers
 - Submit batches to Moody's workflow system
@@ -47,6 +61,12 @@ def _create_batch(
 ) -> int:
     """
     Create a batch record in database (used by create_batch).
+
+    LAYER: 2 (CRUD - private helper)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
 
     Args:
         batch_type: Type of batch (must be registered in ConfigurationTransformer)
@@ -232,7 +252,14 @@ def create_batch(
     schema: str = 'public'
 ) -> int:
     """
-    Create a new batch with job configurations.
+    Create a new batch with job configurations atomically.
+
+    LAYER: 3 (Workflow)
+
+    TRANSACTION BEHAVIOR:
+        - Uses transaction_context() to ensure atomicity
+        - Creates batch + all job configurations + all jobs in single transaction
+        - If any operation fails, entire batch creation is rolled back
 
     Process:
     1. Validate configuration is VALID or ACTIVE
@@ -242,7 +269,8 @@ def create_batch(
     5. In transaction:
        - Create batch record in INITIATED status
        - Create job configuration for each transformed config
-       - Create job for each configuration (via create_job)
+       - Create job for each configuration
+       - All operations committed atomically
 
     Args:
         batch_type: Type of batch processing
@@ -307,23 +335,42 @@ def create_batch(
         raise BatchError(f"Transformer returned no job configurations for batch_type '{batch_type}'")
 
     # Create batch and jobs in transaction
+    # Use transaction_context to ensure atomicity: if any job creation fails,
+    # the entire batch creation is rolled back (no orphaned batch records)
     try:
-        # Create batch record
-        batch_id = _create_batch(batch_type, configuration_id, step_id, schema=schema)
+        from helpers.database import transaction_context
 
-        # Create job configuration and job for each transformed config
-        for job_config_data in job_configs:
-            job_id = job.create_job(
-                batch_id=batch_id,
-                configuration_id=configuration_id,
-                job_configuration_data=job_config_data,
-                validate=False,  # Already validated by transformer
-                schema=schema
-            )
+        with transaction_context(schema=schema):
+            # Create batch record
+            batch_id = _create_batch(batch_type, configuration_id, step_id, schema=schema)
 
-        return batch_id
+            # Create job configuration and job for each transformed config
+            # NOTE: We call CRUD functions directly (not the atomic wrapper) since we're already in a transaction
+            for job_config_data in job_configs:
+                # Create job configuration
+                config_id = job.create_job_configuration(
+                    batch_id=batch_id,
+                    configuration_id=configuration_id,
+                    job_configuration_data=job_config_data,
+                    skipped=False,
+                    overridden=False,
+                    override_reason_txt=None,
+                    schema=schema
+                )
+
+                # Create job
+                job_id = job.create_job(
+                    batch_id=batch_id,
+                    job_configuration_id=config_id,
+                    parent_job_id=None,
+                    schema=schema
+                )
+
+            # All operations committed together at end of context
+            return batch_id
 
     except Exception as e:
+        # Transaction automatically rolled back on exception
         raise BatchError(f"Failed to create batch: {str(e)}")
 
 

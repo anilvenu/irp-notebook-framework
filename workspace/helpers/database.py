@@ -301,8 +301,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 import pandas as pd
 import numpy as np
-from typing import Optional, List, Dict, Any, Tuple
-from helpers.constants import DB_CONFIG, CycleStatus, StepStatus
+from typing import List, Any
+from helpers.constants import DB_CONFIG, StepStatus
 
 # ============================================================================
 # SCHEMA CONTEXT MANAGEMENT
@@ -472,7 +472,6 @@ def transaction_context(schema: str = None):
     the context share a single database connection and are committed together when
     the context exits successfully, or rolled back if an exception occurs.
 
-    IMPORTANT BEHAVIOR:
     - All database operations (execute_query, execute_insert, execute_command, etc.)
       within this context will use the SAME connection
     - Operations are NOT committed until the context exits
@@ -489,56 +488,6 @@ def transaction_context(schema: str = None):
     Raises:
         DatabaseError: If transaction fails or if nested transactions attempted
 
-    Example - Atomic Batch Creation:
-        >>> # Without transaction: if job creation fails, batch is orphaned
-        >>> batch_id = _create_batch(...)  # Commits immediately
-        >>> for config in configs:
-        ...     create_job(...)  # If this fails, batch is orphaned!
-
-        >>> # With transaction: all-or-nothing guarantee
-        >>> with transaction_context():
-        ...     batch_id = _create_batch(...)
-        ...     for config in configs:
-        ...         create_job(...)
-        ...     # All committed together, or all rolled back on exception
-
-    Example - Atomic Job Resubmission:
-        >>> # Create new job and skip old job atomically
-        >>> with transaction_context():
-        ...     new_job_id = create_job(...)
-        ...     skip_job(old_job_id)
-        ...     # Both operations committed together
-
-    Example - With Schema:
-        >>> with transaction_context(schema='test'):
-        ...     cycle_id = register_cycle('test_cycle')
-        ...     stage_id = get_or_create_stage(cycle_id, 1, 'Stage 1')
-        ...     # All in 'test' schema, all committed together
-
-    Example - Error Handling:
-        >>> try:
-        ...     with transaction_context():
-        ...         batch_id = _create_batch(...)
-        ...         raise ValueError("Something went wrong")
-        ...         create_job(...)  # Never executes
-        ... except ValueError:
-        ...     pass
-        >>> # Batch creation was rolled back - no orphaned records
-
-    Thread Safety:
-        Uses thread-local storage, so each thread has its own transaction context.
-        Safe in multi-threaded environments.
-
-    Limitations:
-        - Cannot nest transaction contexts (will raise DatabaseError)
-        - bulk_insert() within transaction context may have unexpected behavior
-          (uses its own internal transaction)
-
-    See Also:
-        schema_context(): For temporary schema changes without transactions
-        execute_command(): Modified to support transactional mode
-        execute_insert(): Modified to support transactional mode
-        execute_query(): Modified to support transactional mode
     """
     # Check for nested transactions
     if hasattr(_context, 'transaction_conn') and _context.transaction_conn is not None:
@@ -976,7 +925,7 @@ def execute_query(query: str, params: tuple = None, schema: str = None) -> pd.Da
             df = pd.read_sql_query(text(converted_query), conn, params=param_dict)
             return df
         else:
-            # Original behavior: fresh connection
+            # New connection
             # Use provided schema, or get from context
             active_schema = schema if schema is not None else get_current_schema()
 
@@ -1022,7 +971,7 @@ def execute_scalar(query: str, params: tuple = None, schema: str = None) -> Any:
             row = result.fetchone()
             return row[0] if row else None
         else:
-            # Original behavior: fresh connection
+            # New connection
             # Use provided schema, or get from context
             active_schema = schema if schema is not None else get_current_schema()
 
@@ -1071,7 +1020,7 @@ def execute_command(query: str, params: tuple = None, schema: str = None) -> int
             result = conn.execute(text(converted_query), param_dict)
             return result.rowcount
         else:
-            # Original behavior: fresh connection + auto-commit
+            # New connection + auto-commit
             # Use provided schema, or get from context
             active_schema = schema if schema is not None else get_current_schema()
 
@@ -1272,439 +1221,27 @@ def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sq
         return False
 
 # ============================================================================
-# CYCLE OPERATIONS
-# ============================================================================
-#
-# Cycles represent analysis periods (e.g., "Analysis-2025-Q1"). They are the
-# top-level organizational unit in the IRP Notebook Framework hierarchy:
-#
-#   Cycle (Analysis-2025-Q1)
-#     └─ Stage 1 (Data Collection)
-#         └─ Step 1 (Load Raw Data)
-#             └─ Step Run 1 (Execution Record)
-#
-# SCHEMA BEHAVIOR:
-# - All cycle operations respect the schema context/override pattern
-# - Use schema_context() for test isolation
-# - Cycles in different schemas are completely independent
-#
-# ============================================================================
-
-def get_active_cycle() -> Optional[Dict[str, Any]]:
-    """
-    Get the currently active cycle from the current schema.
-
-    Returns the most recently created ACTIVE cycle. There should only be one
-    active cycle at a time, but this ensures you get the latest if multiple exist.
-
-    Schema Behavior:
-        - Uses current schema from context (get_current_schema())
-        - To query a different schema, use set_schema() or schema_context()
-        - Searches only within the current context schema
-
-    Returns:
-        Optional[Dict[str, Any]]: Dictionary with cycle fields or None
-            {
-                'id': int,           # Unique cycle ID
-                'cycle_name': str,   # e.g., 'Analysis-2025-Q1'
-                'status': str,       # 'ACTIVE' or 'ARCHIVED'
-                'created_ts': datetime
-            }
-
-    Example:
-        >>> cycle = get_active_cycle()
-        >>> if cycle:
-        ...     print(f"Working on: {cycle['cycle_name']}")
-        ... else:
-        ...     print("No active cycle - need to create one")
-        Working on: Analysis-2025-Q1
-
-        >>> # Test isolation
-        >>> with schema_context('test'):
-        ...     test_cycle = get_active_cycle()  # Searches test schema only
-    """
-    query = """
-        SELECT id, cycle_name, status, created_ts
-        FROM irp_cycle
-        WHERE status = 'ACTIVE'
-        ORDER BY created_ts DESC
-        LIMIT 1
-    """
-    df = execute_query(query)
-    return df.iloc[0].to_dict() if not df.empty else None
-
-
-def get_cycle_by_name(cycle_name: str) -> Optional[Dict[str, Any]]:
-    """
-    Get cycle by its name from the current schema.
-
-    Retrieves a cycle regardless of status (ACTIVE or ARCHIVED). Cycle names
-    must be unique within a schema.
-
-    Args:
-        cycle_name: Name of the cycle to retrieve (e.g., 'Analysis-2025-Q1')
-
-    Schema Behavior:
-        - Uses current schema from context
-        - To query a different schema, use schema_context() first
-
-    Returns:
-        Optional[Dict[str, Any]]: Dictionary with cycle fields or None if not found
-            {
-                'id': int,
-                'cycle_name': str,
-                'status': str,         # 'ACTIVE' or 'ARCHIVED'
-                'created_ts': datetime,
-                'archived_ts': datetime | None
-            }
-
-    Example:
-        >>> cycle = get_cycle_by_name('Analysis-2024-Q4')
-        >>> if cycle:
-        ...     if cycle['status'] == 'ARCHIVED':
-        ...         print("This cycle is archived")
-        ... else:
-        ...     print("Cycle not found")
-    """
-    query = """
-        SELECT id, cycle_name, status, created_ts, archived_ts
-        FROM irp_cycle
-        WHERE cycle_name = %s
-    """
-    df = execute_query(query, (cycle_name,))
-    return df.iloc[0].to_dict() if not df.empty else None
-
-
-def register_cycle(cycle_name: str) -> int:
-    """
-    Create a new cycle with ACTIVE status.
-
-    Creates a new analysis cycle in the current schema. The cycle is automatically
-    set to ACTIVE status.
-
-    Args:
-        cycle_name: Unique name for the cycle (e.g., 'Analysis-2025-Q1')
-                   Should follow naming convention: 'Analysis-YYYY-QN'
-
-    Schema Behavior:
-        - Creates cycle in current schema from context
-        - To create in different schema, use schema_context() or set_schema() first
-        - Cycle names must be unique within their schema
-
-    Returns:
-        int: ID of the newly created cycle
-
-    Raises:
-        DatabaseError: If cycle name already exists in the schema
-
-    Example:
-        >>> cycle_id = register_cycle('Analysis-2025-Q2')
-        >>> print(f"Created cycle with ID: {cycle_id}")
-        Created cycle with ID: 42
-
-        >>> # Test environment
-        >>> with schema_context('test'):
-        ...     test_id = register_cycle('test-cycle')  # Isolated in test schema
-
-    See Also:
-        archive_cycle(): To mark a cycle as archived
-        get_cycle_by_name(): To check if cycle already exists
-    """
-    query = """
-        INSERT INTO irp_cycle (cycle_name, status)
-        VALUES (%s, %s)
-    """
-    return execute_insert(query, (cycle_name, CycleStatus.ACTIVE))
-
-
-def archive_cycle(cycle_id: int) -> bool:
-    """
-    Archive a cycle by setting its status to ARCHIVED.
-
-    Marks a cycle as archived and records the archival timestamp. This does not
-    delete any data - the cycle and all its stages/steps remain in the database.
-
-    Args:
-        cycle_id: ID of the cycle to archive
-
-    Schema Behavior:
-        - Updates cycle in current schema from context
-        - To update in different schema, use schema_context() or set_schema() first
-
-    Returns:
-        bool: True if cycle was archived, False if cycle_id not found
-
-    Example:
-        >>> cycle = get_cycle_by_name('Analysis-2024-Q1')
-        >>> if archive_cycle(cycle['id']):
-        ...     print("Cycle archived successfully")
-        ... else:
-        ...     print("Cycle not found")
-        Cycle archived successfully
-
-        >>> # Verify archival
-        >>> cycle = get_cycle_by_name('Analysis-2024-Q1')
-        >>> print(f"Status: {cycle['status']}, Archived: {cycle['archived_ts']}")
-        Status: ARCHIVED, Archived: 2025-01-15 10:30:00
-
-    Note:
-        Archiving a cycle does not cascade to stages or steps. Only the cycle
-        status changes. All related data remains queryable.
-
-    See Also:
-        register_cycle(): To create a new cycle
-        delete_cycle(): To permanently delete a cycle (use with caution)
-    """
-    query = """
-        UPDATE irp_cycle
-        SET status = %s, archived_ts = NOW()
-        WHERE id = %s
-    """
-    rows = execute_command(query, (CycleStatus.ARCHIVED, cycle_id))
-    return rows > 0
-
-def delete_cycle(cycle_id: int) -> bool:
-    """
-    Permanently delete a cycle and all associated data.
-
-    WARNING: This is a hard delete that will CASCADE to all related records:
-    - All stages in the cycle
-    - All steps in those stages
-    - All step runs for those steps
-    - All associated execution history
-
-    This operation CANNOT be undone. Consider using archive_cycle() instead
-    for most use cases.
-
-    Args:
-        cycle_id: ID of the cycle to delete
-
-    Schema Behavior:
-        - Deletes from current schema from context
-        - To delete from different schema, use schema_context() or set_schema() first
-
-    Returns:
-        bool: True if cycle was deleted, False if cycle_id not found
-
-    Example:
-        >>> # Typical use: Clean up test data
-        >>> with schema_context('test'):
-        ...     test_cycle = get_cycle_by_name('test-cycle')
-        ...     if test_cycle:
-        ...         delete_cycle(test_cycle['id'])
-        ...         print("Test data cleaned up")
-
-    Warnings:
-        - USE WITH EXTREME CAUTION in production
-        - Cannot be undone
-        - Cascades to all related records
-        - Consider archive_cycle() for production use
-
-    See Also:
-        archive_cycle(): Safer alternative that preserves data
-        get_cycle_by_name(): To verify before deleting
-    """
-    query = """
-        DELETE FROM irp_cycle
-        WHERE id = %s
-    """
-    rows = execute_command(query, (cycle_id,)) # It needs to be a tuple
-    return rows > 0
-
-
-# ============================================================================
 # STAGE OPERATIONS
 # ============================================================================
-
-def get_or_create_stage(cycle_id: int, stage_num: int, stage_name: str) -> int:
-    """Get existing stage or create new one"""
-    
-    # Try to get existing
-    query = "SELECT id FROM irp_stage WHERE cycle_id = %s AND stage_num = %s"
-    stage_id = execute_scalar(query, (cycle_id, stage_num))
-    
-    if stage_id:
-        return stage_id
-    
-    # Create new
-    query = """
-        INSERT INTO irp_stage (cycle_id, stage_num, stage_name)
-        VALUES (%s, %s, %s)
-    """
-    return execute_insert(query, (cycle_id, stage_num, stage_name))
+# NOTE: Cycle operations have been moved to helpers/cycle.py
+# Import from there: from helpers.cycle import get_active_cycle, etc.
+# NOTE: Stage operations have been moved to helpers/stage.py
+# Import from there: from helpers.stage import get_or_create_stage, etc.
+# ============================================================================
 
 # ============================================================================
 # STEP OPERATIONS
 # ============================================================================
-
-def get_or_create_step(
-    stage_id: int,
-    step_num: int,
-    step_name: str,
-    notebook_path: str = None,
-) -> int:
-    """Get existing step or create new one"""
-    
-    # Try to get existing
-    query = "SELECT id FROM irp_step WHERE stage_id = %s AND step_num = %s"
-    step_id = execute_scalar(query, (stage_id, step_num))
-    
-    if step_id:
-        return step_id
-    
-    # Create new
-    query = """
-        INSERT INTO irp_step (stage_id, step_num, step_name, notebook_path)
-        VALUES (%s, %s, %s, %s)
-    """
-    return execute_insert(query, (stage_id, step_num, step_name, notebook_path))
-
-
-def get_step_info(step_id: int) -> Optional[Dict[str, Any]]:
-    """Get step information"""
-    query = """
-        SELECT 
-            st.id, st.step_num, st.step_name, st.notebook_path,
-            sg.stage_num, sg.stage_name,
-            c.cycle_name, c.id as cycle_id
-        FROM irp_step st
-        INNER JOIN irp_stage sg ON st.stage_id = sg.id
-        INNER JOIN irp_cycle c ON sg.cycle_id = c.id
-        WHERE st.id = %s
-    """
-    df = execute_query(query, (step_id,))
-    return df.iloc[0].to_dict() if not df.empty else None
-
+# NOTE: Step operations have been moved to helpers/step.py
+# Import from there: from helpers.step import get_or_create_step, get_step_info, etc.
+# NOTE: Step run operations have been moved to helpers/step.py
+# Import from there: from helpers.step import get_last_step_run, create_step_run, update_step_run
 # ============================================================================
-# STEP RUN OPERATIONS
-# ============================================================================
-
-def get_last_step_run(step_id: int) -> Optional[Dict[str, Any]]:
-    """Get the most recent run for a step"""
-    query = """
-        SELECT id, run_num, status, started_ts, completed_ts, 
-               started_by, error_message, output_data
-        FROM irp_step_run
-        WHERE step_id = %s
-        ORDER BY run_num DESC
-        LIMIT 1
-    """
-    df = execute_query(query, (step_id,))
-    return df.iloc[0].to_dict() if not df.empty else None
-
-
-def create_step_run(step_id: int, started_by: str) -> Tuple[int, int]:
-    """
-    Create new step run
-    
-    Returns:
-        Tuple of (run_id, run_num)
-    """
-    # Get next run number
-    query = "SELECT COALESCE(MAX(run_num), 0) + 1 FROM irp_step_run WHERE step_id = %s"
-    run_num = execute_scalar(query, (step_id,))
-    
-    # Create run
-    query = """
-        INSERT INTO irp_step_run (step_id, run_num, status, started_by)
-        VALUES (%s, %s, 'ACTIVE', %s)
-    """
-    run_id = execute_insert(query, (step_id, run_num, started_by))
-    
-    return run_id, run_num
-
-
-def update_step_run(
-    run_id: int,
-    status: str,
-    error_message: str = None,
-    output_data: Dict = None
-) -> bool:
-    """Update step run with completion status"""
-    import json
-    
-    query = """
-        UPDATE irp_step_run
-        SET status = %s,
-            completed_ts = CASE WHEN %s IN ('COMPLETED', 'FAILED', 'SKIPPED') THEN NOW() ELSE completed_ts END,
-            error_message = %s,
-            output_data = %s
-        WHERE id = %s
-    """
-    
-    rows = execute_command(query, (
-        status,
-        status,
-        error_message,
-        json.dumps(output_data) if output_data else None,
-        run_id
-    ))
-    
-    return rows > 0
 
 # ============================================================================
 # QUERY HELPERS
 # ============================================================================
-
-def get_cycle_progress(cycle_name: str) -> pd.DataFrame:
-    """Get progress for all steps in a cycle"""
-    query = """
-        SELECT 
-            sg.stage_num,
-            sg.stage_name,
-            st.step_num,
-            st.step_name,
-            sr.status as last_status,
-            sr.run_num as last_run,
-            sr.completed_ts as last_completed
-        FROM irp_step st
-        INNER JOIN irp_stage sg ON st.stage_id = sg.id
-        INNER JOIN irp_cycle c ON sg.cycle_id = c.id
-        LEFT JOIN LATERAL (
-            SELECT status, run_num, completed_ts
-            FROM irp_step_run
-            WHERE step_id = st.id
-            ORDER BY run_num DESC
-            LIMIT 1
-        ) sr ON TRUE
-        WHERE c.cycle_name = %s
-        ORDER BY sg.stage_num, st.step_num
-    """
-    return execute_query(query, (cycle_name,))
-
-
-def get_step_history(cycle_name: str, stage_num: int = None, step_num: int = None) -> pd.DataFrame:
-    """Get execution history for steps"""
-    
-    base_query = """
-        SELECT 
-            sg.stage_num,
-            sg.stage_name,
-            st.step_num,
-            st.step_name,
-            sr.run_num,
-            sr.status,
-            sr.started_ts,
-            sr.completed_ts,
-            sr.started_by,
-            EXTRACT(EPOCH FROM (sr.completed_ts - sr.started_ts)) as duration_seconds
-        FROM irp_step_run sr
-        INNER JOIN irp_step st ON sr.step_id = st.id
-        INNER JOIN irp_stage sg ON st.stage_id = sg.id
-        INNER JOIN irp_cycle c ON sg.cycle_id = c.id
-        WHERE c.cycle_name = %s
-    """
-    
-    params = [cycle_name]
-    
-    if stage_num is not None:
-        base_query += " AND sg.stage_num = %s"
-        params.append(stage_num)
-    
-    if step_num is not None:
-        base_query += " AND st.step_num = %s"
-        params.append(step_num)
-    
-    base_query += " ORDER BY sr.started_ts DESC"
-    
-    return execute_query(base_query, tuple(params))
+# NOTE: Cycle-related query helpers (get_cycle_progress, get_step_history)
+# have been moved to helpers/cycle.py
+# Import from there: from helpers.cycle import get_cycle_progress, etc.
+# ============================================================================

@@ -31,7 +31,7 @@ from helpers.batch import (
     recon_batch,
     BatchError
 )
-from helpers.job import create_job, update_job_status, skip_job
+from helpers.job import create_job_with_config_atomically as create_job, update_job_status, skip_job
 from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus
 
 
@@ -251,9 +251,9 @@ def test_get_batch_jobs_with_filters(test_schema):
     # Create multiple jobs with different states
     job_config_data = {'param': 'value'}
 
-    job1_id = create_job(batch_id, config_id, job_configuration_data=job_config_data, schema=test_schema)
-    job2_id = create_job(batch_id, config_id, job_configuration_data=job_config_data, schema=test_schema)
-    job3_id = create_job(batch_id, config_id, job_configuration_data=job_config_data, schema=test_schema)
+    job1_id = create_job(batch_id=batch_id, configuration_id=config_id, job_configuration_data=job_config_data, schema=test_schema)
+    job2_id = create_job(batch_id=batch_id, configuration_id=config_id, job_configuration_data=job_config_data, schema=test_schema)
+    job3_id = create_job(batch_id=batch_id, configuration_id=config_id, job_configuration_data=job_config_data, schema=test_schema)
 
     # Update jobs to different states
     update_job_status(job1_id, JobStatus.SUBMITTED, schema=test_schema)

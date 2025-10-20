@@ -12,7 +12,7 @@ from helpers.stage import (
     list_stages_for_cycle,
     StageError
 )
-from helpers.database import register_cycle
+from helpers.cycle import register_cycle
 
 
 @pytest.mark.database

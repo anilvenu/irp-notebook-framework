@@ -18,11 +18,10 @@ from helpers.database import (
     reset_schema,
     get_schema_from_env,
     init_from_environment,
-    register_cycle,
-    get_cycle_by_name,
     execute_query,
     init_database
 )
+from helpers.cycle import register_cycle, get_cycle_by_name
 
 
 # ==============================================================================
