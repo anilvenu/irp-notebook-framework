@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Batch 106 Viewer - Submission Errors</title>
+    <title>Batch 104 - Resubmission Scenario</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -221,7 +221,7 @@
 </head>
 <body>
     <div class="page-header">
-        <h1>Batch 106: Submission Errors</h1>
+        <h1>Batch 104: Resubmission Scenario</h1>
         <div class="subtitle">Cycle: Analysis-2025-Q1 | Stage: Portfolio Analysis Stage | Step: Initial Portfolio Analysis</div>
     </div>
 
@@ -235,25 +235,25 @@
 
         <div class="info-card">
             <h3>Jobs Summary</h3>
-            <div class="value">3 Total</div>
-            <div class="sub-value">3 active, 0 skipped</div>
+            <div class="value">2 Total</div>
+            <div class="sub-value">1 active, 1 skipped</div>
         </div>
 
         <div class="info-card">
             <h3>Configurations</h3>
-            <div class="value">3</div>
-            <div class="sub-value">3 active</div>
+            <div class="value">2</div>
+            <div class="sub-value">1 active</div>
         </div>
 
         <div class="info-card">
             <h3>Created</h3>
-            <div class="value" style="font-size: 16px;">2025-10-18 00:00:00</div>
+            <div class="value" style="font-size: 16px;">2025-10-17 00:00:00</div>
         </div>
 
         <div class="info-card">
             <h3>Submitted</h3>
             <div class="value" style="font-size: 16px;">
-                N/A
+                2025-10-17 00:30:00
             </div>
         </div>
 
@@ -266,8 +266,8 @@
     </div>
 
     <div class="tabs">
-        <button class="tab active" onclick="switchTab('jobs')">Jobs (3)</button>
-        <button class="tab" onclick="switchTab('configurations')">Configurations (3)</button>
+        <button class="tab active" onclick="switchTab('jobs')">Jobs (2)</button>
+        <button class="tab" onclick="switchTab('configurations')">Configurations (2)</button>
     </div>
 
     <div id="jobs-content" class="tab-content active">
@@ -314,8 +314,8 @@
     </div>
 
     <script>
-        const jobs = [{"id": 18, "moodys_workflow_id": "MW-1060001", "status": "ERROR", "skipped": false, "report_status": "ERROR", "next_best_action": "Resubmit OR Skip after Manual Operation on Moody's", "age_hours": 62.386511839166666, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 18, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:02:00+00:00", "job_configuration_data": {"portfolio": "PF001"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 19, "moodys_workflow_id": "MW-1060002", "status": "ERROR", "skipped": false, "report_status": "ERROR", "next_best_action": "Resubmit OR Skip after Manual Operation on Moody's", "age_hours": 62.353178505833334, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 19, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:04:00+00:00", "job_configuration_data": {"portfolio": "PF002"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 20, "moodys_workflow_id": null, "status": "INITIATED", "skipped": false, "report_status": "UNSUBMITTED", "next_best_action": "Submit Batch", "age_hours": 62.319997646944444, "is_successful": false, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 20, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:06:00+00:00", "job_configuration_data": {"portfolio": "PF003"}, "parent_job_status": null, "parent_moodys_id": null}];
-        const configs = [{"config_id": 18, "job_configuration_data": {"portfolio": "PF001"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "finished_jobs": 0, "failed_jobs": 0, "error_jobs": 1, "progress_percent": 0.0, "has_failures": false, "has_errors": true, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 19, "job_configuration_data": {"portfolio": "PF002"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "finished_jobs": 0, "failed_jobs": 0, "error_jobs": 1, "progress_percent": 0.0, "has_failures": false, "has_errors": true, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 20, "job_configuration_data": {"portfolio": "PF003"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "finished_jobs": 0, "failed_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": true, "active_jobs": 1}];
+        const jobs = [{"id": 13, "moodys_workflow_id": "MW-1040001", "status": "FAILED", "skipped": true, "report_status": "SKIPPED", "next_best_action": "Recon Batch OR Check for Manually Completed Job on Moody's", "age_hours": 90.17543535944445, "is_successful": false, "needs_attention": true, "parent_job_id": NaN, "job_configuration_id": 13, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-18 00:00:00+00:00", "completed_ts": "2025-10-19 00:00:00+00:00", "created_ts": "2025-10-17 00:02:00+00:00", "job_configuration_data": {"portfolio": "PF001", "risk_model": "v1"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 14, "moodys_workflow_id": "MW-1040002", "status": "RUNNING", "skipped": false, "report_status": "ACTIVE", "next_best_action": "Track Batch", "age_hours": 34.208705815277774, "is_successful": false, "needs_attention": false, "parent_job_id": 13.0, "job_configuration_id": 14, "overridden": true, "override_reason_txt": "Fixed data issue - using v2 model", "submitted_ts": "2025-10-19 08:00:00+00:00", "completed_ts": "NaT", "created_ts": "2025-10-19 08:00:00+00:00", "job_configuration_data": {"portfolio": "PF001", "risk_model": "v2_corrected"}, "parent_job_status": "FAILED", "parent_moodys_id": "MW-1040001"}];
+        const configs = [{"config_id": 13, "job_configuration_data": {"portfolio": "PF001", "risk_model": "v1"}, "skipped": true, "overridden": false, "config_report_status": "SKIPPED", "total_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 14, "job_configuration_data": {"portfolio": "PF001", "risk_model": "v2_corrected"}, "skipped": false, "overridden": true, "config_report_status": "UNFULFILLED", "total_jobs": 1, "finished_jobs": 0, "failed_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 1}];
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

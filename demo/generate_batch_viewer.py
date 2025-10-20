@@ -8,6 +8,7 @@ This script:
 3. Generates an interactive HTML viewer (demo.html)
 """
 
+from curses import echo
 import sys
 from pathlib import Path
 import json
@@ -156,13 +157,13 @@ def load_test_data():
 
     # Load in dependency order
     tables = [
-        ('cycles.csv', 'irp_cycle'),
-        ('stages.csv', 'irp_stage'),
-        ('steps.csv', 'irp_step'),
-        ('configurations.csv', 'irp_configuration'),
-        ('batches.csv', 'irp_batch'),
-        ('job_configurations.csv', 'irp_job_configuration'),
-        ('jobs.csv', 'irp_job'),
+        ('files/csv_data/cycles.csv', 'irp_cycle'),
+        ('files/csv_data/stages.csv', 'irp_stage'),
+        ('files/csv_data/steps.csv', 'irp_step'),
+        ('files/csv_data/configurations.csv', 'irp_configuration'),
+        ('files/csv_data/batches.csv', 'irp_batch'),
+        ('files/csv_data/job_configurations.csv', 'irp_job_configuration'),
+        ('files/csv_data/jobs.csv', 'irp_job'),
     ]
 
     for csv_file, table_name in tables:
@@ -301,7 +302,7 @@ def generate_html(batch_id, data):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Batch {batch_id} Viewer - {summary['batch_type']}</title>
+    <title>Batch {batch_id} - {summary['batch_type']}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
@@ -717,9 +718,7 @@ def generate_html(batch_id, data):
 
 def main():
     """Main execution"""
-    print("\n" + "="*60)
-    print("BATCH VIEWER DEMO GENERATOR")
-    print("="*60)
+    print("Starting Prototype Generation...")
 
     # Initialize schema
     if not initialize_schema():
@@ -736,11 +735,6 @@ def main():
         print("\n✗ Failed to load test data")
         return 1
 
-    # Generate HTML for ALL batches
-    print("\n" + "="*60)
-    print("GENERATING HTML VIEWERS FOR ALL BATCHES")
-    print("="*60)
-
     # Get list of all batches
     batches_df = db.execute_query("SELECT id, batch_type FROM irp_batch ORDER BY id", schema=SCHEMA)
 
@@ -749,9 +743,10 @@ def main():
         return 1
 
     batches = batches_df.to_dict('records')
-    output_dir = Path(__file__).parent
+    output_dir = Path(__file__).parent / 'files' / 'html_output'
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Found {len(batches)} batches to process")
+    print(f"✓Found {len(batches)} batches to process")
 
     generated_files = []
 
@@ -773,7 +768,7 @@ def main():
         # Create filename: batch_102_In-Progress-Mixed-Statuses.html
         # Clean batch_type for filename (replace spaces and special chars)
         clean_batch_type = batch_type.replace(' ', '-').replace('/', '-')
-        filename = f'batch_{batch_id}_{clean_batch_type}.html'
+        filename = f'batch_{batch_id}.html'
         output_file = output_dir / filename
 
         # Write to file
@@ -781,7 +776,7 @@ def main():
             f.write(html_content)
 
         generated_files.append(str(output_file))
-        print(f"  ✓ Generated: {filename}")
+        print(f"  ✓ Generated: {filename} for {batch_type}")
 
     print("\n" + "="*60)
     print("COMPLETE!")
