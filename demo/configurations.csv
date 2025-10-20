@@ -1,0 +1,2 @@
+id,cycle_id,configuration_file_name,configuration_data,status,file_last_updated_ts,created_ts
+1,1,/configs/2025-Q1-portfolio-config.xlsx,"{""portfolios"":[""PF001"",""PF002"",""PF003""],""analysis_type"":""risk_assessment""}",VALID,2025-10-13 00:00:00,2025-10-13 00:00:00

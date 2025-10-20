@@ -1,0 +1,2 @@
+id,stage_id,step_num,step_name,notebook_path,requires_batch,created_ts
+1,1,1,Initial Portfolio Analysis,/notebooks/analysis.ipynb,TRUE,2025-10-13 00:00:00

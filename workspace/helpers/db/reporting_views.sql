@@ -1,4 +1,5 @@
 -- Store job-level reporting rules
+DROP TABLE IF EXISTS irp_job_status_rule;
 CREATE TABLE irp_job_status_rule (
     id SERIAL PRIMARY KEY,
     skipped BOOLEAN NOT NULL,
@@ -34,8 +35,8 @@ INSERT INTO irp_job_status_rule (skipped, status, report_status, age_calculation
 (TRUE, 'CANCELLED', 'SKIPPED', 'updated_ts - created_ts', 'Recon Batch OR Check for Manually Completed Job on Moody''s', TRUE),
 (TRUE, 'ERROR', 'SKIPPED', 'updated_ts - created_ts', 'Recon Batch OR Check for Manually Completed Job on Moody''s', TRUE);
 
-DROP VIEW v_irp_job;
-CREATE OR REPLACE VIEW v_irp_job AS
+DROP VIEW IF EXISTS v_irp_job;
+CREATE VIEW v_irp_job AS
 SELECT 
     -- Derived reporting fields from rule table
     r.report_status,
@@ -76,7 +77,8 @@ COMMENT ON VIEW v_irp_job IS
 'Enhanced job view with derived reporting status, age calculations, and actionable recommendations based on job_status_rule table';
 
 -- View for job configuration-level reporting
-CREATE OR REPLACE VIEW v_irp_job_configuration AS
+DROP VIEW IF EXISTS v_irp_job_configuration;
+CREATE VIEW v_irp_job_configuration AS
 WITH job_stats AS (
     SELECT 
         jc.id AS job_configuration_id,
@@ -148,8 +150,9 @@ JOIN irp_job_configuration jc ON js.job_configuration_id = jc.id;
 COMMENT ON VIEW v_irp_job_configuration IS 
 'Job configuration view with aggregated job statistics and derived reporting status (FULFILLED/UNFULFILLED/SKIPPED)';
 
-
-CREATE OR REPLACE VIEW v_irp_batch AS
+-- View for batch-level reporting
+DROP VIEW IF EXISTS v_irp_batch;
+CREATE VIEW v_irp_batch AS
 WITH batch_stats AS (
     SELECT 
         b.id AS batch_id,
