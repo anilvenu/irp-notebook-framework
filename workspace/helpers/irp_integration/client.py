@@ -1,6 +1,7 @@
 import requests, time, os
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from .constants import GET_WORKFLOWS
 
 class Client:
 
@@ -92,7 +93,7 @@ class Client:
         while True:
             print(f"Polling batch workflow ids: {','.join(str(item) for item in workflow_ids)}")
             params = {'ids': ','.join(str(item) for item in workflow_ids)}
-            response = self.request('GET', f"/riskmodeler/v1/workflows", params=params)
+            response = self.request('GET', GET_WORKFLOWS, params=params)
 
             all_completed = True
             for workflow in response.json().get('workflows', []):

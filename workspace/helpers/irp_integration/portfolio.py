@@ -1,5 +1,5 @@
-import json
 from .client import Client
+from .constants import CREATE_PORTFOLIO, GET_PORTFOLIOS, GET_PORTFOLIO_BY_ID, PORTFOLIO_GEOHAZ
 
 class PortfolioManager:
     def __init__(self, client: Client):
@@ -12,17 +12,17 @@ class PortfolioManager:
             "number": portfolio_number,
             "description": description,
         }
-        response = self.client.request('POST', '/riskmodeler/v2/portfolios', params=params, json=data)
+        response = self.client.request('POST', CREATE_PORTFOLIO, params=params, json=data)
         return {'id': response.headers['location'].split('/')[-1]}
 
     def get_portfolios_by_edm_name(self, edm_name: str) -> dict:
         params = {"datasource": edm_name}
-        response = self.client.request('GET', '/riskmodeler/v2/portfolios', params=params)
+        response = self.client.request('GET', GET_PORTFOLIOS, params=params)
         return response.json()
     
     def get_portfolio_by_edm_name_and_id(self, edm_name: str, portfolio_id: int) -> dict:
         params = {"datasource": edm_name}
-        response = self.client.request('GET', f'/riskmodeler/v2/portfolios/{portfolio_id}', params=params)
+        response = self.client.request('GET', GET_PORTFOLIO_BY_ID.format(portfolio_id=portfolio_id), params=params)
         return response.json()
     
     # TODO: Refactor repeating code blocks
@@ -72,7 +72,7 @@ class PortfolioManager:
             )
 
         response = self.client.execute_workflow('POST',
-                                                f"/riskmodeler/v2/portfolios/{portfolio_id}/geohaz",
+                                                PORTFOLIO_GEOHAZ.format(portfolio_id=portfolio_id),
                                                 params=params,
                                                 json=data)
         return response.json()

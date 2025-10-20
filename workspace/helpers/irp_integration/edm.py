@@ -1,4 +1,5 @@
 from .client import Client
+from .constants import GET_DATASOURCES, CREATE_DATASOURCE, DELETE_DATASOURCE, EXPORT_EDM, GET_CEDANTS, GET_LOBS
 
 class EDMManager:
     def __init__(self, client: Client, portfolio_manager=None):
@@ -14,12 +15,12 @@ class EDMManager:
         return self._portfolio_manager
 
     def get_all_edms(self) -> dict:
-        response = self.client.request('GET', '/riskmodeler/v2/datasources')
+        response = self.client.request('GET', GET_DATASOURCES)
         return response.json()
     
     def get_edm_by_name(self, edm_name: str) -> dict:
         params = {"q": f"datasourceName={edm_name}"}
-        response = self.client.request('GET', '/riskmodeler/v2/datasources', params=params)
+        response = self.client.request('GET', GET_DATASOURCES, params=params)
         return response.json()
 
     def create_edm(self, edm_name: str, server_name: str) -> dict:
@@ -28,7 +29,7 @@ class EDMManager:
             "servername": server_name,
             "operation": "CREATE"
         }
-        response = self.client.execute_workflow('POST', '/riskmodeler/v2/datasources', params=params)
+        response = self.client.execute_workflow('POST', CREATE_DATASOURCE, params=params)
         return response.json()
     
     def duplicate_edm(self, source_edm_name: str, dest_edm_name: str = "") -> dict:
@@ -62,7 +63,7 @@ class EDMManager:
             "type": "ExposureExportInput"
         }
 
-        response = self.client.execute_workflow('POST', '/riskmodeler/v2/exports', json=data)
+        response = self.client.execute_workflow('POST', EXPORT_EDM, json=data)
         return response.json()
     
     def upgrade_edm_version(self, edm_name: str) -> dict:
@@ -70,11 +71,11 @@ class EDMManager:
             "datasourcename": edm_name,
             "operation": "EDM_DATA_UPGRADE"
         }
-        response = self.client.execute_workflow('POST', '/riskmodeler/v2/datasources', params=params)
+        response = self.client.execute_workflow('POST', CREATE_DATASOURCE, params=params)
         return response.json()
     
     def delete_edm(self, edm_name: str) -> dict:
-        response = self.client.execute_workflow('DELETE', f'/riskmodeler/v2/datasources/{edm_name}')
+        response = self.client.execute_workflow('DELETE', DELETE_DATASOURCE.format(edm_name=edm_name))
         return response.json()
     
     def get_cedants_by_edm(self, edm_name: str) -> dict:
@@ -83,7 +84,7 @@ class EDMManager:
             "datasource": edm_name,
             "limit": 1000
         }
-        response = self.client.request('GET', '/riskmodeler/v1/cedants', params=params)
+        response = self.client.request('GET', GET_CEDANTS, params=params)
         return response.json()
 
     def get_lobs_by_edm(self, edm_name: str) -> dict:
@@ -92,6 +93,6 @@ class EDMManager:
             "datasource": edm_name,
             "limit": 1000
         }
-        response = self.client.request('GET', '/riskmodeler/v1/lobs', params=params)
+        response = self.client.request('GET', GET_LOBS, params=params)
         return response.json()
     
