@@ -569,6 +569,7 @@ def get_batch_job_configurations(
     query = """
         SELECT id, batch_id, configuration_id, job_configuration_data,
                skipped, overridden, override_reason_txt,
+               parent_job_configuration_id, skipped_reason_txt, override_job_configuration_id,
                created_ts, updated_ts
         FROM irp_job_configuration
         WHERE batch_id = %s

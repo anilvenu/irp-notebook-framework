@@ -793,3 +793,405 @@ def test_resubmit_job_invalid_id(test_schema):
     with pytest.raises(JobError) as exc_info:
         resubmit_job(job_id=-1, schema=test_schema)
     assert 'invalid job_id' in str(exc_info.value).lower()
+
+
+# ==============================================================================
+# JOB CONFIGURATION SKIP TESTS (NEW FEATURE)
+# ==============================================================================
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_skip_job_configuration_standalone(test_schema):
+    """Test skip_job_configuration() standalone (manual skip)"""
+    from helpers.job import skip_job_configuration, create_job_configuration
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_skip_config_standalone')
+
+    # Create job configuration manually
+    job_config_id = create_job_configuration(
+        batch_id=batch_id,
+        configuration_id=config_id,
+        job_configuration_data={'test': 'data'},
+        schema=test_schema
+    )
+
+    # Skip the configuration
+    skip_reason = "Manual skip for testing purposes"
+    skip_job_configuration(
+        job_configuration_id=job_config_id,
+        skipped_reason_txt=skip_reason,
+        schema=test_schema
+    )
+
+    # Verify configuration is marked as skipped
+    df = execute_query(
+        """SELECT skipped, skipped_reason_txt, override_job_configuration_id
+           FROM irp_job_configuration WHERE id = %s""",
+        (job_config_id,),
+        schema=test_schema
+    )
+
+    assert df.iloc[0]['skipped'] == True
+    assert df.iloc[0]['skipped_reason_txt'] == skip_reason
+    assert df.iloc[0]['override_job_configuration_id'] is None
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_skip_job_configuration_with_override_id(test_schema):
+    """Test skip_job_configuration() with override_job_configuration_id"""
+    from helpers.job import skip_job_configuration, create_job_configuration
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_skip_with_override')
+
+    # Create original configuration
+    original_config_id = create_job_configuration(
+        batch_id=batch_id,
+        configuration_id=config_id,
+        job_configuration_data={'original': 'data'},
+        schema=test_schema
+    )
+
+    # Create override configuration
+    override_config_id = create_job_configuration(
+        batch_id=batch_id,
+        configuration_id=config_id,
+        job_configuration_data={'override': 'data'},
+        schema=test_schema
+    )
+
+    # Skip original configuration pointing to override
+    skip_reason = "Configuration overridden by user"
+    skip_job_configuration(
+        job_configuration_id=original_config_id,
+        skipped_reason_txt=skip_reason,
+        override_job_configuration_id=override_config_id,
+        schema=test_schema
+    )
+
+    # Verify
+    df = execute_query(
+        """SELECT skipped, skipped_reason_txt, override_job_configuration_id
+           FROM irp_job_configuration WHERE id = %s""",
+        (original_config_id,),
+        schema=test_schema
+    )
+
+    assert df.iloc[0]['skipped'] == True
+    assert df.iloc[0]['skipped_reason_txt'] == skip_reason
+    assert df.iloc[0]['override_job_configuration_id'] == override_config_id
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_skip_job_configuration_invalid_id(test_schema):
+    """Test skip_job_configuration() with invalid job_configuration_id"""
+    from helpers.job import skip_job_configuration
+
+    with pytest.raises(JobError) as exc_info:
+        skip_job_configuration(
+            job_configuration_id=-1,
+            skipped_reason_txt="Test reason",
+            schema=test_schema
+        )
+    assert 'invalid job_configuration_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_skip_job_configuration_empty_reason(test_schema):
+    """Test skip_job_configuration() with empty skipped_reason_txt"""
+    from helpers.job import skip_job_configuration
+
+    # Test with empty string
+    with pytest.raises(JobError) as exc_info:
+        skip_job_configuration(
+            job_configuration_id=1,
+            skipped_reason_txt="",
+            schema=test_schema
+        )
+    assert 'skipped_reason_txt' in str(exc_info.value).lower()
+
+    # Test with whitespace only
+    with pytest.raises(JobError):
+        skip_job_configuration(
+            job_configuration_id=1,
+            skipped_reason_txt="   ",
+            schema=test_schema
+        )
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_skip_job_configuration_invalid_override_id(test_schema):
+    """Test skip_job_configuration() with invalid override_job_configuration_id"""
+    from helpers.job import skip_job_configuration
+
+    with pytest.raises(JobError) as exc_info:
+        skip_job_configuration(
+            job_configuration_id=1,
+            skipped_reason_txt="Test reason",
+            override_job_configuration_id=0,  # Invalid
+            schema=test_schema
+        )
+    assert 'invalid override_job_configuration_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_skip_job_configuration_not_found(test_schema):
+    """Test skip_job_configuration() with non-existent configuration"""
+    from helpers.job import skip_job_configuration
+
+    with pytest.raises(JobError) as exc_info:
+        skip_job_configuration(
+            job_configuration_id=999999,
+            skipped_reason_txt="Test reason",
+            schema=test_schema
+        )
+    assert 'not found' in str(exc_info.value).lower()
+
+
+# ==============================================================================
+# JOB CONFIGURATION PARENT-CHILD RELATIONSHIP TESTS (NEW FEATURE)
+# ==============================================================================
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_job_with_override_config_relationships(test_schema):
+    """Test resubmit_job with override creates proper parent-child relationships"""
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_config_relationships')
+
+    # Create original job
+    original_job_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'original': 'config'},
+        schema=test_schema
+    )
+
+    # Get original config ID
+    original_job = read_job(original_job_id, schema=test_schema)
+    original_config_id = original_job['job_configuration_id']
+
+    # Resubmit with override
+    override_config = {'overridden': 'config'}
+    override_reason = "Testing parent-child relationship"
+
+    new_job_id = resubmit_job(
+        original_job_id,
+        job_configuration_data=override_config,
+        override_reason=override_reason,
+        schema=test_schema
+    )
+
+    # Get new config ID
+    new_job = read_job(new_job_id, schema=test_schema)
+    new_config_id = new_job['job_configuration_id']
+
+    # Verify NEW configuration has parent_job_configuration_id set
+    new_config = get_job_config(new_job_id, schema=test_schema)
+    assert new_config['parent_job_configuration_id'] == original_config_id
+    assert new_config['overridden'] == True
+    assert new_config['override_reason_txt'] == override_reason
+
+    # Verify ORIGINAL configuration is marked as skipped
+    df = execute_query(
+        """SELECT skipped, skipped_reason_txt, override_job_configuration_id
+           FROM irp_job_configuration WHERE id = %s""",
+        (original_config_id,),
+        schema=test_schema
+    )
+
+    assert df.iloc[0]['skipped'] == True
+    assert df.iloc[0]['skipped_reason_txt'] == override_reason
+    assert df.iloc[0]['override_job_configuration_id'] == new_config_id
+
+    # Verify bidirectional linkage
+    # Parent -> Child: original_config.override_job_configuration_id points to new_config
+    # Child -> Parent: new_config.parent_job_configuration_id points to original_config
+    assert df.iloc[0]['override_job_configuration_id'] == new_config_id
+    assert new_config['parent_job_configuration_id'] == original_config_id
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_job_without_override_no_config_skip(test_schema):
+    """Test resubmit_job without override does NOT skip original configuration"""
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_no_override_no_skip')
+
+    # Create original job
+    original_job_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'original': 'config'},
+        schema=test_schema
+    )
+
+    # Get original config ID
+    original_job = read_job(original_job_id, schema=test_schema)
+    original_config_id = original_job['job_configuration_id']
+
+    # Resubmit WITHOUT override
+    new_job_id = resubmit_job(original_job_id, schema=test_schema)
+
+    # Verify ORIGINAL configuration is NOT marked as skipped
+    # (because we're reusing the same configuration)
+    df = execute_query(
+        """SELECT skipped, skipped_reason_txt, override_job_configuration_id
+           FROM irp_job_configuration WHERE id = %s""",
+        (original_config_id,),
+        schema=test_schema
+    )
+
+    assert df.iloc[0]['skipped'] == False
+    assert df.iloc[0]['skipped_reason_txt'] is None
+    assert df.iloc[0]['override_job_configuration_id'] is None
+
+    # Verify new job uses SAME configuration
+    new_job = read_job(new_job_id, schema=test_schema)
+    assert new_job['job_configuration_id'] == original_config_id
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_create_job_configuration_with_parent(test_schema):
+    """Test create_job_configuration() with parent_job_configuration_id"""
+    from helpers.job import create_job_configuration
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_create_with_parent')
+
+    # Create parent configuration
+    parent_config_id = create_job_configuration(
+        batch_id=batch_id,
+        configuration_id=config_id,
+        job_configuration_data={'parent': 'config'},
+        schema=test_schema
+    )
+
+    # Create child configuration with parent reference
+    child_config_id = create_job_configuration(
+        batch_id=batch_id,
+        configuration_id=config_id,
+        job_configuration_data={'child': 'config'},
+        parent_job_configuration_id=parent_config_id,
+        schema=test_schema
+    )
+
+    # Verify parent-child relationship
+    df = execute_query(
+        """SELECT parent_job_configuration_id FROM irp_job_configuration WHERE id = %s""",
+        (child_config_id,),
+        schema=test_schema
+    )
+
+    assert df.iloc[0]['parent_job_configuration_id'] == parent_config_id
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_create_job_configuration_invalid_parent_id(test_schema):
+    """Test create_job_configuration() with invalid parent_job_configuration_id"""
+    from helpers.job import create_job_configuration
+
+    with pytest.raises(JobError) as exc_info:
+        create_job_configuration(
+            batch_id=1,
+            configuration_id=1,
+            job_configuration_data={'test': 'data'},
+            parent_job_configuration_id=0,  # Invalid
+            schema=test_schema
+        )
+    assert 'invalid parent_job_configuration_id' in str(exc_info.value).lower()
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_get_job_config_returns_new_fields(test_schema):
+    """Test get_job_config() returns new fields (parent_job_configuration_id, etc.)"""
+    from helpers.job import create_job_configuration
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_get_config_fields')
+
+    # Create configuration with parent
+    parent_config_id = create_job_configuration(
+        batch_id=batch_id,
+        configuration_id=config_id,
+        job_configuration_data={'parent': 'config'},
+        schema=test_schema
+    )
+
+    child_config_id = create_job_configuration(
+        batch_id=batch_id,
+        configuration_id=config_id,
+        job_configuration_data={'child': 'config'},
+        parent_job_configuration_id=parent_config_id,
+        overridden=True,
+        override_reason_txt="Test override",
+        schema=test_schema
+    )
+
+    # Create job with child configuration
+    job_id = create_job(
+        batch_id=batch_id,
+        job_configuration_id=child_config_id,
+        schema=test_schema
+    )
+
+    # Get job config
+    job_config = get_job_config(job_id, schema=test_schema)
+
+    # Verify all new fields are present
+    assert 'parent_job_configuration_id' in job_config
+    assert 'skipped_reason_txt' in job_config
+    assert 'override_job_configuration_id' in job_config
+    assert job_config['parent_job_configuration_id'] == parent_config_id
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_chained_resubmissions_with_override(test_schema):
+    """Test multiple chained resubmissions create proper parent-child chain"""
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_chained_resubmit')
+
+    # Create original job
+    job1_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'version': 1},
+        schema=test_schema
+    )
+    config1_id = read_job(job1_id, schema=test_schema)['job_configuration_id']
+
+    # First resubmission
+    job2_id = resubmit_job(
+        job1_id,
+        job_configuration_data={'version': 2},
+        override_reason="First override",
+        schema=test_schema
+    )
+    config2_id = read_job(job2_id, schema=test_schema)['job_configuration_id']
+
+    # Second resubmission
+    job3_id = resubmit_job(
+        job2_id,
+        job_configuration_data={'version': 3},
+        override_reason="Second override",
+        schema=test_schema
+    )
+    config3_id = read_job(job3_id, schema=test_schema)['job_configuration_id']
+
+    # Verify chain: config1 -> config2 -> config3
+    config2 = get_job_config(job2_id, schema=test_schema)
+    config3 = get_job_config(job3_id, schema=test_schema)
+
+    assert config2['parent_job_configuration_id'] == config1_id
+    assert config3['parent_job_configuration_id'] == config2_id
+
+    # Verify config1 and config2 are both marked as skipped
+    df = execute_query(
+        """SELECT id, skipped, override_job_configuration_id FROM irp_job_configuration WHERE id IN (%s, %s)""",
+        (config1_id, config2_id),
+        schema=test_schema
+    )
+
+    for row in df.itertuples():
+        assert row.skipped == True
+        assert row.override_job_configuration_id is not None

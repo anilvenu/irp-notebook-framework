@@ -105,17 +105,21 @@ CREATE TABLE irp_batch (
 
 -- Configuration for Job
 CREATE TABLE irp_job_configuration (
-    id SERIAL PRIMARY KEY,    
+    id SERIAL PRIMARY KEY,
     batch_id INTEGER NOT NULL,
     configuration_id INTEGER NOT NULL,
     job_configuration_data JSONB NOT NULL,
     skipped BOOLEAN DEFAULT False,
     overridden BOOLEAN DEFAULT False,
     override_reason_txt VARCHAR(1000),
+    parent_job_configuration_id INTEGER NULL,
+    skipped_reason_txt VARCHAR(1000) NULL,
+    override_job_configuration_id INTEGER NULL,
     created_ts TIMESTAMPTZ DEFAULT NOW(),
     updated_ts TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT fk_job_configuration_batch FOREIGN KEY (batch_id) REFERENCES irp_batch(id),
-    CONSTRAINT fk_job_configuration_configuration FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id)
+    CONSTRAINT fk_job_configuration_configuration FOREIGN KEY (configuration_id) REFERENCES irp_configuration(id),
+    CONSTRAINT fk_job_configuration_parent FOREIGN KEY (parent_job_configuration_id) REFERENCES irp_job_configuration(id)
 );
 
 -- Job Tracking
@@ -171,6 +175,8 @@ CREATE INDEX idx_batch_type ON irp_batch(batch_type);
 CREATE INDEX idx_job_batch ON irp_job(batch_id);
 CREATE INDEX idx_job_status ON irp_job(status);
 CREATE INDEX idx_job_configuration ON irp_job(job_configuration_id);
+CREATE INDEX idx_job_configuration_parent ON irp_job_configuration(parent_job_configuration_id);
+CREATE INDEX idx_job_configuration_override ON irp_job_configuration(override_job_configuration_id);
 CREATE INDEX idx_recon_batch ON irp_batch_recon_log(batch_id);
 CREATE INDEX idx_recon_ts ON irp_batch_recon_log(recon_ts DESC);
 CREATE INDEX idx_tracking_job ON irp_job_tracking_log(job_id);

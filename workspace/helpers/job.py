@@ -47,6 +47,7 @@ def create_job_configuration(
     skipped: bool = False,
     overridden: bool = False,
     override_reason_txt: Optional[str] = None,
+    parent_job_configuration_id: Optional[int] = None,
     schema: str = 'public'
 ) -> int:
     """
@@ -65,6 +66,7 @@ def create_job_configuration(
         skipped: Whether this configuration is skipped
         overridden: Whether this is an override configuration
         override_reason_txt: Reason for override (if overridden=True)
+        parent_job_configuration_id: Parent job configuration ID (if this is an override)
         schema: Database schema
 
     Returns:
@@ -82,16 +84,20 @@ def create_job_configuration(
     if not isinstance(job_configuration_data, dict):
         raise JobError("job_configuration_data must be a dictionary")
 
+    if parent_job_configuration_id is not None:
+        if not isinstance(parent_job_configuration_id, int) or parent_job_configuration_id <= 0:
+            raise JobError(f"Invalid parent_job_configuration_id: {parent_job_configuration_id}")
+
     try:
         query = """
             INSERT INTO irp_job_configuration
-            (batch_id, configuration_id, job_configuration_data, skipped, overridden, override_reason_txt)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            (batch_id, configuration_id, job_configuration_data, skipped, overridden, override_reason_txt, parent_job_configuration_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         job_config_id = execute_insert(
             query,
             (batch_id, configuration_id, json.dumps(job_configuration_data),
-             skipped, overridden, override_reason_txt),
+             skipped, overridden, override_reason_txt, parent_job_configuration_id),
             schema=schema
         )
         return job_config_id
@@ -408,6 +414,7 @@ def get_job_config(job_id: int, schema: str = 'public') -> Dict[str, Any]:
     query = """
         SELECT id, batch_id, configuration_id, job_configuration_data,
                skipped, overridden, override_reason_txt,
+               parent_job_configuration_id, skipped_reason_txt, override_job_configuration_id,
                created_ts, updated_ts
         FROM irp_job_configuration
         WHERE id = %s
@@ -532,7 +539,68 @@ def skip_job(job_id: int, schema: str = 'public') -> None:
         """
         execute_command(query, (job_id,), schema=schema)
     except DatabaseError as e:  # pragma: no cover
-        raise JobError(f"Failed to skip job: {str(e)}") 
+        raise JobError(f"Failed to skip job: {str(e)}")
+
+
+def skip_job_configuration(
+    job_configuration_id: int,
+    skipped_reason_txt: str,
+    override_job_configuration_id: Optional[int] = None,
+    schema: str = 'public'
+) -> None:
+    """
+    Mark job configuration as skipped.
+
+    LAYER: 2 (CRUD)
+
+    TRANSACTION BEHAVIOR:
+        - Never manages transactions
+        - Safe to call within or outside transaction_context()
+
+    This function can be called:
+    1. Standalone for manual skipping (with override_job_configuration_id=None)
+    2. As part of resubmit_job() workflow (with override_job_configuration_id set)
+
+    Args:
+        job_configuration_id: Job configuration ID to skip
+        skipped_reason_txt: Mandatory reason for skipping (user input)
+        override_job_configuration_id: Optional ID of override configuration (if applicable)
+        schema: Database schema
+
+    Raises:
+        JobError: If configuration not found or update fails
+        JobError: If skipped_reason_txt is empty
+    """
+    if not isinstance(job_configuration_id, int) or job_configuration_id <= 0:
+        raise JobError(f"Invalid job_configuration_id: {job_configuration_id}")
+
+    if not skipped_reason_txt or not isinstance(skipped_reason_txt, str) or not skipped_reason_txt.strip():
+        raise JobError("skipped_reason_txt is required and must be a non-empty string")
+
+    if override_job_configuration_id is not None:
+        if not isinstance(override_job_configuration_id, int) or override_job_configuration_id <= 0:
+            raise JobError(f"Invalid override_job_configuration_id: {override_job_configuration_id}")
+
+    try:
+        query = """
+            UPDATE irp_job_configuration
+            SET skipped = TRUE,
+                skipped_reason_txt = %s,
+                override_job_configuration_id = %s,
+                updated_ts = NOW()
+            WHERE id = %s
+        """
+        rows = execute_command(
+            query,
+            (skipped_reason_txt, override_job_configuration_id, job_configuration_id),
+            schema=schema
+        )
+
+        if rows == 0:
+            raise JobError(f"Job configuration with id {job_configuration_id} not found")
+
+    except DatabaseError as e:  # pragma: no cover
+        raise JobError(f"Failed to skip job configuration: {str(e)}")  # pragma: no cover 
 
 
 # ============================================================================
@@ -774,7 +842,10 @@ def resubmit_job(
     with transaction_context(schema=schema):
         # Create new job
         if job_configuration_data:
-            # Override case: Create new job with override configuration
+            # Override case: Create new job configuration with parent reference
+            original_config_id = job['job_configuration_id']
+
+            # Create NEW job configuration with parent reference
             new_config_id = create_job_configuration(
                 batch_id=batch_id,
                 configuration_id=configuration_id,
@@ -782,9 +853,19 @@ def resubmit_job(
                 skipped=False,
                 overridden=True,
                 override_reason_txt=override_reason,
+                parent_job_configuration_id=original_config_id,
                 schema=schema
             )
 
+            # Skip ORIGINAL job configuration (before creating new job)
+            skip_job_configuration(
+                job_configuration_id=original_config_id,
+                skipped_reason_txt=override_reason,
+                override_job_configuration_id=new_config_id,
+                schema=schema
+            )
+
+            # Create new job with new configuration
             new_job_id = create_job(
                 batch_id=batch_id,
                 job_configuration_id=new_config_id,
@@ -793,7 +874,7 @@ def resubmit_job(
             )
 
         else:
-            # Reuse same config
+            # Reuse same config (no override)
             job_config_id = job['job_configuration_id']
 
             new_job_id = create_job(
