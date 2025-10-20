@@ -463,6 +463,121 @@ def schema_context(schema: str):
         set_schema(old_schema)
 
 
+@contextmanager
+def transaction_context(schema: str = None):
+    """
+    Context manager for executing multiple database operations in a single transaction.
+
+    This provides ACID guarantees across multiple operations. All operations within
+    the context share a single database connection and are committed together when
+    the context exits successfully, or rolled back if an exception occurs.
+
+    IMPORTANT BEHAVIOR:
+    - All database operations (execute_query, execute_insert, execute_command, etc.)
+      within this context will use the SAME connection
+    - Operations are NOT committed until the context exits
+    - If ANY operation raises an exception, ALL operations are rolled back
+    - Nesting transaction contexts is NOT supported (will raise error)
+    - Thread-safe: Each thread has its own transaction context
+
+    Args:
+        schema: Schema to use for this transaction (optional, uses current schema if None)
+
+    Yields:
+        SQLAlchemy connection object (can be ignored in most cases)
+
+    Raises:
+        DatabaseError: If transaction fails or if nested transactions attempted
+
+    Example - Atomic Batch Creation:
+        >>> # Without transaction: if job creation fails, batch is orphaned
+        >>> batch_id = _create_batch(...)  # Commits immediately
+        >>> for config in configs:
+        ...     create_job(...)  # If this fails, batch is orphaned!
+
+        >>> # With transaction: all-or-nothing guarantee
+        >>> with transaction_context():
+        ...     batch_id = _create_batch(...)
+        ...     for config in configs:
+        ...         create_job(...)
+        ...     # All committed together, or all rolled back on exception
+
+    Example - Atomic Job Resubmission:
+        >>> # Create new job and skip old job atomically
+        >>> with transaction_context():
+        ...     new_job_id = create_job(...)
+        ...     skip_job(old_job_id)
+        ...     # Both operations committed together
+
+    Example - With Schema:
+        >>> with transaction_context(schema='test'):
+        ...     cycle_id = register_cycle('test_cycle')
+        ...     stage_id = get_or_create_stage(cycle_id, 1, 'Stage 1')
+        ...     # All in 'test' schema, all committed together
+
+    Example - Error Handling:
+        >>> try:
+        ...     with transaction_context():
+        ...         batch_id = _create_batch(...)
+        ...         raise ValueError("Something went wrong")
+        ...         create_job(...)  # Never executes
+        ... except ValueError:
+        ...     pass
+        >>> # Batch creation was rolled back - no orphaned records
+
+    Thread Safety:
+        Uses thread-local storage, so each thread has its own transaction context.
+        Safe in multi-threaded environments.
+
+    Limitations:
+        - Cannot nest transaction contexts (will raise DatabaseError)
+        - bulk_insert() within transaction context may have unexpected behavior
+          (uses its own internal transaction)
+
+    See Also:
+        schema_context(): For temporary schema changes without transactions
+        execute_command(): Modified to support transactional mode
+        execute_insert(): Modified to support transactional mode
+        execute_query(): Modified to support transactional mode
+    """
+    # Check for nested transactions
+    if hasattr(_context, 'transaction_conn') and _context.transaction_conn is not None:
+        raise DatabaseError(
+            "Nested transactions are not supported. "
+            "Complete the outer transaction_context before starting a new one."
+        )
+
+    # Determine schema to use
+    active_schema = schema if schema is not None else get_current_schema()
+
+    # Get engine and start transaction
+    engine = get_engine()
+
+    try:
+        # Use engine.begin() for automatic commit/rollback
+        with engine.begin() as conn:
+            # Set search path for this connection
+            _set_search_path(conn, active_schema)
+
+            # Store connection in thread-local storage
+            _context.transaction_conn = conn
+
+            try:
+                yield conn
+                # If we reach here without exception, commit happens automatically
+            finally:
+                # Always clean up thread-local storage
+                _context.transaction_conn = None
+
+    except Exception as e:
+        # Rollback happens automatically via engine.begin()
+        # Re-raise as DatabaseError for consistency
+        if isinstance(e, DatabaseError):
+            raise
+        else:
+            raise DatabaseError(f"Transaction failed: {str(e)}")
+
+
 def reset_schema():
     """
     Reset schema to default ('public').
@@ -843,19 +958,36 @@ def execute_query(query: str, params: tuple = None, schema: str = None) -> pd.Da
 
     Returns:
         DataFrame with query results
+
+    Transaction Behavior:
+        - If called within transaction_context(): Uses shared connection
+        - If called outside transaction: Creates connection (read-only, no commit needed)
     """
     try:
-        # Use provided schema, or get from context
-        active_schema = schema if schema is not None else get_current_schema()
+        # Check if we're in a transaction context
+        if hasattr(_context, 'transaction_conn') and _context.transaction_conn is not None:
+            # Use existing transaction connection
+            conn = _context.transaction_conn
 
-        # Convert query params
-        converted_query, param_dict = _convert_query_params(query, params)
+            # Convert query params
+            converted_query, param_dict = _convert_query_params(query, params)
 
-        engine = get_engine()
-        with engine.connect() as conn:
-            _set_search_path(conn, active_schema)
+            # Execute query using shared connection
             df = pd.read_sql_query(text(converted_query), conn, params=param_dict)
-        return df
+            return df
+        else:
+            # Original behavior: fresh connection
+            # Use provided schema, or get from context
+            active_schema = schema if schema is not None else get_current_schema()
+
+            # Convert query params
+            converted_query, param_dict = _convert_query_params(query, params)
+
+            engine = get_engine()
+            with engine.connect() as conn:
+                _set_search_path(conn, active_schema)
+                df = pd.read_sql_query(text(converted_query), conn, params=param_dict)
+            return df
     except Exception as e:
         raise DatabaseError(f"Query failed: {str(e)}") # pragma: no cover
 
@@ -871,20 +1003,38 @@ def execute_scalar(query: str, params: tuple = None, schema: str = None) -> Any:
 
     Returns:
         Single value from query
+
+    Transaction Behavior:
+        - If called within transaction_context(): Uses shared connection
+        - If called outside transaction: Creates connection (read-only, no commit needed)
     """
     try:
-        # Use provided schema, or get from context
-        active_schema = schema if schema is not None else get_current_schema()
+        # Check if we're in a transaction context
+        if hasattr(_context, 'transaction_conn') and _context.transaction_conn is not None:
+            # Use existing transaction connection
+            conn = _context.transaction_conn
 
-        # Convert query params
-        converted_query, param_dict = _convert_query_params(query, params)
+            # Convert query params
+            converted_query, param_dict = _convert_query_params(query, params)
 
-        engine = get_engine()
-        with engine.connect() as conn:
-            _set_search_path(conn, active_schema)
+            # Execute query using shared connection
             result = conn.execute(text(converted_query), param_dict)
             row = result.fetchone()
             return row[0] if row else None
+        else:
+            # Original behavior: fresh connection
+            # Use provided schema, or get from context
+            active_schema = schema if schema is not None else get_current_schema()
+
+            # Convert query params
+            converted_query, param_dict = _convert_query_params(query, params)
+
+            engine = get_engine()
+            with engine.connect() as conn:
+                _set_search_path(conn, active_schema)
+                result = conn.execute(text(converted_query), param_dict)
+                row = result.fetchone()
+                return row[0] if row else None
     except Exception as e:
         raise DatabaseError(f"Scalar query failed: {str(e)}") # paragma: no cover
 
@@ -900,23 +1050,43 @@ def execute_command(query: str, params: tuple = None, schema: str = None) -> int
 
     Returns:
         Number of rows affected
+
+    Transaction Behavior:
+        - If called within transaction_context(): Uses shared connection, no commit
+        - If called outside transaction: Creates connection, auto-commits
     """
     try:
-        # Use provided schema, or get from context
-        active_schema = schema if schema is not None else get_current_schema()
+        # Check if we're in a transaction context
+        if hasattr(_context, 'transaction_conn') and _context.transaction_conn is not None:
+            # Use existing transaction connection (don't commit)
+            conn = _context.transaction_conn
 
-        # Convert numpy types to Python native types for psycopg2 compatibility
-        params = _convert_params_to_native_types(params)
+            # Convert numpy types to Python native types for psycopg2 compatibility
+            params = _convert_params_to_native_types(params)
 
-        # Convert query params
-        converted_query, param_dict = _convert_query_params(query, params)
+            # Convert query params
+            converted_query, param_dict = _convert_query_params(query, params)
 
-        engine = get_engine()
-        with engine.connect() as conn:
-            _set_search_path(conn, active_schema)
+            # Execute without commit (transaction will commit)
             result = conn.execute(text(converted_query), param_dict)
-            conn.commit()
             return result.rowcount
+        else:
+            # Original behavior: fresh connection + auto-commit
+            # Use provided schema, or get from context
+            active_schema = schema if schema is not None else get_current_schema()
+
+            # Convert numpy types to Python native types for psycopg2 compatibility
+            params = _convert_params_to_native_types(params)
+
+            # Convert query params
+            converted_query, param_dict = _convert_query_params(query, params)
+
+            engine = get_engine()
+            with engine.connect() as conn:
+                _set_search_path(conn, active_schema)
+                result = conn.execute(text(converted_query), param_dict)
+                conn.commit()
+                return result.rowcount
     except Exception as e:
         raise DatabaseError(f"Command failed: {str(e)}") # pragma: no cover
 
@@ -932,28 +1102,49 @@ def execute_insert(query: str, params: tuple = None, schema: str = None) -> int:
 
     Returns:
         ID of newly inserted record
+
+    Transaction Behavior:
+        - If called within transaction_context(): Uses shared connection, no commit
+        - If called outside transaction: Creates connection, auto-commits
     """
     try:
-        # Use provided schema, or get from context
-        active_schema = schema if schema is not None else get_current_schema()
-
         # Add RETURNING id if not present
         if "RETURNING" not in query.upper():
             query = query + " RETURNING id"
 
-        # Convert numpy types to Python native types for psycopg2 compatibility
-        params = _convert_params_to_native_types(params)
+        # Check if we're in a transaction context
+        if hasattr(_context, 'transaction_conn') and _context.transaction_conn is not None:
+            # Use existing transaction connection (don't commit)
+            conn = _context.transaction_conn
 
-        # Convert query params
-        converted_query, param_dict = _convert_query_params(query, params)
+            # Convert numpy types to Python native types for psycopg2 compatibility
+            params = _convert_params_to_native_types(params)
 
-        engine = get_engine()
-        with engine.connect() as conn:
-            _set_search_path(conn, active_schema)
+            # Convert query params
+            converted_query, param_dict = _convert_query_params(query, params)
+
+            # Execute without commit (transaction will commit)
             result = conn.execute(text(converted_query), param_dict)
-            conn.commit()
             row = result.fetchone()
             return row[0] if row else None
+        else:
+            # Original behavior: fresh connection + auto-commit
+            # Use provided schema, or get from context
+            active_schema = schema if schema is not None else get_current_schema()
+
+            # Convert numpy types to Python native types for psycopg2 compatibility
+            params = _convert_params_to_native_types(params)
+
+            # Convert query params
+            converted_query, param_dict = _convert_query_params(query, params)
+
+            engine = get_engine()
+            with engine.connect() as conn:
+                _set_search_path(conn, active_schema)
+                result = conn.execute(text(converted_query), param_dict)
+                conn.commit()
+                row = result.fetchone()
+                return row[0] if row else None
     except Exception as e:
         raise DatabaseError(f"Insert failed: {str(e)}") # pragma: no cover
 
