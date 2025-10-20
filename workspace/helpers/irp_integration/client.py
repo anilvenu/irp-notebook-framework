@@ -109,7 +109,7 @@ class Client:
                 raise TimeoutError(f"Batch workflows did not complete within {timeout} seconds.")
             time.sleep(interval)
 
-    def execute_workflow(self, method, path, *, params=None, json=None, headers=None, timeout=None, stream=False) -> requests.Response:
+    def execute_workflow(self, method, path, *, params=None, json=None, headers={}, timeout=None, stream=False) -> requests.Response:
         print("Submitting workflow request...")
         response = self.request(method, path, params=params, json=json, headers=headers, timeout=timeout, stream=stream)
         if response.status_code not in (201,202):

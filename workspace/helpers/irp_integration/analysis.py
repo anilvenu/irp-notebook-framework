@@ -1,6 +1,6 @@
 import json
 from .client import Client
-from .constants import GET_MODEL_PROFILES, GET_ANALYSES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME, GET_PLATFORM_ANALYSES, PORTFOLIO_PROCESS, CREATE_ANALYSIS_GROUP
+from .constants import GET_MODEL_PROFILES, GET_ANALYSES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME, GET_PLATFORM_ANALYSES, ANALYZE_PORTFOLIO, CREATE_ANALYSIS_GROUP
 
 class AnalysisManager:
     def __init__(self, client: Client, reference_data_manager=None):
@@ -80,7 +80,7 @@ class AnalysisManager:
 
             print(json.dumps(data, indent=2))
 
-            response = self.client.request('POST', PORTFOLIO_PROCESS.format(portfolio_id=portfolio_id), json=data)
+            response = self.client.request('POST', ANALYZE_PORTFOLIO.format(portfolio_id=portfolio_id), json=data)
             return int(response.headers['location'].split('/')[-1])
         return -1
     
@@ -121,7 +121,7 @@ class AnalysisManager:
             "jobName": job_name
         }
 
-        response = self.client.execute_workflow('POST', PORTFOLIO_PROCESS.format(portfolio_id=portfolio_id), json=data)
+        response = self.client.execute_workflow('POST', ANALYZE_PORTFOLIO.format(portfolio_id=portfolio_id), json=data)
         return response.json()
     
     def execute_analysis(self, job_name: str, edm_name: str, portfolio_id: int, analysis_profile_name: str, output_profile_name: str, event_rate_scheme_name: str, treaty_ids: list) -> dict:

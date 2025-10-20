@@ -1,5 +1,5 @@
 from .client import Client
-from .constants import GET_TREATIES, CREATE_TREATY, TREATY_LOB_BATCH, GET_TREATY_TYPES, GET_TREATY_ATTACHMENT_BASES, GET_TREATY_ATTACHMENT_LEVELS
+from .constants import GET_TREATIES, CREATE_TREATY, ASSIGN_TREATY_LOBS, GET_TREATY_TYPES, GET_TREATY_ATTACHMENT_BASES, GET_TREATY_ATTACHMENT_LEVELS
 
 class TreatyManager:
 
@@ -57,5 +57,5 @@ class TreatyManager:
                 "path": f"/{treaty_id}/lob"
             }
             data.append(item)
-        response = self.client.request('POST', TREATY_LOB_BATCH, params=params, json=data)
+        response = self.client.request('POST', ASSIGN_TREATY_LOBS, params=params, json=data)
         return response.json()
