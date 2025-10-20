@@ -62,7 +62,7 @@ class ConfigurationTransformer:
         return decorator
 
     @classmethod
-    def get_job_configurations(
+    def create_job_configurations(
         cls,
         batch_type: str,
         configuration: Dict[str, Any]

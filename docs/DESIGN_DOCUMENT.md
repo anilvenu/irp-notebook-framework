@@ -377,7 +377,7 @@ class ConfigurationTransformer:
         cls._transformers[batch_type] = transformer_func
 
     @classmethod
-    def get_job_configurations(cls, batch_type: str, master_config: Dict) -> List[Dict]:
+    def create_job_configurations(cls, batch_type: str, master_config: Dict) -> List[Dict]:
         transformer = cls._transformers[batch_type]
         return transformer(master_config)
 ```

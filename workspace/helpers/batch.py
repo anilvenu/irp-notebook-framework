@@ -324,7 +324,7 @@ def create_batch(
 
     # Apply transformer to generate job configurations
     try:
-        job_configs = ConfigurationTransformer.get_job_configurations(
+        job_configs = ConfigurationTransformer.create_job_configurations(
             batch_type,
             config['configuration_data']
         )

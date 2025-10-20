@@ -471,7 +471,7 @@ def test_configuration_transformer_default():
         'nested': {'key': 'value'}
     }
 
-    result = ConfigurationTransformer.get_job_configurations('default', config)
+    result = ConfigurationTransformer.create_job_configurations('default', config)
 
     # Verify results
     assert len(result) == 1, "Should return single job config"
@@ -484,7 +484,7 @@ def test_configuration_transformer_passthrough():
     """Test ConfigurationTransformer passthrough type"""
     config = {'data': 'test', 'count': 5}
 
-    result = ConfigurationTransformer.get_job_configurations('passthrough', config)
+    result = ConfigurationTransformer.create_job_configurations('passthrough', config)
 
     # Verify results
     assert len(result) == 1, "Should return single job config"
@@ -504,7 +504,7 @@ def test_configuration_transformer_multi_job_with_jobs():
         ]
     }
 
-    result = ConfigurationTransformer.get_job_configurations('multi_job', config_with_jobs)
+    result = ConfigurationTransformer.create_job_configurations('multi_job', config_with_jobs)
 
     assert len(result) == 3, "Should return 3 job configs"
     assert result[0] == {'job_id': 1, 'param': 'A'}
@@ -517,7 +517,7 @@ def test_configuration_transformer_multi_job_fallback():
     """Test ConfigurationTransformer multi_job type without jobs list (fallback)"""
     config_no_jobs = {'single_job': 'data'}
 
-    result = ConfigurationTransformer.get_job_configurations('multi_job', config_no_jobs)
+    result = ConfigurationTransformer.create_job_configurations('multi_job', config_no_jobs)
 
     assert len(result) == 1, "Should return single job config"
     assert result[0] == config_no_jobs
@@ -529,7 +529,7 @@ def test_configuration_transformer_unknown_type():
     config = {'data': 'test'}
 
     with pytest.raises(ConfigurationError) as exc_info:
-        ConfigurationTransformer.get_job_configurations('nonexistent_type', config)
+        ConfigurationTransformer.create_job_configurations('nonexistent_type', config)
 
     assert 'nonexistent_type' in str(exc_info.value)
     assert 'Available types' in str(exc_info.value)
@@ -560,7 +560,7 @@ def test_configuration_transformer_custom_registration():
 
     # Test the custom transformer
     config = {'value': 10}
-    result = ConfigurationTransformer.get_job_configurations('test_custom', config)
+    result = ConfigurationTransformer.create_job_configurations('test_custom', config)
 
     assert len(result) == 2, "Should return 2 job configs"
     assert result[0] == {'value': 20}, "First job should have doubled value"

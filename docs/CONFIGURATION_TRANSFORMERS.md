@@ -25,7 +25,7 @@ This design allows for:
 
 ## Core API
 
-### `get_job_configurations(batch_type, configuration)`
+### `create_job_configurations(batch_type, configuration)`
 
 Transform a configuration dictionary into a list of job configurations.
 
@@ -49,7 +49,7 @@ config = {
     'parameters': {'risk_level': 'high'}
 }
 
-jobs = ConfigurationTransformer.get_job_configurations('default', config)
+jobs = ConfigurationTransformer.create_job_configurations('default', config)
 # Returns: [{'portfolio': 'PortfolioA', 'start_date': '2024-01-01', ...}]
 ```
 
@@ -199,7 +199,7 @@ config = {
     'parameters': {'risk_level': 'medium'}
 }
 
-jobs = ConfigurationTransformer.get_job_configurations('portfolio_batch', config)
+jobs = ConfigurationTransformer.create_job_configurations('portfolio_batch', config)
 
 # Result:
 # [
@@ -304,7 +304,7 @@ config = {
     'common_config': {'threshold': 0.95}
 }
 
-jobs = ConfigurationTransformer.get_job_configurations('cartesian_product', config)
+jobs = ConfigurationTransformer.create_job_configurations('cartesian_product', config)
 
 # Result: 4 jobs (2 portfolios × 2 scenarios)
 # [
@@ -414,7 +414,7 @@ def test_portfolio_batch_transformer():
         'param': 'value'
     }
 
-    jobs = ConfigurationTransformer.get_job_configurations(
+    jobs = ConfigurationTransformer.create_job_configurations(
         'portfolio_batch',
         config
     )
@@ -441,7 +441,7 @@ config_data = read_configuration(config_id)
 
 # 2. Transform into job configurations
 batch_type = 'portfolio_batch'  # Determined by batch metadata
-job_configs = ConfigurationTransformer.get_job_configurations(
+job_configs = ConfigurationTransformer.create_job_configurations(
     batch_type,
     config_data['configuration_data']
 )
@@ -543,7 +543,7 @@ class ConfigurationTransformer:
     def register(cls, batch_type: str) -> Callable
 
     @classmethod
-    def get_job_configurations(
+    def create_job_configurations(
         cls,
         batch_type: str,
         configuration: Dict[str, Any]
