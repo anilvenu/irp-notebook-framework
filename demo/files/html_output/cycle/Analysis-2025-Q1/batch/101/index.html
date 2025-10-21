@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Batch 101 - Happy Path - All Completed</title>
     <style>
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Poppins', Roboto, Arial, sans-serif;
             background: #f5f5f5;
             padding: 16px;
         }
@@ -21,7 +20,7 @@
         }
 
         .breadcrumb a {
-            color: #1976d2;
+            color: #3b72a9;
             text-decoration: none;
             font-weight: 500;
         }
@@ -41,7 +40,7 @@
 
         /* Page Header */
         .page-header {
-            background: linear-gradient(135deg, #546e7a 0%, #37474f 100%);
+            background: linear-gradient(135deg, #818282 0%, #3e3e3e 100%);
             color: white;
             padding: 20px 24px;
             margin-bottom: 20px;
@@ -99,14 +98,14 @@
         /* Status Badges */
         .status-badge {
             display: inline-block;
-            padding: 4px 10px;
+            padding: 4px 8px;
             border-radius: 4px;
             font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
         }
 
-        .status-ACTIVE { background: #e3f2fd; color: #1976d2; }
+        .status-ACTIVE { background: #e3f2fd; color: #2b6197; }
         .status-COMPLETED { background: #e8f5e9; color: #388e3c; }
         .status-INITIATED { background: #fff3e0; color: #f57c00; }
         .status-FAILED { background: #ffebee; color: #d32f2f; }
@@ -114,11 +113,12 @@
         .status-ERROR { background: #ffebee; color: #c62828; }
         .status-FINISHED { background: #e8f5e9; color: #2e7d32; }
         .status-RUNNING { background: #e1f5fe; color: #0288d1; }
-        .status-QUEUED, .status-PENDING, .status-SUBMITTED { background: #f3e5f5; color: #7b1fa2; }
+        .status-QUEUED, .status-PENDING, .status-SUBMITTED { background: #ebe2ec; color: #775784; }
         .status-SKIPPED { background: #fafafa; color: #616161; }
-        .status-UNSUBMITTED { background: #fff9c4; color: #f57f17; }
+        .status-UNSUBMITTED { background: #fff3e0; color: #f57c00; }
         .status-FULFILLED { background: #e8f5e9; color: #2e7d32; }
         .status-UNFULFILLED { background: #fff3e0; color: #f57c00; }
+        .status-INCOMPLETE { background: #fff3e0; color: #f57c00; }
 
         /* Tabs */
         .tabs {
@@ -226,11 +226,77 @@
             white-space: nowrap;
             font-family: 'Courier New', monospace;
             font-size: 11px;
-            color: #666;
-            cursor: help;
+            color: #2563eb;
+            cursor: pointer;
             padding: 4px 8px;
-            background: #f5f5f5;
+            background: #eff6ff;
             border-radius: 3px;
+            position: relative;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .json-preview:hover {
+            background: #dbeafe;
+            border-color: #3b82f6;
+            color: #1d4ed8;
+        }
+
+        /* JSON Tooltip */
+        .json-tooltip {
+            position: fixed;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            max-width: 500px;
+            max-height: 400px;
+            overflow: auto;
+            display: none;
+        }
+
+        .json-tooltip-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .json-tooltip-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .json-tooltip-copy {
+            padding: 4px 8px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .json-tooltip-copy:hover {
+            background: #2563eb;
+        }
+
+        .json-tooltip-copy.copied {
+            background: #10b981;
+        }
+
+        .json-tooltip-content {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #333;
         }
 
         .age-badge {
@@ -268,7 +334,6 @@
             margin-right: 8px;
             font-size: 12px;
         }
-    
     </style>
 </head>
 <body>
@@ -324,7 +389,7 @@
     </div>
     
     <div class="tabs">
-        <button class="tab active" onclick="switchTab('jobs')">Jobs (3)</button><button class="tab " onclick="switchTab('configurations')">Configurations (3)</button>
+        <button class="tab active" onclick="switchTab('jobs', event)">Jobs (3)</button><button class="tab " onclick="switchTab('configurations', event)">Configurations (3)</button>
     </div>
     
 
@@ -359,8 +424,7 @@
     </div>
 
     <script>
-
-    function switchTab(tabName) {
+    function switchTab(tabName, event) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
@@ -395,10 +459,98 @@
             row.style.display = text.includes(filter) ? '' : 'none';
         });
     }
-    
+
+    // JSON Tooltip Management
+    let currentTooltip = null;
+
+    function showJsonTooltip(element, jsonData) {
+        // Remove existing tooltip if any
+        hideJsonTooltip();
+
+        // Create tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'json-tooltip';
+        tooltip.innerHTML = `
+            <div class="json-tooltip-header">
+                <span class="json-tooltip-title">Configuration JSON</span>
+                <button class="json-tooltip-copy" onclick="copyJsonToClipboard(event)">Copy</button>
+            </div>
+            <div class="json-tooltip-content"></div>
+        `;
+
+        // Format and display JSON
+        const content = tooltip.querySelector('.json-tooltip-content');
+        try {
+            const formatted = JSON.stringify(jsonData, null, 2);
+            content.textContent = formatted;
+        } catch (e) {
+            content.textContent = JSON.stringify(jsonData);
+        }
+
+        document.body.appendChild(tooltip);
+
+        // Position tooltip near the element
+        const rect = element.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+
+        let top = rect.bottom + 5;
+        let left = rect.left;
+
+        // Adjust if tooltip goes off-screen
+        if (left + tooltipRect.width > window.innerWidth) {
+            left = window.innerWidth - tooltipRect.width - 10;
+        }
+        if (top + tooltipRect.height > window.innerHeight) {
+            top = rect.top - tooltipRect.height - 5;
+        }
+
+        tooltip.style.top = top + 'px';
+        tooltip.style.left = left + 'px';
+        tooltip.style.display = 'block';
+
+        currentTooltip = tooltip;
+    }
+
+    function hideJsonTooltip() {
+        if (currentTooltip) {
+            currentTooltip.remove();
+            currentTooltip = null;
+        }
+    }
+
+    function copyJsonToClipboard(event) {
+        event.stopPropagation();
+        const tooltip = event.target.closest('.json-tooltip');
+        const content = tooltip.querySelector('.json-tooltip-content').textContent;
+        const button = event.target;
+
+        navigator.clipboard.writeText(content).then(() => {
+            const originalText = button.textContent;
+            button.textContent = 'Copied!';
+            button.classList.add('copied');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('copied');
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            alert('Failed to copy to clipboard');
+        });
+    }
+
+    // Close tooltip when clicking outside
+    document.addEventListener('click', (event) => {
+        if (currentTooltip && !event.target.closest('.json-tooltip') && !event.target.closest('.json-preview')) {
+            hideJsonTooltip();
+        }
+    });
+
+    // Close tooltip on scroll
+    document.addEventListener('scroll', hideJsonTooltip, true);
 
         const jobs = [{"id": 1, "moodys_workflow_id": "MW-1010001", "status": "FINISHED", "skipped": false, "report_status": "FINISHED", "next_best_action": "", "age_hours": 3.0, "is_successful": true, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 1, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-20 15:00:00+00:00", "completed_ts": "2025-10-20 18:00:00+00:00", "created_ts": "2025-10-14 00:02:00+00:00", "job_configuration_data": {"portfolio": "PF001", "risk_model": "standard"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 2, "moodys_workflow_id": "MW-1010002", "status": "FINISHED", "skipped": false, "report_status": "FINISHED", "next_best_action": "", "age_hours": 3.0, "is_successful": true, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 2, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-20 15:00:00+00:00", "completed_ts": "2025-10-20 18:00:00+00:00", "created_ts": "2025-10-14 00:04:00+00:00", "job_configuration_data": {"portfolio": "PF002", "risk_model": "standard"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 3, "moodys_workflow_id": "MW-1010003", "status": "FINISHED", "skipped": false, "report_status": "FINISHED", "next_best_action": "", "age_hours": 3.0, "is_successful": true, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 3, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-20 15:00:00+00:00", "completed_ts": "2025-10-20 18:00:00+00:00", "created_ts": "2025-10-14 00:06:00+00:00", "job_configuration_data": {"portfolio": "PF003", "risk_model": "standard"}, "parent_job_status": null, "parent_moodys_id": null}];
-        const configs = [{"config_id": 1, "job_configuration_data": {"portfolio": "PF001", "risk_model": "standard"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "finished_jobs": 1, "failed_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 2, "job_configuration_data": {"portfolio": "PF002", "risk_model": "standard"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "finished_jobs": 1, "failed_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 3, "job_configuration_data": {"portfolio": "PF003", "risk_model": "standard"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "finished_jobs": 1, "failed_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}];
+        const configs = [{"config_id": 1, "job_configuration_data": {"portfolio": "PF001", "risk_model": "standard"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 1, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 2, "job_configuration_data": {"portfolio": "PF002", "risk_model": "standard"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 1, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 3, "job_configuration_data": {"portfolio": "PF003", "risk_model": "standard"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 1, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}];
 
         function renderJobs() {
             const tbody = document.getElementById('jobsTableBody');
@@ -407,13 +559,13 @@
                 return;
             }
 
-            tbody.innerHTML = jobs.map(job => `
+            tbody.innerHTML = jobs.map((job, idx) => `
                 <tr>
                     <td>${job.id}</td>
                     <td>${job.moodys_workflow_id || '-'}</td>
                     <td><span class="status-badge status-${job.status}">${job.status}</span></td>
                     <td><span class="status-badge status-${job.report_status}">${job.report_status || '-'}</span></td>
-                    <td><div class="json-preview" title="${JSON.stringify(job.job_configuration_data)}">${JSON.stringify(job.job_configuration_data)}</div></td>
+                    <td><div class="json-preview" onclick="showJsonTooltip(this, jobs[${idx}].job_configuration_data)">${JSON.stringify(job.job_configuration_data)}</div></td>
                     <td>${job.overridden ? '✓ ' + (job.override_reason_txt || '') : '-'}</td>
                     <td>${job.age_hours ? '<span class="age-badge">' + Math.round(job.age_hours * 100) / 100 + 'h</span>' : '-'}</td>
                     <td class="${job.needs_attention ? 'needs-attention' : ''}">${job.next_best_action || '-'}</td>
@@ -429,7 +581,7 @@
                 return;
             }
 
-            tbody.innerHTML = configs.map(config => {
+            tbody.innerHTML = configs.map((config, idx) => {
                 // Build alerts string with counts (Enhancement #8)
                 const alerts = [];
                 if (config.has_failures) {
@@ -441,8 +593,8 @@
                     alerts.push(`<span class="alert-flag" style="color: #c62828;">⚠ Errors (${count})</span>`);
                 }
                 if (config.has_unsubmitted) {
-                    // Count unsubmitted jobs
-                    const unsubmitted = config.total_jobs - config.finished_jobs - config.failed_jobs - (config.cancelled_jobs || 0) - (config.active_jobs || 0);
+                    // calculated in view based on INITIATED status
+                    const unsubmitted = config.unsubmitted_jobs || 0;
                     alerts.push(`<span class="alert-flag" style="color: #f57f17;">⚠ Unsubmitted (${unsubmitted})</span>`);
                 }
                 const alertsHtml = alerts.length > 0 ? alerts.join('<br>') : '-';
@@ -451,7 +603,7 @@
                     <tr>
                         <td>${config.config_id}</td>
                         <td><span class="status-badge status-${config.config_report_status}">${config.config_report_status}</span></td>
-                        <td><div class="json-preview" title="${JSON.stringify(config.job_configuration_data)}">${JSON.stringify(config.job_configuration_data)}</div></td>
+                        <td><div class="json-preview" onclick="showJsonTooltip(this, configs[${idx}].job_configuration_data)">${JSON.stringify(config.job_configuration_data)}</div></td>
                         <td>${config.total_jobs}</td>
                         <td style="color: #0288d1; font-weight: 600;">${config.active_jobs || 0}</td>
                         <td style="color: #2e7d32; font-weight: 600;">${config.finished_jobs}</td>

@@ -51,21 +51,32 @@ def calculate_cycle_statistics(batches):
 
     # Aggregate from batches
     for batch in batches:
-        # Batch counts
+        # Batch counts (batch_status field now contains reporting_status)
         if batch['batch_status'] == 'COMPLETED':
             stats['completed_batches'] += 1
         else:
             stats['not_completed_batches'] += 1
 
-        # Job counts (these would come from expanded batch data)
-        # For now, use total_jobs from summary
+        # Job counts
         stats['total_jobs'] += batch.get('total_jobs', 0)
 
-        # Note: We need to query additional data for detailed job/config stats
-        # This is a simplified version
+        # Configuration counts
+        stats['total_configs'] += batch.get('total_configs', 0)
+
+        # Get enhanced stats from batch if available
+        stats['fulfilled_configs'] += batch.get('fulfilled_configs', 0)
+        stats['unfulfilled_configs'] += batch.get('unfulfilled_configs', 0)
+        stats['skipped_configs'] += batch.get('skipped_configs', 0)
+        stats['finished_jobs'] += batch.get('finished_jobs', 0)
+        stats['failed_jobs'] += batch.get('failed_jobs', 0)
+        stats['error_jobs'] += batch.get('error_jobs', 0)
+        stats['skipped_jobs'] += batch.get('skipped_jobs', 0)
+
+    # Calculate not finished jobs
+    stats['not_finished_jobs'] = stats['total_jobs'] - stats['finished_jobs']
 
     # Determine cycle status
-    stats['cycle_status'] = 'COMPLETED' if stats['not_completed_batches'] == 0 else 'NOT COMPLETED'
+    stats['cycle_status'] = 'COMPLETED' if stats['not_completed_batches'] == 0 else 'INCOMPLETE'
 
     return stats
 
@@ -107,16 +118,16 @@ def enhance_batches_with_alerts(batches, cycle_name):
         if not alerts_df.empty:
             alert_data = alerts_df.to_dict('records')[0]
 
-            # Build alert string
+            # Build alert string with icons (matching batch page style)
             alerts = []
             if alert_data['failed_count'] > 0:
-                alerts.append(f"Failures ({alert_data['failed_count']})")
+                alerts.append(f"⚠ Failures ({alert_data['failed_count']})")
             if alert_data['error_count'] > 0:
-                alerts.append(f"Errors ({alert_data['error_count']})")
+                alerts.append(f"⚠ Errors ({alert_data['error_count']})")
             if alert_data['cancelled_count'] > 0:
-                alerts.append(f"Cancelled ({alert_data['cancelled_count']})")
+                alerts.append(f"⚠ Cancelled ({alert_data['cancelled_count']})")
             if alert_data['skipped_count'] > 0:
-                alerts.append(f"Skipped ({alert_data['skipped_count']})")
+                alerts.append(f"⚠ Skipped ({alert_data['skipped_count']})")
 
             batch['job_alerts'] = ', '.join(alerts) if alerts else '-'
             batch['has_alerts'] = len(alerts) > 0
@@ -174,18 +185,18 @@ def generate_cycle_dashboard_html(cycle_name, batches):
         f"{stats['completed_batches']} completed, {stats['not_completed_batches']} not completed"
     ))
 
-    # Card 3: Jobs (placeholder - would need full query for accurate counts)
+    # Card 3: Jobs
     cards.append(generate_card(
         "Jobs",
-        str(stats['total_jobs']),
-        f"Finished: {stats['finished_jobs']}, Not Finished: {stats['not_finished_jobs']}"
+        str(int(stats['total_jobs'])),
+        f"Finished: {int(stats['finished_jobs'])}, Not Finished: {int(stats['not_finished_jobs'])}"
     ))
 
-    # Card 4: Configurations (placeholder - would need full query)
+    # Card 4: Configurations
     cards.append(generate_card(
         "Configurations",
-        str(stats['total_configs']),
-        f"Fulfilled: {stats['fulfilled_configs']}, Unfulfilled: {stats['unfulfilled_configs']}"
+        str(int(stats['total_configs'])),
+        f"Fulfilled: {int(stats['fulfilled_configs'])}, Unfulfilled: {int(stats['unfulfilled_configs'])}, Skipped: {int(stats['skipped_configs'])}"
     ))
 
     cards_html = f'<div class="info-grid">{"".join(cards)}</div>'
@@ -234,7 +245,7 @@ def generate_cycle_dashboard_html(cycle_name, batches):
             color: #d32f2f;
         }}
 
-        .status-NOT_COMPLETED {{
+        .status-INCOMPLETE {{
             background: #fff3e0;
             color: #f57c00;
         }}

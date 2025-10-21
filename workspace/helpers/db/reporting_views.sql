@@ -154,17 +154,18 @@ COMMENT ON VIEW v_irp_job_configuration IS
 DROP VIEW IF EXISTS v_irp_batch;
 CREATE VIEW v_irp_batch AS
 WITH batch_stats AS (
-    SELECT 
+    SELECT
         b.id AS batch_id,
         b.step_id,
         b.configuration_id,
         b.batch_type,
-        b.status AS batch_status,        
+        b.status AS batch_status,
         -- Configuration stats
         COUNT(DISTINCT jc.id) AS total_configs,
         COUNT(DISTINCT jc.id) FILTER (WHERE NOT jc.skipped) AS non_skipped_configs,
         COUNT(DISTINCT jc.id) FILTER (WHERE vjc.config_report_status = 'FULFILLED') AS fulfilled_configs,
         COUNT(DISTINCT jc.id) FILTER (WHERE vjc.config_report_status = 'UNFULFILLED') AS unfulfilled_configs,
+        COUNT(DISTINCT jc.id) FILTER (WHERE vjc.config_report_status = 'SKIPPED') AS skipped_configs,
         -- Job stats (from v_irp_job_configuration)
         SUM(vjc.total_jobs) AS total_jobs,
         SUM(vjc.unsubmitted_jobs) AS unsubmitted_jobs,
@@ -176,6 +177,12 @@ WITH batch_stats AS (
         -- Aggregate flags
         BOOL_OR(vjc.has_failures) AS has_any_failures,
         BOOL_OR(vjc.has_errors) AS has_any_errors,
+        -- Check if all jobs are UNSUBMITTED (using v_irp_job report_status)
+        BOOL_AND(COALESCE(vj.report_status = 'UNSUBMITTED', TRUE)) AS all_jobs_unsubmitted,
+        -- Check if at least one job has ERROR reporting status
+        BOOL_OR(vj.report_status = 'ERROR') AS has_error_report_status,
+        -- Check if at least one job has FAILED reporting status
+        BOOL_OR(vj.report_status = 'FAILED') AS has_failed_report_status,
         b.created_ts,
         b.submitted_ts,
         b.completed_ts,
@@ -183,29 +190,45 @@ WITH batch_stats AS (
     FROM irp_batch b
     LEFT JOIN irp_job_configuration jc ON b.id = jc.batch_id
     LEFT JOIN v_irp_job_configuration vjc ON jc.id = vjc.job_configuration_id
-    GROUP BY b.id, b.step_id, b.configuration_id, b.batch_type, 
+    LEFT JOIN v_irp_job vj ON jc.id = vj.job_configuration_id
+    GROUP BY b.id, b.step_id, b.configuration_id, b.batch_type,
              b.status, b.created_ts, b.submitted_ts, b.completed_ts, b.updated_ts
 )
-SELECT 
+SELECT
     bs.*,
+    -- Derived batch reporting status based on configuration and job reporting statuses
+    CASE
+        -- Rule 1: If all configurations are SKIPPED reporting status, then SKIPPED
+        WHEN bs.total_configs > 0 AND bs.skipped_configs = bs.total_configs THEN 'SKIPPED'
+        -- Rule 2: If all configurations are FULFILLED, then COMPLETED
+        WHEN bs.total_configs > 0 AND bs.fulfilled_configs = bs.total_configs THEN 'COMPLETED'
+        -- Rule 3: If all jobs are in UNSUBMITTED reporting status, then UNSUBMITTED
+        WHEN bs.all_jobs_unsubmitted AND bs.total_jobs > 0 THEN 'UNSUBMITTED'
+        -- Rule 4: If at least one job is in ERROR reporting status, then ERROR
+        WHEN bs.has_error_report_status THEN 'ERROR'
+        -- Rule 5: If at least one job is in FAILED reporting status, then FAILED
+        WHEN bs.has_failed_report_status THEN 'FAILED'
+        -- Rule 6: Otherwise INCOMPLETE
+        ELSE 'INCOMPLETE'
+    END AS reporting_status,
     -- Completion percentage
-    CASE 
-        WHEN bs.non_skipped_configs > 0 THEN 
+    CASE
+        WHEN bs.non_skipped_configs > 0 THEN
             ROUND((bs.fulfilled_configs::NUMERIC / bs.non_skipped_configs::NUMERIC) * 100, 2)
         ELSE 0
     END AS completion_percent,
     -- Age calculations
-    CASE 
-        WHEN bs.batch_status IN ('INITIATED') THEN 
+    CASE
+        WHEN bs.batch_status IN ('INITIATED') THEN
             EXTRACT(EPOCH FROM (NOW() - bs.created_ts)) / 3600.0
-        WHEN bs.batch_status IN ('ACTIVE') THEN 
+        WHEN bs.batch_status IN ('ACTIVE') THEN
             EXTRACT(EPOCH FROM (NOW() - bs.submitted_ts)) / 3600.0
-        WHEN bs.batch_status IN ('COMPLETED', 'FAILED', 'CANCELLED') THEN 
+        WHEN bs.batch_status IN ('COMPLETED', 'FAILED', 'CANCELLED') THEN
             EXTRACT(EPOCH FROM (bs.completed_ts - bs.submitted_ts)) / 3600.0
         ELSE NULL
     END AS age_hours,
     -- Recommended action
-    CASE 
+    CASE
         WHEN bs.batch_status = 'INITIATED' THEN 'Submit Batch'
         WHEN bs.batch_status = 'ACTIVE' AND bs.unfulfilled_configs > 0 THEN 'Track Jobs'
         WHEN bs.batch_status = 'ACTIVE' AND bs.unfulfilled_configs = 0 THEN 'Recon Batch'

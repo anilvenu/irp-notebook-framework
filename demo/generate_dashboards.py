@@ -30,32 +30,29 @@ SCHEMA = 'demo'
 
 def query_batch_data(batch_id):
     """Query all data for a specific batch"""
-    # Get batch summary
+    # Get batch summary using v_irp_batch view for reporting_status
     summary_df = db.execute_query("""
         SELECT
-            b.id as batch_id,
-            b.batch_type,
-            b.status as batch_status,
+            vb.batch_id,
+            vb.batch_type,
+            vb.batch_status,
+            vb.reporting_status,
             c.cycle_name,
             st.stage_name,
             s.step_name,
-            b.created_ts,
-            b.submitted_ts,
-            b.completed_ts,
-            COUNT(DISTINCT jc.id) as total_configs,
-            COUNT(DISTINCT jc.id) FILTER (WHERE NOT jc.skipped) as active_configs,
-            COUNT(j.id) as total_jobs,
-            COUNT(j.id) FILTER (WHERE NOT j.skipped) as active_jobs
-        FROM irp_batch b
-        JOIN irp_configuration cfg ON b.configuration_id = cfg.id
+            vb.created_ts,
+            vb.submitted_ts,
+            vb.completed_ts,
+            vb.total_configs,
+            vb.non_skipped_configs as active_configs,
+            vb.total_jobs,
+            (vb.total_jobs - COALESCE(vb.skipped_jobs, 0)) as active_jobs
+        FROM v_irp_batch vb
+        JOIN irp_configuration cfg ON vb.configuration_id = cfg.id
         JOIN irp_cycle c ON cfg.cycle_id = c.id
-        JOIN irp_step s ON b.step_id = s.id
+        JOIN irp_step s ON vb.step_id = s.id
         JOIN irp_stage st ON s.stage_id = st.id
-        LEFT JOIN irp_job_configuration jc ON b.id = jc.batch_id
-        LEFT JOIN irp_job j ON jc.id = j.job_configuration_id
-        WHERE b.id = %s
-        GROUP BY b.id, b.batch_type, b.status, c.cycle_name, st.stage_name, s.step_name,
-                 b.created_ts, b.submitted_ts, b.completed_ts
+        WHERE vb.batch_id = %s
     """, (batch_id,), schema=SCHEMA)
 
     if summary_df.empty:
@@ -104,8 +101,10 @@ def query_batch_data(batch_id):
             jc.overridden,
             vjc.config_report_status,
             vjc.total_jobs,
+            vjc.unsubmitted_jobs,
             vjc.finished_jobs,
             vjc.failed_jobs,
+            vjc.cancelled_jobs,
             vjc.error_jobs,
             vjc.progress_percent,
             vjc.has_failures,
@@ -191,14 +190,39 @@ def main():
         generated_files.append(str(output_file))
         print(f"  ✓ Generated: cycle/{cycle_name}/batch/{batch_id}/index.html")
 
+        # Query enhanced stats from v_irp_batch for cycle dashboard
+        batch_view_df = db.execute_query("""
+            SELECT
+                fulfilled_configs,
+                unfulfilled_configs,
+                skipped_configs,
+                finished_jobs,
+                failed_jobs,
+                error_jobs,
+                skipped_jobs
+            FROM v_irp_batch
+            WHERE batch_id = %s
+        """, (batch_id,), schema=SCHEMA)
+
+        enhanced_stats = batch_view_df.to_dict('records')[0] if not batch_view_df.empty else {}
+
         # Track cycle data for dashboard
         if cycle_name not in cycles_data:
             cycles_data[cycle_name] = []
         cycles_data[cycle_name].append({
             'batch_id': batch_id,
             'batch_type': batch_type,
-            'batch_status': data['summary']['batch_status'],
+            'batch_status': data['summary']['reporting_status'], 
             'total_jobs': data['summary']['total_jobs'],
+            'total_configs': data['summary']['total_configs'],
+            'active_configs': data['summary']['active_configs'],
+            'fulfilled_configs': enhanced_stats.get('fulfilled_configs', 0),
+            'unfulfilled_configs': enhanced_stats.get('unfulfilled_configs', 0),
+            'skipped_configs': enhanced_stats.get('skipped_configs', 0),
+            'finished_jobs': enhanced_stats.get('finished_jobs', 0),
+            'failed_jobs': enhanced_stats.get('failed_jobs', 0),
+            'error_jobs': enhanced_stats.get('error_jobs', 0),
+            'skipped_jobs': enhanced_stats.get('skipped_jobs', 0),
             'created_ts': data['summary']['created_ts']
         })
 

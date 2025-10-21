@@ -56,10 +56,11 @@ def generate_batch_html(batch_id, data):
     # Info cards with enhancements
     cards = []
 
-    # Card 1: Batch Status
+    # Card 1: Batch Status (use reporting_status for display)
+    reporting_status = summary.get('reporting_status', summary.get('batch_status', 'UNKNOWN'))
     cards.append(generate_card(
         "Batch Status",
-        f'<span class="status-badge status-{summary["batch_status"]}">{summary["batch_status"]}</span>'
+        f'<span class="status-badge status-{reporting_status}">{reporting_status}</span>'
     ))
 
     # Card 2: Jobs Summary
@@ -177,13 +178,13 @@ def generate_batch_html(batch_id, data):
                 return;
             }}
 
-            tbody.innerHTML = jobs.map(job => `
+            tbody.innerHTML = jobs.map((job, idx) => `
                 <tr>
                     <td>${{job.id}}</td>
                     <td>${{job.moodys_workflow_id || '-'}}</td>
                     <td><span class="status-badge status-${{job.status}}">${{job.status}}</span></td>
                     <td><span class="status-badge status-${{job.report_status}}">${{job.report_status || '-'}}</span></td>
-                    <td><div class="json-preview" title="${{JSON.stringify(job.job_configuration_data)}}">${{JSON.stringify(job.job_configuration_data)}}</div></td>
+                    <td><div class="json-preview" onclick="showJsonTooltip(this, jobs[${{idx}}].job_configuration_data)">${{JSON.stringify(job.job_configuration_data)}}</div></td>
                     <td>${{job.overridden ? '✓ ' + (job.override_reason_txt || '') : '-'}}</td>
                     <td>${{job.age_hours ? '<span class="age-badge">' + Math.round(job.age_hours * 100) / 100 + 'h</span>' : '-'}}</td>
                     <td class="${{job.needs_attention ? 'needs-attention' : ''}}">${{job.next_best_action || '-'}}</td>
@@ -199,7 +200,7 @@ def generate_batch_html(batch_id, data):
                 return;
             }}
 
-            tbody.innerHTML = configs.map(config => {{
+            tbody.innerHTML = configs.map((config, idx) => {{
                 // Build alerts string with counts (Enhancement #8)
                 const alerts = [];
                 if (config.has_failures) {{
@@ -211,8 +212,8 @@ def generate_batch_html(batch_id, data):
                     alerts.push(`<span class="alert-flag" style="color: #c62828;">⚠ Errors (${{count}})</span>`);
                 }}
                 if (config.has_unsubmitted) {{
-                    // Count unsubmitted jobs
-                    const unsubmitted = config.total_jobs - config.finished_jobs - config.failed_jobs - (config.cancelled_jobs || 0) - (config.active_jobs || 0);
+                    // calculated in view based on INITIATED status
+                    const unsubmitted = config.unsubmitted_jobs || 0;
                     alerts.push(`<span class="alert-flag" style="color: #f57f17;">⚠ Unsubmitted (${{unsubmitted}})</span>`);
                 }}
                 const alertsHtml = alerts.length > 0 ? alerts.join('<br>') : '-';
@@ -221,7 +222,7 @@ def generate_batch_html(batch_id, data):
                     <tr>
                         <td>${{config.config_id}}</td>
                         <td><span class="status-badge status-${{config.config_report_status}}">${{config.config_report_status}}</span></td>
-                        <td><div class="json-preview" title="${{JSON.stringify(config.job_configuration_data)}}">${{JSON.stringify(config.job_configuration_data)}}</div></td>
+                        <td><div class="json-preview" onclick="showJsonTooltip(this, configs[${{idx}}].job_configuration_data)">${{JSON.stringify(config.job_configuration_data)}}</div></td>
                         <td>${{config.total_jobs}}</td>
                         <td style="color: #0288d1; font-weight: 600;">${{config.active_jobs || 0}}</td>
                         <td style="color: #2e7d32; font-weight: 600;">${{config.finished_jobs}}</td>
