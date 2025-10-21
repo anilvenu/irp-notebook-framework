@@ -23,6 +23,7 @@ Usage:
 
 import os
 import csv
+import shutil
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
@@ -460,6 +461,96 @@ def preview_structure(file_path: str, sheet_name: Optional[str] = None) -> str:
     lines.append("=" * 60)
 
     return "\n".join(lines)
+
+
+def clear_generated_folder(
+    output_dir: str,
+    confirm: bool = True,
+    verbose: bool = True
+) -> Dict[str, any]:
+    """
+    Clear all contents from the generated notebooks folder.
+
+    WARNING: This will delete all files and folders in the specified directory!
+
+    Args:
+        output_dir: Path to the directory to clear
+        confirm: If True, requires the directory name to contain 'generated' as a safety check
+        verbose: If True, print progress messages
+
+    Returns:
+        Dictionary with deletion statistics:
+        {
+            'deleted': bool,
+            'folders_removed': int,
+            'files_removed': int,
+            'path': str
+        }
+
+    Raises:
+        NotebookGeneratorError: If safety checks fail or deletion errors occur
+    """
+    output_path = Path(output_dir)
+
+    # Safety check: only allow deletion if 'generated' is in the path
+    if confirm and 'generated' not in str(output_path).lower():
+        raise NotebookGeneratorError(
+            f"Safety check failed: Directory path must contain 'generated' to use clear function. "
+            f"Path provided: {output_path}\n"
+            f"To bypass this check, use confirm=False (NOT RECOMMENDED)"
+        )
+
+    # Check if directory exists
+    if not output_path.exists():
+        if verbose:
+            print(f"Directory does not exist: {output_path}")
+            print("Nothing to clear.")
+        return {
+            'deleted': False,
+            'folders_removed': 0,
+            'files_removed': 0,
+            'path': str(output_path)
+        }
+
+    # Count items before deletion
+    folders_count = 0
+    files_count = 0
+
+    try:
+        # Count all items
+        for item in output_path.rglob('*'):
+            if item.is_file():
+                files_count += 1
+            elif item.is_dir():
+                folders_count += 1
+
+        if verbose:
+            print(f"Clearing directory: {output_path.absolute()}")
+            print(f"Found {files_count} files and {folders_count} folders")
+
+        # Remove all contents
+        for item in output_path.iterdir():
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                shutil.rmtree(item)
+
+        if verbose:
+            print("=" * 60)
+            print("CLEAR COMPLETE")
+            print("=" * 60)
+            print(f"Removed {files_count} files and {folders_count} folders")
+            print("=" * 60)
+
+        return {
+            'deleted': True,
+            'folders_removed': folders_count,
+            'files_removed': files_count,
+            'path': str(output_path.absolute())
+        }
+
+    except Exception as e:
+        raise NotebookGeneratorError(f"Failed to clear directory: {str(e)}")
 
 
 # Example usage
