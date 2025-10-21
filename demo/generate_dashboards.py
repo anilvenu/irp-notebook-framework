@@ -45,8 +45,14 @@ def query_batch_data(batch_id):
             vb.completed_ts,
             vb.total_configs,
             vb.non_skipped_configs as active_configs,
+            vb.fulfilled_configs,
+            vb.unfulfilled_configs,
+            vb.skipped_configs,
             vb.total_jobs,
-            (vb.total_jobs - COALESCE(vb.skipped_jobs, 0)) as active_jobs
+            vb.finished_jobs,
+            vb.skipped_jobs,
+            (vb.total_jobs - COALESCE(vb.skipped_jobs, 0)) as active_jobs,
+            (vb.total_jobs - COALESCE(vb.finished_jobs, 0) - COALESCE(vb.skipped_jobs, 0)) as unfinished_jobs
         FROM v_irp_batch vb
         JOIN irp_configuration cfg ON vb.configuration_id = cfg.id
         JOIN irp_cycle c ON cfg.cycle_id = c.id

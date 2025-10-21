@@ -360,25 +360,19 @@
     <div class="info-card">
         <h3>Jobs Summary</h3>
         <div class="value">1 Total</div>
-        <div class="sub-value">1 active, 0 skipped</div>
+        <div class="sub-value">Finished: 0, Unfinished: 1, Skipped: 0</div>
     </div>
     
     <div class="info-card">
         <h3>Configurations</h3>
         <div class="value">2</div>
-        <div class="sub-value">1 active</div>
+        <div class="sub-value">Fulfilled: 0, Unfulfilled: 1, Skipped: 1</div>
     </div>
     
     <div class="info-card">
         <h3>Created</h3>
         <div class="value"><span style="font-size: 14px;">2025-10-17 00:00:00</span></div>
         <div class="sub-value">Portfolio Analysis Stage › Initial Portfolio Analysis</div>
-    </div>
-    
-    <div class="info-card">
-        <h3>Submitted</h3>
-        <div class="value"><span style="font-size: 14px;">2025-10-17 00:30:00</span></div>
-        
     </div>
     
     <div class="info-card">
@@ -549,7 +543,7 @@
     // Close tooltip on scroll
     document.addEventListener('scroll', hideJsonTooltip, true);
 
-        const jobs = [{"id": 13, "moodys_workflow_id": "MW-1040001", "status": "FAILED", "skipped": true, "report_status": "SKIPPED", "next_best_action": "Recon Batch OR Check for Manually Completed Job on Moody's", "age_hours": 98.13516828222222, "is_successful": false, "needs_attention": true, "parent_job_id": NaN, "job_configuration_id": 13, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-18 00:00:00+00:00", "completed_ts": "2025-10-19 00:00:00+00:00", "created_ts": "2025-10-17 00:02:00+00:00", "job_configuration_data": {"portfolio": "PF001", "risk_model": "v1"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 14, "moodys_workflow_id": "MW-1040002", "status": "RUNNING", "skipped": false, "report_status": "ACTIVE", "next_best_action": "Track Batch", "age_hours": 42.16873621083333, "is_successful": false, "needs_attention": false, "parent_job_id": 13.0, "job_configuration_id": 14, "overridden": true, "override_reason_txt": "Fixed data issue - using v2 model", "submitted_ts": "2025-10-19 08:00:00+00:00", "completed_ts": "NaT", "created_ts": "2025-10-19 08:00:00+00:00", "job_configuration_data": {"portfolio": "PF001", "risk_model": "v2_corrected"}, "parent_job_status": "FAILED", "parent_moodys_id": "MW-1040001"}];
+        const jobs = [{"id": 13, "moodys_workflow_id": "MW-1040001", "status": "FAILED", "skipped": true, "report_status": "SKIPPED", "next_best_action": "Recon Batch OR Check for Manually Completed Job on Moody's", "age_hours": 100.07725437083333, "is_successful": false, "needs_attention": true, "parent_job_id": NaN, "job_configuration_id": 13, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-18 00:00:00+00:00", "completed_ts": "2025-10-19 00:00:00+00:00", "created_ts": "2025-10-17 00:02:00+00:00", "job_configuration_data": {"portfolio": "PF001", "risk_model": "v1"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 14, "moodys_workflow_id": "MW-1040002", "status": "RUNNING", "skipped": false, "report_status": "ACTIVE", "next_best_action": "Track Batch", "age_hours": 44.11079128972222, "is_successful": false, "needs_attention": false, "parent_job_id": 13.0, "job_configuration_id": 14, "overridden": true, "override_reason_txt": "Fixed data issue - using v2 model", "submitted_ts": "2025-10-19 08:00:00+00:00", "completed_ts": "NaT", "created_ts": "2025-10-19 08:00:00+00:00", "job_configuration_data": {"portfolio": "PF001", "risk_model": "v2_corrected"}, "parent_job_status": "FAILED", "parent_moodys_id": "MW-1040001"}];
         const configs = [{"config_id": 13, "job_configuration_data": {"portfolio": "PF001", "risk_model": "v1"}, "skipped": true, "overridden": false, "config_report_status": "SKIPPED", "total_jobs": 0, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 14, "job_configuration_data": {"portfolio": "PF001", "risk_model": "v2_corrected"}, "skipped": false, "overridden": true, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 1}];
 
         function renderJobs() {
@@ -604,10 +598,10 @@
                         <td>${config.config_id}</td>
                         <td><span class="status-badge status-${config.config_report_status}">${config.config_report_status}</span></td>
                         <td><div class="json-preview" onclick="showJsonTooltip(this, configs[${idx}].job_configuration_data)">${JSON.stringify(config.job_configuration_data)}</div></td>
-                        <td>${config.total_jobs}</td>
-                        <td style="color: #0288d1; font-weight: 600;">${config.active_jobs || 0}</td>
-                        <td style="color: #2e7d32; font-weight: 600;">${config.finished_jobs}</td>
-                        <td style="color: #d32f2f; font-weight: 600;">${config.failed_jobs}</td>
+                        <td>${config.total_jobs || ''}</td>
+                        <td style="color: #0288d1; font-weight: 600;">${config.active_jobs || ''}</td>
+                        <td style="color: #2e7d32; font-weight: 600;">${config.finished_jobs || ''}</td>
+                        <td style="color: #d32f2f; font-weight: 600;">${config.failed_jobs || ''}</td>
                         <td>${Math.round(config.progress_percent * 100) / 100}%</td>
                         <td>${alertsHtml}</td>
                     </tr>

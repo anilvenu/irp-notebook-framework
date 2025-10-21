@@ -64,17 +64,23 @@ def generate_batch_html(batch_id, data):
     ))
 
     # Card 2: Jobs Summary
+    finished_jobs = int(summary.get('finished_jobs', 0))
+    unfinished_jobs = int(summary.get('unfinished_jobs', 0))
+    skipped_jobs = int(summary.get('skipped_jobs', 0))
     cards.append(generate_card(
         "Jobs Summary",
         f"{total_jobs} Total",
-        f"{active_jobs} active, {total_jobs - active_jobs} skipped"
+        f"Finished: {finished_jobs}, Unfinished: {unfinished_jobs}, Skipped: {skipped_jobs}"
     ))
 
     # Card 3: Configurations
+    fulfilled = int(summary.get('fulfilled_configs', 0))
+    unfulfilled = int(summary.get('unfulfilled_configs', 0))
+    skipped = int(summary.get('skipped_configs', 0))
     cards.append(generate_card(
         "Configurations",
         str(summary['total_configs']),
-        f"{summary['active_configs']} active"
+        f"Fulfilled: {fulfilled}, Unfulfilled: {unfulfilled}, Skipped: {skipped}"
     ))
 
     # Card 4: Created + Stage/Step info (Enhancement #3)
@@ -85,13 +91,7 @@ def generate_batch_html(batch_id, data):
         stage_step_info
     ))
 
-    # Card 5: Submitted
-    cards.append(generate_card(
-        "Submitted",
-        f'<span style="font-size: 14px;">{format_timestamp(summary["submitted_ts"])}</span>'
-    ))
-
-    # Card 6: Completed
+    # Card 5: Completed
     cards.append(generate_card(
         "Completed",
         f'<span style="font-size: 14px;">{format_timestamp(summary["completed_ts"])}</span>'
@@ -223,10 +223,10 @@ def generate_batch_html(batch_id, data):
                         <td>${{config.config_id}}</td>
                         <td><span class="status-badge status-${{config.config_report_status}}">${{config.config_report_status}}</span></td>
                         <td><div class="json-preview" onclick="showJsonTooltip(this, configs[${{idx}}].job_configuration_data)">${{JSON.stringify(config.job_configuration_data)}}</div></td>
-                        <td>${{config.total_jobs}}</td>
-                        <td style="color: #0288d1; font-weight: 600;">${{config.active_jobs || 0}}</td>
-                        <td style="color: #2e7d32; font-weight: 600;">${{config.finished_jobs}}</td>
-                        <td style="color: #d32f2f; font-weight: 600;">${{config.failed_jobs}}</td>
+                        <td>${{config.total_jobs || ''}}</td>
+                        <td style="color: #0288d1; font-weight: 600;">${{config.active_jobs || ''}}</td>
+                        <td style="color: #2e7d32; font-weight: 600;">${{config.finished_jobs || ''}}</td>
+                        <td style="color: #d32f2f; font-weight: 600;">${{config.failed_jobs || ''}}</td>
                         <td>${{Math.round(config.progress_percent * 100) / 100}}%</td>
                         <td>${{alertsHtml}}</td>
                     </tr>

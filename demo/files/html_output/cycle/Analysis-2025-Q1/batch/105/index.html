@@ -360,25 +360,19 @@
     <div class="info-card">
         <h3>Jobs Summary</h3>
         <div class="value">3 Total</div>
-        <div class="sub-value">3 active, 0 skipped</div>
+        <div class="sub-value">Finished: 1, Unfinished: 2, Skipped: 0</div>
     </div>
     
     <div class="info-card">
         <h3>Configurations</h3>
         <div class="value">3</div>
-        <div class="sub-value">3 active</div>
+        <div class="sub-value">Fulfilled: 1, Unfulfilled: 2, Skipped: 0</div>
     </div>
     
     <div class="info-card">
         <h3>Created</h3>
         <div class="value"><span style="font-size: 14px;">2025-10-18 00:00:00</span></div>
         <div class="sub-value">Portfolio Analysis Stage › Initial Portfolio Analysis</div>
-    </div>
-    
-    <div class="info-card">
-        <h3>Submitted</h3>
-        <div class="value"><span style="font-size: 14px;">2025-10-18 00:30:00</span></div>
-        
     </div>
     
     <div class="info-card">
@@ -604,10 +598,10 @@
                         <td>${config.config_id}</td>
                         <td><span class="status-badge status-${config.config_report_status}">${config.config_report_status}</span></td>
                         <td><div class="json-preview" onclick="showJsonTooltip(this, configs[${idx}].job_configuration_data)">${JSON.stringify(config.job_configuration_data)}</div></td>
-                        <td>${config.total_jobs}</td>
-                        <td style="color: #0288d1; font-weight: 600;">${config.active_jobs || 0}</td>
-                        <td style="color: #2e7d32; font-weight: 600;">${config.finished_jobs}</td>
-                        <td style="color: #d32f2f; font-weight: 600;">${config.failed_jobs}</td>
+                        <td>${config.total_jobs || ''}</td>
+                        <td style="color: #0288d1; font-weight: 600;">${config.active_jobs || ''}</td>
+                        <td style="color: #2e7d32; font-weight: 600;">${config.finished_jobs || ''}</td>
+                        <td style="color: #d32f2f; font-weight: 600;">${config.failed_jobs || ''}</td>
                         <td>${Math.round(config.progress_percent * 100) / 100}%</td>
                         <td>${alertsHtml}</td>
                     </tr>
