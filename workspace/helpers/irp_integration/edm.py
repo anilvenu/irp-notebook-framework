@@ -82,7 +82,7 @@ class EDMManager:
         params = {
             "fields": "id, name",
             "datasource": edm_name,
-            "limit": 1000
+            "limit": 100
         }
         response = self.client.request('GET', GET_CEDANTS, params=params)
         return response.json()
@@ -91,7 +91,7 @@ class EDMManager:
         params = {
             "fields": "id, name",
             "datasource": edm_name,
-            "limit": 1000
+            "limit": 100
         }
         response = self.client.request('GET', GET_LOBS, params=params)
         return response.json()

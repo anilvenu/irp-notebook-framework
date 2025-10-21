@@ -8,8 +8,7 @@ class ReferenceDataManager:
 
     def get_currencies(self) -> dict:
         params = {
-            "fields": "code,name",
-            "limit": 1000
+            "fields": "code,name"
         }
         response = self.client.request('GET', GET_CURRENCIES, params=params)
         return response.json()

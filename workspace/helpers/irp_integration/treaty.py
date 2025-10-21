@@ -9,7 +9,7 @@ class TreatyManager:
     def get_treaties_by_edm(self, edm_name: str) -> dict:
         params = {
             "datasource": edm_name,
-            "limit": 1000
+            "limit": 100
         }
         response = self.client.request('GET', GET_TREATIES, params=params)
         return response.json()
@@ -18,7 +18,7 @@ class TreatyManager:
         params = {
             "fields": "code,name",
             "datasource": edm_name,
-            "limit": 1000
+            "limit": 100
         }
         response = self.client.request('GET', GET_TREATY_TYPES, params=params)
         return response.json()
@@ -27,7 +27,7 @@ class TreatyManager:
         params = {
             "fields": "code,name",
             "datasource": edm_name,
-            "limit": 1000
+            "limit": 100
         }
         response = self.client.request('GET', GET_TREATY_ATTACHMENT_BASES, params=params)
         return response.json()
@@ -36,7 +36,7 @@ class TreatyManager:
         params = {
             "fields": "code,name",
             "datasource": edm_name,
-            "limit": 1000
+            "limit": 100
         }
         response = self.client.request('GET', GET_TREATY_ATTACHMENT_LEVELS, params=params)
         return response.json()

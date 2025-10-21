@@ -15,8 +15,8 @@ class AnalysisManager:
             self._reference_data_manager = ReferenceDataManager(self.client)
         return self._reference_data_manager
 
-    def get_model_profiles_by_name(self, profile_names: list) -> dict:
-        params = {'name': profile_names}
+    def get_model_profile_by_name(self, profile_name: str) -> dict:
+        params = {'name': profile_name}
         response = self.client.request('GET', GET_MODEL_PROFILES, params=params)
         return response.json()
 
@@ -53,7 +53,7 @@ class AnalysisManager:
                             global_analysis_settings: dict = {"franchiseDeductible": False,"minLossThreshold": "1.00","treatConstructionOccupancyAsUnknown": True,"numMaxLossEvent": 1},
                             currency: dict = {} # TODO
                         ) -> int:
-        model_profile_response = self.get_model_profiles_by_name([analysis_profile_name])
+        model_profile_response = self.get_model_profile_by_name(analysis_profile_name)
         output_profile_response = self.get_output_profile_by_name(output_profile_name)
         event_rate_scheme_response = self.get_event_rate_scheme_by_name(event_rate_scheme_name)
         tag_ids = self.reference_data_manager.get_tag_ids_from_tag_names(tag_names)
@@ -125,7 +125,7 @@ class AnalysisManager:
         return response.json()
     
     def execute_analysis(self, job_name: str, edm_name: str, portfolio_id: int, analysis_profile_name: str, output_profile_name: str, event_rate_scheme_name: str, treaty_ids: list) -> dict:
-        model_profile_response = self.get_model_profiles_by_name([analysis_profile_name])
+        model_profile_response = self.get_model_profile_by_name(analysis_profile_name)
         output_profile_response = self.get_output_profile_by_name(output_profile_name)
         event_rate_scheme_response = self.get_event_rate_scheme_by_name(event_rate_scheme_name)
         if model_profile_response['count'] > 0 and len(output_profile_response) > 0 and event_rate_scheme_response['count'] > 0:
