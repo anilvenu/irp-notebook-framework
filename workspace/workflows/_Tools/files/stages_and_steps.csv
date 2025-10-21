@@ -1,0 +1,31 @@
+Stage,Step,Activities
+01_Setup,01_Initialize_Environment,1) Validate Database Connectivity
+01_Setup,01_Initialize_Environment,2) Validate Cycle Configuration
+01_Setup,01_Initialize_Environment,3) Set Up Working Directories
+01_Setup,01_Initialize_Environment,4) Initialize Logging
+01_Setup,02_Validate_Config_File,1) Validate File Format
+01_Setup,02_Validate_Config_File,2) Validate Required Data Present
+01_Setup,02_Validate_Config_File,"3) Validate Versions (EDM, Model Profile, GeoHaz)"
+01_Setup,02_Validate_Config_File,4) Validate Existence of Reference Data
+02_Data_Extraction,01_Validate_And_Update_SQL_Scripts,1) Validate SQL Scripts
+02_Data_Extraction,01_Validate_And_Update_SQL_Scripts,2) Apply Parameters on SQL Scripts
+02_Data_Extraction,01_Validate_And_Update_SQL_Scripts,3) Execute Data Extraction
+02_Data_Extraction,02_Extract_Import_CSVs,1) Export Data to CSV
+02_Data_Extraction,02_Extract_Import_CSVs,2) Run Control Totals Scripts
+03_Data_Import,01_Import_Base_Data,1) Create EDMs
+03_Data_Import,01_Import_Base_Data,2) Create Base Portfolios
+03_Data_Import,01_Import_Base_Data,3) Populate Base Portfolios via MRI Import
+03_Data_Import,01_Import_Base_Data,4) Create Reinsurance Treaties
+03_Data_Import,02_Portfolio_Mapping,1) Validate SQL Scripts
+03_Data_Import,02_Portfolio_Mapping,2) Apply Parameters on SQL Scripts
+03_Data_Import,02_Portfolio_Mapping,3) Execute Portfolio Mapping
+03_Data_Import,02_Portfolio_Mapping,4) Review Data Creation Report
+04_Analysis_Execution,01_GeoHaz_Portfolios,1) Upgrade EDM Data Version
+04_Analysis_Execution,01_GeoHaz_Portfolios,2) GeoHaz Portfolios
+04_Analysis_Execution,01_GeoHaz_Portfolios,3) Run Control Totals Scripts
+04_Analysis_Execution,02_Execute_Analysis,1) Execute Portfolio Analysis
+04_Analysis_Execution,02_Execute_Analysis,2) Review Analysis Summary Report
+05_Grouping_and_Export,01_Group_Analysis_Results,1) Execute Analysis Grouping
+05_Grouping_and_Export,01_Group_Analysis_Results,2) Review Grouping Summary Report
+05_Grouping_and_Export,02_Export_to_RDM,1) Execute RDM Export
+05_Grouping_and_Export,02_Export_to_RDM,2) Review Export Summary Report
