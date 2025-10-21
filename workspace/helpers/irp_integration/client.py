@@ -92,19 +92,45 @@ class Client:
         start = time.time()
         while True:
             print(f"Polling batch workflow ids: {','.join(str(item) for item in workflow_ids)}")
-            params = {'ids': ','.join(str(item) for item in workflow_ids)}
-            response = self.request('GET', GET_WORKFLOWS, params=params)
 
+            # Fetch all workflows across all pages
+            all_workflows = []
+            offset = 0
+            limit = 100
+
+            while True:
+                params = {
+                    'ids': ','.join(str(item) for item in workflow_ids),
+                    'limit': limit,
+                    'offset': offset
+                }
+                response = self.request('GET', GET_WORKFLOWS, params=params)
+                response_data = response.json()
+                total_match_count = response_data['totalMatchCount']
+                workflows = response_data.get('workflows', [])
+
+                all_workflows.extend(workflows)
+
+                # Check if we've fetched all workflows
+                if len(all_workflows) >= total_match_count:
+                    break
+
+                # Move to next page
+                offset += limit
+
+            # Check if all workflows are completed
             all_completed = True
-            for workflow in response.json().get('workflows', []):
+            for workflow in all_workflows:
                 status = workflow.get('status', '')
                 if status in self.WORKFLOW_IN_PROGRESS:
                     all_completed = False
                     break
 
             if all_completed:
+                # Return the last response but with all workflows combined
+                response_data['workflows'] = all_workflows
                 return response
-            
+
             if time.time() - start > timeout:
                 raise TimeoutError(f"Batch workflows did not complete within {timeout} seconds.")
             time.sleep(interval)
