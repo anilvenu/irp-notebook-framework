@@ -31,8 +31,8 @@ class ReferenceDataManager:
         for tag_name in tag_names:
             tag_search_response = self.get_tag_by_name(tag_name)
             if len(tag_search_response) > 0:
-                tag_ids.append(tag_search_response[0]['tagId'])
+                tag_ids.append(int(tag_search_response[0]['tagId']))
             else:
-                tag_ids.append(self.create_tag(tag_name)['id'])
+                tag_ids.append(int(self.create_tag(tag_name)['id']))
 
         return tag_ids

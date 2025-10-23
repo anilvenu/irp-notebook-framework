@@ -34,5 +34,5 @@ class RDMManager:
 
         print(json.dumps(data, indent=2))
 
-        response = self.client.execute_workflow('POST', EXPORT_TO_RDM, json=data, headers={"x-rms-resource-group-id": os.environ.get('RISK_MODELER_RESOURCE_GROUP_ID')})
+        response = self.client.execute_workflow('POST', EXPORT_TO_RDM, json=data)
         return response.json()

@@ -43,6 +43,9 @@ class TreatyManager:
 
     def create_treaty(self, edm_name: str, treaty_data: dict) -> dict:
         params = {"datasource": edm_name}
+        # Truncate treaty number if it exists
+        if "treatyNumber" in treaty_data:
+            treaty_data["treatyNumber"] = treaty_data["treatyNumber"][:20]
         response = self.client.request('POST', CREATE_TREATY, params=params, json=treaty_data)
         return {'id': response.headers['location'].split('/')[-1]}
     
