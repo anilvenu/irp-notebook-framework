@@ -19,7 +19,7 @@ irp_integration/
 
 ### Environment Variables
 
-These tests automatically load environment variables from the `.env` file in the project root. The required variables are:
+These tests automatically load environment variables from the `.env.test` file in the project root. The required variables are:
 
 ```bash
 RISK_MODELER_BASE_URL=https://api-euw1.rms-ppe.com
@@ -27,7 +27,7 @@ RISK_MODELER_API_KEY=your_actual_api_key_here
 RISK_MODELER_RESOURCE_GROUP_ID=your_resource_group_id
 ```
 
-**Note:** The conftest automatically loads these from `.env` before running tests. If the `.env` file is missing or these variables are not set, the `Client` class will use default values which will cause authentication failures.
+**Note:** The conftest automatically loads these from `.env.test` before running tests. If the `.env.test` file is missing or these variables are not set, the `Client` class will use default values which will cause authentication failures.
 
 ### Test Data
 

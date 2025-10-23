@@ -27,7 +27,7 @@ workspace/workflows/_Tools/files/working_files/*.csv
 .DS_Store
 
 # Environment
-.env
+.env*
 *.env
 !.env.example
 
