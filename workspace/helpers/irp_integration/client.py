@@ -41,7 +41,6 @@ class Client:
             else:
                 url = f"{self.base_url}/{path.lstrip('/')}"
 
-        print(f"Headers: {self.headers}")
         response = self.session.request(
             method=method,
             url=url,
