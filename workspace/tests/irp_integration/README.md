@@ -17,20 +17,17 @@ irp_integration/
 
 ## Prerequisites
 
-### Environment Variables (Optional)
+### Environment Variables
 
-These tests will use the Moody's API with credentials from environment variables if set:
+These tests automatically load environment variables from the `.env` file in the project root. The required variables are:
 
 ```bash
-export RISK_MODELER_BASE_URL="https://api-euw1.rms-ppe.com"
-export RISK_MODELER_API_KEY="your_actual_api_key_here"
+RISK_MODELER_BASE_URL=https://api-euw1.rms-ppe.com
+RISK_MODELER_API_KEY=your_actual_api_key_here
+RISK_MODELER_RESOURCE_GROUP_ID=your_resource_group_id
 ```
 
-**If not set**, the `Client` class will use default values:
-- `RISK_MODELER_BASE_URL`: defaults to `'https://api-euw1.rms-ppe.com'`
-- `RISK_MODELER_API_KEY`: defaults to `'your_api_key'` (will fail authentication)
-
-**Note:** Tests will run but likely fail with authentication errors if valid credentials are not provided via environment variables.
+**Note:** The conftest automatically loads these from `.env` before running tests. If the `.env` file is missing or these variables are not set, the `Client` class will use default values which will cause authentication failures.
 
 ### Test Data
 

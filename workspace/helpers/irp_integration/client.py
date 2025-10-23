@@ -11,7 +11,7 @@ class Client:
     def __init__(self):
         self.base_url = os.environ.get('RISK_MODELER_BASE_URL', 'https://api-euw1.rms-ppe.com')
         self.api_key = os.environ.get('RISK_MODELER_API_KEY', 'your_api_key')
-        self.resource_group_id = os.environ.get('RISK_MODELER_RESOURCE_GROUP_ID')
+        self.resource_group_id = os.environ.get('RISK_MODELER_RESOURCE_GROUP_ID', 'your_resource_id')
         self.headers = {
             'Authorization': self.api_key,
             'x-rms-resource-group-id': self.resource_group_id
@@ -41,6 +41,7 @@ class Client:
             else:
                 url = f"{self.base_url}/{path.lstrip('/')}"
 
+        print(f"Headers: {self.headers}")
         response = self.session.request(
             method=method,
             url=url,

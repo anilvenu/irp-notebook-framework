@@ -19,6 +19,7 @@ Workflow:
 Requirements:
 - RISK_MODELER_BASE_URL environment variable
 - RISK_MODELER_API_KEY environment variable
+- RISK_MODELER_RESOURCE_GROUP_ID environment variable
 - Valid Moody's API credentials
 
 Run these tests:
@@ -27,8 +28,6 @@ Run these tests:
 """
 
 import pytest
-import json
-import os
 from pathlib import Path
 
 

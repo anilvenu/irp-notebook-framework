@@ -6,13 +6,23 @@ This module provides fixtures specific to testing the irp_integration module:
 - Unique name generation for test resources
 - Cleanup utilities
 
-Note: Environment variables can be set before running tests if needed.
-The Client class reads from os.environ with sensible defaults.
+Note: Loads .env file from project root to populate environment variables
+for RISK_MODELER_BASE_URL, RISK_MODELER_API_KEY, and RISK_MODELER_RESOURCE_GROUP_ID.
 """
 
+# Load .env file BEFORE any imports to ensure environment variables are available
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from project root
+project_root = Path(__file__).parent.parent.parent.parent.resolve()
+env_file = project_root / '.env'
+if env_file.exists():
+    load_dotenv(env_file)
+
+# Now import everything else
 import sys
 import pytest
-from pathlib import Path
 from datetime import datetime
 
 # Add workspace directory to Python path for imports
@@ -35,6 +45,7 @@ def irp_client():
     The underlying Client reads configuration from environment variables:
     - RISK_MODELER_BASE_URL (default: 'https://api-euw1.rms-ppe.com')
     - RISK_MODELER_API_KEY (default: 'your_api_key')
+    - RISK_MODELER_RESOURCE_GROUP_ID (default: 'your_resource_group')
 
     Set these environment variables before running tests to use real credentials.
 
