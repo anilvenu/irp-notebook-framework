@@ -1,10 +1,38 @@
 from .client import Client
-from .constants import GET_CURRENCIES, GET_TAGS, CREATE_TAG
+from .constants import GET_CURRENCIES, GET_TAGS, CREATE_TAG, GET_MODEL_PROFILES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME
 
 class ReferenceDataManager:
 
     def __init__(self, client: Client):
         self.client = client
+
+    def get_model_profiles(self) -> dict:
+        response = self.client.request('GET', GET_MODEL_PROFILES)
+        return response.json()
+
+    def get_model_profile_by_name(self, profile_name: str) -> dict:
+        params = {'name': profile_name}
+        response = self.client.request('GET', GET_MODEL_PROFILES, params=params)
+        return response.json()
+
+    def get_output_profiles(self) -> dict:
+        response = self.client.request('GET', GET_OUTPUT_PROFILES)
+        return response.json()
+
+    def get_output_profile_by_name(self, profile_name: str) -> dict:
+        params = {'name': profile_name}
+        response = self.client.request('GET', GET_OUTPUT_PROFILES, params=params)
+        return response.json()
+    
+    def get_event_rate_schemes(self) -> dict:
+        params = {'where': 'isActive=True'}
+        response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
+        return response.json()
+    
+    def get_event_rate_scheme_by_name(self, scheme_name: str) -> dict:
+        params = {'where': f"eventRateSchemeName=\"{scheme_name}\""}
+        response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
+        return response.json()
 
     def get_currencies(self) -> dict:
         params = {

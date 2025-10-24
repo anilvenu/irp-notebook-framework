@@ -1,6 +1,6 @@
 import json
 from .client import Client
-from .constants import GET_MODEL_PROFILES, GET_ANALYSES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME, GET_PLATFORM_ANALYSES, ANALYZE_PORTFOLIO, CREATE_ANALYSIS_GROUP
+from .constants import GET_ANALYSES, GET_PLATFORM_ANALYSES, ANALYZE_PORTFOLIO, CREATE_ANALYSIS_GROUP
 
 class AnalysisManager:
     def __init__(self, client: Client, reference_data_manager=None):
@@ -15,37 +15,9 @@ class AnalysisManager:
             self._reference_data_manager = ReferenceDataManager(self.client)
         return self._reference_data_manager
 
-    def get_model_profiles(self) -> dict:
-        response = self.client.request('GET', GET_MODEL_PROFILES)
-        return response.json()
-
-    def get_model_profile_by_name(self, profile_name: str) -> dict:
-        params = {'name': profile_name}
-        response = self.client.request('GET', GET_MODEL_PROFILES, params=params)
-        return response.json()
-
     def get_analysis_by_id(self, analysis_id: int) -> dict:
         params = {"q": f"id={analysis_id}"}
         response = self.client.request('GET', GET_ANALYSES, params=params)
-        return response.json()
-    
-    def get_output_profiles(self) -> dict:
-        response = self.client.request('GET', GET_OUTPUT_PROFILES)
-        return response.json()
-
-    def get_output_profile_by_name(self, profile_name: str) -> dict:
-        params = {'name': profile_name}
-        response = self.client.request('GET', GET_OUTPUT_PROFILES, params=params)
-        return response.json()
-    
-    def get_event_rate_schemes(self) -> dict:
-        params = {'where': 'isActive=True'}
-        response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
-        return response.json()
-    
-    def get_event_rate_scheme_by_name(self, scheme_name: str) -> dict:
-        params = {'where': f"eventRateSchemeName=\"{scheme_name}\""}
-        response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
         return response.json()
     
     def get_analyses_by_ids(self, analysis_ids: list) -> dict:
@@ -66,9 +38,9 @@ class AnalysisManager:
                             global_analysis_settings: dict = {"franchiseDeductible": False,"minLossThreshold": "1.00","treatConstructionOccupancyAsUnknown": True,"numMaxLossEvent": 1},
                             currency: dict = {} # TODO
                         ) -> int:
-        model_profile_response = self.get_model_profile_by_name(analysis_profile_name)
-        output_profile_response = self.get_output_profile_by_name(output_profile_name)
-        event_rate_scheme_response = self.get_event_rate_scheme_by_name(event_rate_scheme_name)
+        model_profile_response = self.reference_data_manager.get_model_profile_by_name(analysis_profile_name)
+        output_profile_response = self.reference_data_manager.get_output_profile_by_name(output_profile_name)
+        event_rate_scheme_response = self.reference_data_manager.get_event_rate_scheme_by_name(event_rate_scheme_name)
         tag_ids = self.reference_data_manager.get_tag_ids_from_tag_names(tag_names)
 
         if model_profile_response['count'] > 0 and len(output_profile_response) > 0 and event_rate_scheme_response['count'] > 0:
@@ -138,9 +110,9 @@ class AnalysisManager:
         return response.json()
     
     def execute_analysis(self, job_name: str, edm_name: str, portfolio_id: int, analysis_profile_name: str, output_profile_name: str, event_rate_scheme_name: str, treaty_ids: list) -> dict:
-        model_profile_response = self.get_model_profile_by_name(analysis_profile_name)
-        output_profile_response = self.get_output_profile_by_name(output_profile_name)
-        event_rate_scheme_response = self.get_event_rate_scheme_by_name(event_rate_scheme_name)
+        model_profile_response = self.reference_data_manager.get_model_profile_by_name(analysis_profile_name)
+        output_profile_response = self.reference_data_manager.get_output_profile_by_name(output_profile_name)
+        event_rate_scheme_response = self.reference_data_manager.get_event_rate_scheme_by_name(event_rate_scheme_name)
         if model_profile_response['count'] > 0 and len(output_profile_response) > 0 and event_rate_scheme_response['count'] > 0:
             return self.analyze_portfolio(job_name, 
                                           edm_name, 
