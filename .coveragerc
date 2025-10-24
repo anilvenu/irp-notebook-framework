@@ -10,10 +10,10 @@ source = workspace/helpers
 # Omit (exclude) specific files or patterns from coverage
 omit =
     # Exclude integration directory for Moody's API
-    workspace/helpers/irp_integration/*
+    #workspace/helpers/irp_integration/*
     # Exclude ux.py and notebook.py from coverage
     workspace/helpers/ux.py
-    workspace/helpers/notebook.py
+    workspace/helpers/notebook*.py
     # Exclude __pycache__ and .pyc files
     */__pycache__/*
     */.pytest_cache/*
