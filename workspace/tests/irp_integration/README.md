@@ -8,6 +8,7 @@ This directory contains tests for the `irp_integration` module, which provides i
 irp_integration/
 ├── __init__.py                    # Package initialization
 ├── conftest.py                    # Shared fixtures for API tests
+├── test_client.py                 # HTTP client unit tests (retry, timeout, polling)
 ├── test_irp_integration_e2e.py    # End-to-end workflow tests
 └── fixtures/                      # Test data files
     ├── test_accounts.csv          # Sample account data (10 records)
@@ -19,7 +20,7 @@ irp_integration/
 
 ### Environment Variables
 
-These tests automatically load environment variables from the `.env` file in the project root. The required variables are:
+These tests automatically load environment variables from the `.env.test` file in the project root. The required variables are:
 
 ```bash
 RISK_MODELER_BASE_URL=https://api-euw1.rms-ppe.com
@@ -27,7 +28,7 @@ RISK_MODELER_API_KEY=your_actual_api_key_here
 RISK_MODELER_RESOURCE_GROUP_ID=your_resource_group_id
 ```
 
-**Note:** The conftest automatically loads these from `.env` before running tests. If the `.env` file is missing or these variables are not set, the `Client` class will use default values which will cause authentication failures.
+**Note:** The conftest automatically loads these from `.env.test` before running tests. If the `.env.test` file is missing or these variables are not set, the `Client` class will use default values which will cause authentication failures.
 
 ### Test Data
 
@@ -41,10 +42,24 @@ The test data files in the `fixtures/` directory are minimal versions (10 record
 pytest workspace/tests/irp_integration/ -v -s
 ```
 
-### Run Only E2E Test
+### Run Specific Test Files
 
 ```bash
+# Run HTTP client tests (fast, fully mocked, no API required)
+pytest workspace/tests/irp_integration/test_client.py -v
+
+# Run E2E workflow tests (slow, requires API credentials)
 pytest workspace/tests/irp_integration/test_irp_integration_e2e.py -v -s
+```
+
+### Run with test.sh Script
+
+```bash
+# Run all integration tests
+./test.sh workspace/tests/irp_integration/ -v
+
+# Run only client tests
+./test.sh workspace/tests/irp_integration/test_client.py -v
 ```
 
 ### Run with Marker Filters
@@ -58,6 +73,9 @@ pytest -m "e2e and slow" -v -s
 
 # Skip slow tests
 pytest workspace/tests/irp_integration/ -m "not slow" -v
+
+# Run only unit tests (fast, no API)
+pytest workspace/tests/irp_integration/ -m "unit" -v
 ```
 
 ### Collect Tests Without Running
@@ -70,11 +88,94 @@ pytest workspace/tests/irp_integration/ --collect-only
 
 Tests in this directory use the following pytest markers:
 
+- **`@pytest.mark.unit`**: Unit tests with mocked dependencies (fast, no external APIs)
+- **`@pytest.mark.integration`**: Integration tests that may use mocked APIs or real APIs
 - **`@pytest.mark.moody_api`**: Tests that require Moody's API credentials
 - **`@pytest.mark.e2e`**: End-to-end integration tests
 - **`@pytest.mark.slow`**: Tests that take a long time to run (>1 minute)
 
-## E2E Workflow Test
+## Client Unit Tests (test_client.py)
+
+The `test_client.py` file contains comprehensive unit tests for the HTTP client that handles all API communication. These tests are **fully mocked** and do not require API credentials or network connectivity.
+
+### Test Coverage: 100%
+
+**60 tests covering:**
+
+1. **Client Initialization** (4 tests)
+   - Environment variable configuration
+   - Headers setup
+   - Session retry adapter configuration
+
+2. **Retry Mechanism** (11 tests)
+   - Retry on transient errors (429, 500, 502, 503, 504)
+   - No retry on client errors (400, 404)
+   - Max retry attempts (6 total: 1 original + 5 retries)
+   - Retry across all HTTP methods
+
+3. **Timeout Handling** (3 tests)
+   - Default timeout (200s)
+   - Custom timeout parameter
+   - Timeout exception handling
+
+4. **HTTP Request Methods** (10 tests)
+   - GET, POST, PUT, PATCH, DELETE requests
+   - Query parameters
+   - JSON body handling
+   - Custom headers merging
+   - URL construction (full_url vs base_url + path)
+
+5. **Error Handling** (6 tests)
+   - HTTPError with JSON/text response enrichment
+   - 401 Unauthorized, 403 Forbidden
+   - Connection errors
+   - raise_for_status validation
+
+6. **Workflow Helper Methods** (6 tests)
+   - Location header extraction
+   - Workflow ID parsing
+   - Case sensitivity handling
+
+7. **Workflow Polling** (7 tests)
+   - Single workflow polling
+   - Status progression (QUEUED → PENDING → RUNNING → FINISHED)
+   - FAILED, CANCELLED status handling
+   - Timeout and invalid URL validation
+   - Custom polling intervals
+
+8. **Batch Workflow Polling** (6 tests)
+   - Multi-workflow polling
+   - Pagination handling (100+ workflows)
+   - Mixed completion statuses
+   - Batch timeout handling
+
+9. **Execute Workflow** (7 tests)
+   - Submit + poll flow for 201/202 responses
+   - No polling for non-201/202 responses
+   - Parameter and header passthrough
+   - End-to-end execution
+
+### Running Client Tests
+
+```bash
+# Fast execution (~21 seconds for all 60 tests)
+pytest workspace/tests/irp_integration/test_client.py -v
+
+# With coverage report
+pytest workspace/tests/irp_integration/test_client.py --cov=helpers.irp_integration.client
+
+# Run specific test
+pytest workspace/tests/irp_integration/test_client.py::test_retry_on_429_rate_limit -v
+```
+
+### Key Features
+
+- ✅ **No API Required** - All responses mocked using `responses` library
+- ✅ **Fast** - Complete test suite runs in ~21 seconds
+- ✅ **100% Coverage** - Every line of client.py tested
+- ✅ **Comprehensive** - All error paths and edge cases covered
+
+## E2E Workflow Test (test_irp_integration_e2e.py)
 
 The `test_complete_workflow_edm_to_rdm` test validates the complete Moody's API integration workflow:
 
@@ -178,27 +279,34 @@ When adding new tests to this directory:
        f"Expected FINISHED but got {response['status']}"
    ```
 
+## Test Summary
+
+### Current Test Files
+
+| File | Tests | Coverage | Runtime | API Required | Description |
+|------|-------|----------|---------|--------------|-------------|
+| `test_client.py` | 60 | 100% | ~21s | ❌ No | HTTP client retry, timeout, polling |
+| `test_irp_integration_e2e.py` | 1 | N/A | 10-15min | ✅ Yes | Complete workflow validation |
+
+### Total: 61 tests
+
 ## Future Tests
 
 Planned additions to this test directory:
 
-- **`test_irp_integration_client.py`** - Unit tests for `client.py` with mocked responses
-  - Test retry logic
-  - Test error handling
-  - Test timeout behavior
-  - Test polling mechanisms
-
-- **`test_irp_integration_managers.py`** - Individual manager tests
+- **`test_managers.py`** - Individual manager tests with mocked client
   - EDMManager specific tests
   - PortfolioManager specific tests
   - AnalysisManager specific tests
-  - etc.
+  - TreatyManager specific tests
+  - RDMManager specific tests
 
-- **`test_irp_integration_errors.py`** - Error handling tests
+- **`test_error_handling.py`** - Error handling tests
   - Invalid credentials
   - Network failures
   - API errors (400, 404, 500, etc.)
   - Malformed responses
+  - Retry exhaustion scenarios
 
 ## References
 
