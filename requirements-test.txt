@@ -4,6 +4,7 @@ pytest-cov==4.1.0          # Coverage reporting
 pytest-xdist==3.5.0        # Parallel test execution
 pytest-timeout==2.2.0      # Timeout protection for hanging tests
 pytest-mock==3.12.0        # Enhanced mocking capabilities
+responses==0.25.0          # HTTP request mocking
 
 # Code Quality
 coverage==7.4.0            # Coverage analysis (standalone)
