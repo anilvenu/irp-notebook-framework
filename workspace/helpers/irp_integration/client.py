@@ -1,14 +1,37 @@
-import requests, time, os
+"""
+Client for IRP Integration API requests.
+
+Handles HTTP requests with retry logic, workflow polling,
+and batch workflow execution.
+"""
+
+import requests
+import time
+import os
+from typing import Dict, List, Any, Optional, Union
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 from .constants import GET_WORKFLOWS
+from .exceptions import IRPAPIError, IRPValidationError, IRPWorkflowError
+from .validators import validate_non_empty_string, validate_positive_int
+from .utils import extract_workflow_url_from_response, parse_workflow_response
 
 class Client:
+
+    """Client for Moody's Risk Modeler API."""
 
     WORKFLOW_COMPLETED = ['FINISHED', 'FAILED', 'CANCELLED'] # https://developer.rms.com/risk-modeler/docs/workflow-engine#polling-workflow-job-and-operation-statuses
     WORKFLOW_IN_PROGRESS = ['QUEUED', 'PENDING', 'RUNNING', 'CANCEL_REQUESTED', 'CANCELLING']
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """
+        Initialize API client with credentials from environment.
+
+        Environment variables:
+            RISK_MODELER_BASE_URL: API base URL
+            RISK_MODELER_API_KEY: API authentication key
+            RISK_MODELER_RESOURCE_GROUP_ID: Resource group ID
+        """
         self.base_url = os.environ.get('RISK_MODELER_BASE_URL', 'https://api-euw1.rms-ppe.com')
         self.api_key = os.environ.get('RISK_MODELER_API_KEY', 'your_api_key')
         self.resource_group_id = os.environ.get('RISK_MODELER_RESOURCE_GROUP_ID', 'your_resource_id')
@@ -32,7 +55,41 @@ class Client:
         session.mount("http://", HTTPAdapter(max_retries=retry))
         self.session = session
 
-    def request(self, method, path, *, full_url=None, base_url=None, params=None, json=None, headers={}, timeout=None, stream=False) -> requests.Response:
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        full_url: Optional[str] = None,
+        base_url: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
+        json: Optional[Union[Dict[str, Any], List[Any]]] = None,
+        headers: Dict[str, str] = {},
+        timeout: Optional[int] = None,
+        stream: bool = False
+    ) -> requests.Response:
+        """
+        Make HTTP request to API.
+
+        Args:
+            method: HTTP method (GET, POST, PUT, DELETE, etc.)
+            path: API path (e.g., '/api/v1/datasources')
+            full_url: Full URL (overrides path/base_url if provided)
+            base_url: Base URL (overrides default if provided)
+            params: Query parameters
+            json: JSON request body
+            headers: Additional headers
+            timeout: Request timeout in seconds
+            stream: Enable streaming response
+
+        Returns:
+            HTTP response object
+
+        Raises:
+            IRPAPIError: If HTTP request fails
+        """
+        validate_non_empty_string(method, "method")
+
         if full_url:
             url = full_url
         else:
@@ -41,58 +98,128 @@ class Client:
             else:
                 url = f"{self.base_url}/{path.lstrip('/')}"
 
-        response = self.session.request(
-            method=method,
-            url=url,
-            params=params,
-            json=json,
-            headers=self.headers | headers,
-            timeout=timeout or self.timeout,
-            stream=stream,
-        )
-
         try:
+            response = self.session.request(
+                method=method,
+                url=url,
+                params=params,
+                json=json,
+                headers=self.headers | headers,
+                timeout=timeout or self.timeout,
+                stream=stream,
+            )
             response.raise_for_status()
         except requests.HTTPError as e:
-            # Optional: enrich with server message if available
+            # Enrich with server message if available
             msg = ""
             try:
                 body = response.json()
                 msg = f" | server: {body}"
             except Exception:
                 msg = f" | text: {response.text[:500]}"
-            raise requests.HTTPError(f"{e} {msg}") from None
+            raise IRPAPIError(f"HTTP request failed: {e} {msg}") from e
+        except requests.RequestException as e:
+            raise IRPAPIError(f"Request error: {e}") from e
+
         return response
     
-    def get_location_header(self, response) -> str:
-        if 'location' in response.headers:
-            return response.headers['location']
-        return ""
-    
-    def get_workflow_id(self, response) -> str:
-        if 'location' in response.headers:
-            return response.headers['location'].split('/')[-1]
+    def get_location_header(self, response: requests.Response) -> str:
+        """
+        Get Location header from response.
+
+        Args:
+            response: HTTP response object
+
+        Returns:
+            Location header value, or empty string if not found
+        """
+        return response.headers.get('location', '')
+
+    def get_workflow_id(self, response: requests.Response) -> str:
+        """
+        Extract workflow ID from Location header.
+
+        Args:
+            response: HTTP response object
+
+        Returns:
+            Workflow ID, or empty string if not found
+        """
+        location = self.get_location_header(response)
+        if location:
+            return location.split('/')[-1]
         return ""
 
-    def poll_workflow(self, workflow_url, interval=10, timeout=600000) -> requests.Response:
-        if not workflow_url:
-            raise ValueError(f"Invalid workflow URL provided for polling: {workflow_url}.")
+    def poll_workflow(
+        self,
+        workflow_url: str,
+        interval: int = 10,
+        timeout: int = 600000
+    ) -> requests.Response:
+        """
+        Poll workflow until completion or timeout.
+
+        Args:
+            workflow_url: Full URL to workflow endpoint
+            interval: Polling interval in seconds
+            timeout: Maximum timeout in seconds
+
+        Returns:
+            Final workflow response
+
+        Raises:
+            IRPValidationError: If workflow_url is invalid
+            IRPWorkflowError: If workflow times out
+        """
+        validate_non_empty_string(workflow_url, "workflow_url")
         
+        validate_positive_int(interval, "interval")
+        validate_positive_int(timeout, "timeout")
+
         start = time.time()
         while True:
             print(f"Polling workflow url {workflow_url}")
             response = self.request('GET', '', full_url=workflow_url)
-            print(f"Workflow status: {response.json().get('status', '')}; Percent complete: {response.json().get('progress', '')}")
+            workflow_data = response.json()
+            status = workflow_data.get('status', '')
+            progress = workflow_data.get('progress', '')
+            print(f"Workflow status: {status}; Percent complete: {progress}")
 
-            status = response.json().get('status', '')
             if status in self.WORKFLOW_COMPLETED:
                 return response
-            
+
             if time.time() - start > timeout:
-                raise TimeoutError(f"Workflow did not complete within {timeout} seconds.")
+                raise IRPWorkflowError(
+                    f"Workflow did not complete within {timeout} seconds. Last status: {status}"
+                )
             time.sleep(interval)
 
-    def poll_workflow_batch(self, workflow_ids, interval=20, timeout=600000) -> requests.Response:
+    def poll_workflow_batch(
+        self,
+        workflow_ids: List[int],
+        interval: int = 20,
+        timeout: int = 600000
+    ) -> requests.Response:
+        """
+        Poll multiple workflows until all complete or timeout.
+
+        Args:
+            workflow_ids: List of workflow IDs to poll
+            interval: Polling interval in seconds
+            timeout: Maximum timeout in seconds
+
+        Returns:
+            Response with all workflows combined
+
+        Raises:
+            IRPValidationError: If inputs are invalid
+            IRPWorkflowError: If workflows time out
+        """
+        from .validators import validate_list_not_empty
+        validate_list_not_empty(workflow_ids, "workflow_ids")
+        validate_positive_int(interval, "interval")
+        validate_positive_int(timeout, "timeout")
+
         start = time.time()
         while True:
             print(f"Polling batch workflow ids: {','.join(str(item) for item in workflow_ids)}")
@@ -136,14 +263,61 @@ class Client:
                 return response
 
             if time.time() - start > timeout:
-                raise TimeoutError(f"Batch workflows did not complete within {timeout} seconds.")
+                raise IRPWorkflowError(
+                    f"Batch workflows did not complete within {timeout} seconds"
+                )
             time.sleep(interval)
 
-    def execute_workflow(self, method, path, *, params=None, json=None, headers={}, timeout=None, stream=False) -> requests.Response:
+    def execute_workflow(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Optional[Dict[str, Any]] = None,
+        json: Optional[Union[Dict[str, Any], List[Any]]] = None,
+        headers: Dict[str, str] = {},
+        timeout: Optional[int] = None,
+        stream: bool = False
+    ) -> requests.Response:
+        """
+        Execute workflow: submit request and poll until completion.
+
+        This is a convenience method that combines request submission
+        with automatic workflow polling.
+
+        Args:
+            method: HTTP method (POST, DELETE, etc.)
+            path: API path
+            params: Query parameters
+            json: JSON request body
+            headers: Additional headers
+            timeout: Request timeout in seconds
+            stream: Enable streaming response
+
+        Returns:
+            Final workflow response after completion
+
+        Raises:
+            IRPAPIError: If request fails
+            IRPWorkflowError: If workflow times out
+        """
         print("Submitting workflow request...")
-        response = self.request(method, path, params=params, json=json, headers=headers, timeout=timeout, stream=stream)
-        if response.status_code not in (201,202):
+        response = self.request(
+            method, path,
+            params=params,
+            json=json,
+            headers=headers,
+            timeout=timeout,
+            stream=stream
+        )
+
+        if response.status_code not in (201, 202):
             return response
-        else:
-            workflow_url = self.get_location_header(response)
-            return self.poll_workflow(workflow_url)
+
+        workflow_url = self.get_location_header(response)
+        if not workflow_url:
+            raise IRPAPIError(
+                "Workflow submission succeeded but Location header is missing"
+            )
+
+        return self.poll_workflow(workflow_url)

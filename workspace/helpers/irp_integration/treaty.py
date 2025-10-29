@@ -444,7 +444,7 @@ class TreatyManager:
         # Create treaty
         treaty_response = self.create_treaty(edm_name, treaty_data)
 
-        result = {
+        result: Dict[str, Any] = {
             'id': treaty_response['id'],
             'treaty_name': treaty_name
         }
