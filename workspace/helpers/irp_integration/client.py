@@ -14,7 +14,7 @@ from requests.adapters import HTTPAdapter
 from .constants import GET_WORKFLOWS
 from .exceptions import IRPAPIError, IRPValidationError, IRPWorkflowError
 from .validators import validate_non_empty_string, validate_positive_int
-from .utils import extract_workflow_url_from_response, parse_workflow_response
+from .utils import get_location_header
 
 class Client:
 
@@ -122,33 +122,7 @@ class Client:
             raise IRPAPIError(f"Request error: {e}") from e
 
         return response
-    
-    def get_location_header(self, response: requests.Response) -> str:
-        """
-        Get Location header from response.
 
-        Args:
-            response: HTTP response object
-
-        Returns:
-            Location header value, or empty string if not found
-        """
-        return response.headers.get('location', '')
-
-    def get_workflow_id(self, response: requests.Response) -> str:
-        """
-        Extract workflow ID from Location header.
-
-        Args:
-            response: HTTP response object
-
-        Returns:
-            Workflow ID, or empty string if not found
-        """
-        location = self.get_location_header(response)
-        if location:
-            return location.split('/')[-1]
-        return ""
 
     def poll_workflow(
         self,
@@ -314,7 +288,7 @@ class Client:
         if response.status_code not in (201, 202):
             return response
 
-        workflow_url = self.get_location_header(response)
+        workflow_url = get_location_header(response)
         if not workflow_url:
             raise IRPAPIError(
                 "Workflow submission succeeded but Location header is missing"

@@ -8,7 +8,7 @@ import json
 from typing import Dict, List, Any, Optional
 from .client import Client
 from .constants import GET_ANALYSES, GET_PLATFORM_ANALYSES, ANALYZE_PORTFOLIO, CREATE_ANALYSIS_GROUP
-from .exceptions import IRPAPIError, IRPReferenceDataError
+from .exceptions import IRPReferenceDataError
 from .validators import validate_non_empty_string, validate_positive_int, validate_list_not_empty
 from .utils import extract_id_from_location_header, build_analysis_currency_dict
 

@@ -10,10 +10,29 @@ from typing import Dict, List, Any, Optional
 import requests
 from .exceptions import IRPAPIError, IRPReferenceDataError
 
+def get_location_header(
+    response: requests.Response,
+    error_context: str = "response"
+) -> str:
+    """
+    Get Location header from response.
+
+    Args:
+        response: HTTP response object
+
+    Returns:
+        Location header value, or empty string if not found
+    """
+    if 'location' not in response.headers:
+        raise IRPAPIError(
+            f"Location header missing from {error_context}"
+        )
+    return response.headers.get('location', '')
+
 
 def extract_id_from_location_header(
     response: requests.Response,
-    error_context: str = "response"
+    error_context: str = "response",
 ) -> str:
     """
     Extract ID from Location header in HTTP response.
@@ -28,11 +47,7 @@ def extract_id_from_location_header(
     Raises:
         IRPAPIError: If Location header is missing
     """
-    if 'location' not in response.headers:
-        raise IRPAPIError(
-            f"Location header missing from {error_context}"
-        )
-    location = response.headers['location']
+    location = get_location_header(response, error_context)
     resource_id = location.split('/')[-1]
     if not resource_id:
         raise IRPAPIError(

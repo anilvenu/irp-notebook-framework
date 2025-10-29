@@ -18,7 +18,7 @@ from .validators import (
     validate_file_exists,
     validate_positive_int
 )
-from .utils import decode_mri_credentials, extract_id_from_location_header
+from .utils import decode_mri_credentials, extract_id_from_location_header, get_location_header
 
 
 class MRIImportManager:
@@ -93,7 +93,7 @@ class MRIImportManager:
             raise IRPAPIError(f"Failed to get file credentials: {e}")
 
         # Extract file ID from location header
-        file_id = extract_id_from_location_header(response, "file credentials response")
+        file_id = extract_id_from_location_header(response)
 
         # Decode credentials
         decoded_creds = decode_mri_credentials(response_json)
@@ -336,8 +336,8 @@ class MRIImportManager:
 
         # Create AWS bucket
         bucket_response = self.create_aws_bucket()
-        bucket_url = bucket_response.headers['location']
-        bucket_id = bucket_url.split('/')[-1]
+        bucket_url = get_location_header(bucket_response, "AWS bucket creation response")
+        bucket_id = extract_id_from_location_header(bucket_response, "AWS bucket creation response")
 
         # Upload accounts file
         accounts_credentials = self.get_file_credentials(
