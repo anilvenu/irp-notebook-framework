@@ -70,7 +70,7 @@ class ReferenceDataManager:
         response = self.client.request('GET', GET_OUTPUT_PROFILES)
         return response.json()
 
-    def get_output_profile_by_name(self, profile_name: str) -> Dict[str, Any]:
+    def get_output_profile_by_name(self, profile_name: str) -> List[Dict[str, Any]]:
         """
         Retrieve output profile by name.
 

@@ -54,7 +54,7 @@ class AnalysisManager:
         response = self.client.request('GET', GET_ANALYSES, params=params)
         return response.json()
 
-    def get_analyses_by_ids(self, analysis_ids: List[int]) -> Dict[str, Any]:
+    def get_analyses_by_ids(self, analysis_ids: List[int]) -> List[Dict[str, Any]]:
         """
         Retrieve multiple analyses by IDs.
 
