@@ -307,7 +307,7 @@ class MRIImportManager:
         """
         # Validate inputs
         validate_non_empty_string(edm_name, "edm_name")
-        validate_non_empty_string(portfolio_id, "portfolio_id")
+        validate_positive_int(portfolio_id, "portfolio_id")
         validate_non_empty_string(accounts_file, "accounts_file")
         validate_non_empty_string(locations_file, "locations_file")
         validate_non_empty_string(mapping_file, "mapping_file")

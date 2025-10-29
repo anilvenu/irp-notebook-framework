@@ -29,7 +29,7 @@ class PortfolioManager:
         portfolio_name: str,
         portfolio_number: str = "1",
         description: str = ""
-    ) -> Dict[str, str]:
+    ) -> Dict[str, int]:
         """
         Create new portfolio in EDM.
 
@@ -58,7 +58,7 @@ class PortfolioManager:
         }
         response = self.client.request('POST', CREATE_PORTFOLIO, params=params, json=data)
         portfolio_id = extract_id_from_location_header(response, "portfolio creation")
-        return {'id': portfolio_id}
+        return {'id': int(portfolio_id)}
 
     def get_portfolios_by_edm_name(self, edm_name: str) -> Dict[str, Any]:
         """

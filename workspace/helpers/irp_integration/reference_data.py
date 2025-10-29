@@ -57,7 +57,7 @@ class ReferenceDataManager:
         response = self.client.request('GET', GET_MODEL_PROFILES, params=params)
         return response.json()
 
-    def get_output_profiles(self) -> Dict[str, Any]:
+    def get_output_profiles(self) -> List[Dict[str, Any]]:
         """
         Retrieve all output profiles.
 
