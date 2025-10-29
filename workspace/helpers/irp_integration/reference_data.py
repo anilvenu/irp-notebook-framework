@@ -34,8 +34,11 @@ class ReferenceDataManager:
         Raises:
             IRPAPIError: If request fails
         """
-        response = self.client.request('GET', GET_MODEL_PROFILES)
-        return response.json()
+        try:
+            response = self.client.request('GET', GET_MODEL_PROFILES)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get model profiles: {e}")
 
     def get_model_profile_by_name(self, profile_name: str) -> Dict[str, Any]:
         """
@@ -54,8 +57,12 @@ class ReferenceDataManager:
         validate_non_empty_string(profile_name, "profile_name")
 
         params = {'name': profile_name}
-        response = self.client.request('GET', GET_MODEL_PROFILES, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_MODEL_PROFILES, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get model profile '{profile_name}': {e}")
 
     def get_output_profiles(self) -> List[Dict[str, Any]]:
         """
@@ -67,8 +74,11 @@ class ReferenceDataManager:
         Raises:
             IRPAPIError: If request fails
         """
-        response = self.client.request('GET', GET_OUTPUT_PROFILES)
-        return response.json()
+        try:
+            response = self.client.request('GET', GET_OUTPUT_PROFILES)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get output profiles: {e}")
 
     def get_output_profile_by_name(self, profile_name: str) -> List[Dict[str, Any]]:
         """
@@ -87,8 +97,12 @@ class ReferenceDataManager:
         validate_non_empty_string(profile_name, "profile_name")
 
         params = {'name': profile_name}
-        response = self.client.request('GET', GET_OUTPUT_PROFILES, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_OUTPUT_PROFILES, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get output profile '{profile_name}': {e}")
 
     def get_event_rate_schemes(self) -> Dict[str, Any]:
         """
@@ -101,8 +115,12 @@ class ReferenceDataManager:
             IRPAPIError: If request fails
         """
         params = {'where': 'isActive=True'}
-        response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get event rate schemes: {e}")
 
     def get_event_rate_scheme_by_name(self, scheme_name: str) -> Dict[str, Any]:
         """
@@ -121,8 +139,12 @@ class ReferenceDataManager:
         validate_non_empty_string(scheme_name, "scheme_name")
 
         params = {'where': f"eventRateSchemeName=\"{scheme_name}\""}
-        response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get event rate scheme '{scheme_name}': {e}")
 
     def get_currencies(self) -> Dict[str, Any]:
         """
@@ -135,8 +157,12 @@ class ReferenceDataManager:
             IRPAPIError: If request fails
         """
         params = {"fields": "code,name"}
-        response = self.client.request('GET', GET_CURRENCIES, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_CURRENCIES, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get currencies: {e}")
 
     def get_tag_by_name(self, tag_name: str) -> List[Dict[str, Any]]:
         """
@@ -158,8 +184,12 @@ class ReferenceDataManager:
             "isActive": True,
             "filter": f"TAGNAME = '{tag_name}'"
         }
-        response = self.client.request('GET', GET_TAGS, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_TAGS, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get tag '{tag_name}': {e}")
 
     def create_tag(self, tag_name: str) -> Dict[str, str]:
         """
@@ -178,9 +208,13 @@ class ReferenceDataManager:
         validate_non_empty_string(tag_name, "tag_name")
 
         data = {"tagName": tag_name}
-        response = self.client.request('POST', CREATE_TAG, json=data)
-        tag_id = extract_id_from_location_header(response, "tag creation")
-        return {"id": tag_id}
+
+        try:
+            response = self.client.request('POST', CREATE_TAG, json=data)
+            tag_id = extract_id_from_location_header(response, "tag creation")
+            return {"id": tag_id}
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create tag '{tag_name}': {e}")
 
     def get_tag_ids_from_tag_names(self, tag_names: List[str]) -> List[int]:
         """

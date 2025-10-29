@@ -56,9 +56,13 @@ class PortfolioManager:
             "number": portfolio_number,
             "description": description,
         }
-        response = self.client.request('POST', CREATE_PORTFOLIO, params=params, json=data)
-        portfolio_id = extract_id_from_location_header(response, "portfolio creation")
-        return {'id': int(portfolio_id)}
+
+        try:
+            response = self.client.request('POST', CREATE_PORTFOLIO, params=params, json=data)
+            portfolio_id = extract_id_from_location_header(response, "portfolio creation")
+            return {'id': int(portfolio_id)}
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create portfolio '{portfolio_name}' in EDM '{edm_name}': {e}")
 
     def get_portfolios_by_edm_name(self, edm_name: str) -> Dict[str, Any]:
         """
@@ -77,8 +81,12 @@ class PortfolioManager:
         validate_non_empty_string(edm_name, "edm_name")
 
         params = {"datasource": edm_name}
-        response = self.client.request('GET', GET_PORTFOLIOS, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_PORTFOLIOS, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get portfolios for EDM '{edm_name}': {e}")
 
     def get_portfolio_by_edm_name_and_id(
         self,
@@ -103,8 +111,12 @@ class PortfolioManager:
         validate_positive_int(portfolio_id, "portfolio_id")
 
         params = {"datasource": edm_name}
-        response = self.client.request('GET', GET_PORTFOLIO_BY_ID.format(portfolio_id=portfolio_id), params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_PORTFOLIO_BY_ID.format(portfolio_id=portfolio_id), params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get portfolio {portfolio_id} from EDM '{edm_name}': {e}")
     
     def geohaz_portfolio(
         self,
@@ -188,10 +200,13 @@ class PortfolioManager:
                 "layerOptions": hazard_layer_options
             })
 
-        response = self.client.execute_workflow(
-            'POST',
-            PORTFOLIO_GEOHAZ.format(portfolio_id=portfolio_id),
-            params=params,
-            json=data
-        )
-        return response.json()
+        try:
+            response = self.client.execute_workflow(
+                'POST',
+                PORTFOLIO_GEOHAZ.format(portfolio_id=portfolio_id),
+                params=params,
+                json=data
+            )
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to execute geohaz for portfolio {portfolio_id} in EDM '{edm_name}': {e}")

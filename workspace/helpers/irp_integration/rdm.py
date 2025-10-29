@@ -57,25 +57,28 @@ class RDMManager:
         validate_non_empty_string(rdm_name, "rdm_name")
         validate_list_not_empty(analysis_ids, "analysis_ids")
 
-        analyses = self.analysis_manager.get_analyses_by_ids(analysis_ids)
-        resourceUris = [analysis['uri'] for analysis in analyses]
+        try:
+            analyses = self.analysis_manager.get_analyses_by_ids(analysis_ids)
+            resourceUris = [analysis['uri'] for analysis in analyses]
 
-        if not resourceUris:
-            raise IRPAPIError(
-                f"No analysis URIs found for the provided IDs: {analysis_ids}"
-            )
+            if not resourceUris:
+                raise IRPAPIError(
+                    f"No analysis URIs found for the provided IDs: {analysis_ids}"
+                )
 
-        data = {
-            "exportType": "RDM_DATABRIDGE",
-            "resourceType": "analyses",
-            "resourceUris": resourceUris,
-            "settings": {
-                "serverId": server_id,
-                "rdmName": rdm_name
+            data = {
+                "exportType": "RDM_DATABRIDGE",
+                "resourceType": "analyses",
+                "resourceUris": resourceUris,
+                "settings": {
+                    "serverId": server_id,
+                    "rdmName": rdm_name
+                }
             }
-        }
 
-        print(json.dumps(data, indent=2))
+            print(json.dumps(data, indent=2))
 
-        response = self.client.execute_workflow('POST', EXPORT_TO_RDM, json=data)
-        return response.json()
+            response = self.client.execute_workflow('POST', EXPORT_TO_RDM, json=data)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to export analyses to RDM '{rdm_name}': {e}")

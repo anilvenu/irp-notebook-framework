@@ -8,7 +8,7 @@ import json
 from typing import Dict, List, Any, Optional
 from .client import Client
 from .constants import GET_ANALYSES, GET_PLATFORM_ANALYSES, ANALYZE_PORTFOLIO, CREATE_ANALYSIS_GROUP
-from .exceptions import IRPReferenceDataError
+from .exceptions import IRPAPIError, IRPReferenceDataError
 from .validators import validate_non_empty_string, validate_positive_int, validate_list_not_empty
 from .utils import extract_id_from_location_header, build_analysis_currency_dict
 
@@ -51,8 +51,12 @@ class AnalysisManager:
         validate_positive_int(analysis_id, "analysis_id")
 
         params = {"q": f"id={analysis_id}"}
-        response = self.client.request('GET', GET_ANALYSES, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_ANALYSES, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get analysis {analysis_id}: {e}")
 
     def get_analyses_by_ids(self, analysis_ids: List[int]) -> List[Dict[str, Any]]:
         """
@@ -71,8 +75,12 @@ class AnalysisManager:
         validate_list_not_empty(analysis_ids, "analysis_ids")
 
         params = {'filter': f"appAnalysisId IN ({','.join(str(id) for id in analysis_ids)})"}
-        response = self.client.request('GET', GET_PLATFORM_ANALYSES, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_PLATFORM_ANALYSES, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get analyses by IDs: {e}")
 
     def submit_analysis_job(
         self,
@@ -159,9 +167,12 @@ class AnalysisManager:
 
         print(json.dumps(data, indent=2))
 
-        response = self.client.request('POST', ANALYZE_PORTFOLIO.format(portfolio_id=portfolio_id), json=data)
-        workflow_id = extract_id_from_location_header(response, "analysis job submission")
-        return int(workflow_id)
+        try:
+            response = self.client.request('POST', ANALYZE_PORTFOLIO.format(portfolio_id=portfolio_id), json=data)
+            workflow_id = extract_id_from_location_header(response, "analysis job submission")
+            return int(workflow_id)
+        except Exception as e:
+            raise IRPAPIError(f"Failed to submit analysis job '{job_name}' for portfolio {portfolio_id}: {e}")
     
     def poll_analysis_job_batch(self, workflow_ids: List[int]) -> Dict[str, Any]:
         """
@@ -179,8 +190,11 @@ class AnalysisManager:
         """
         validate_list_not_empty(workflow_ids, "workflow_ids")
 
-        response = self.client.poll_workflow_batch(workflow_ids)
-        return response.json()
+        try:
+            response = self.client.poll_workflow_batch(workflow_ids)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to poll analysis job batch: {e}")
 
     def analyze_portfolio(
         self,
@@ -248,8 +262,11 @@ class AnalysisManager:
             "jobName": job_name
         }
 
-        response = self.client.execute_workflow('POST', ANALYZE_PORTFOLIO.format(portfolio_id=portfolio_id), json=data)
-        return response.json()
+        try:
+            response = self.client.execute_workflow('POST', ANALYZE_PORTFOLIO.format(portfolio_id=portfolio_id), json=data)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to analyze portfolio {portfolio_id} with job '{job_name}': {e}")
 
     def execute_analysis(
         self,
@@ -380,6 +397,9 @@ class AnalysisManager:
 
         print(json.dumps(data, indent=2))
 
-        response = self.client.execute_workflow('POST', CREATE_ANALYSIS_GROUP, json=data)
-        return response.json()
+        try:
+            response = self.client.execute_workflow('POST', CREATE_ANALYSIS_GROUP, json=data)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create analysis group '{group_name}': {e}")
         

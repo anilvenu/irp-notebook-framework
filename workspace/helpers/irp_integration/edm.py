@@ -43,8 +43,11 @@ class EDMManager:
         Raises:
             IRPAPIError: If request fails
         """
-        response = self.client.request('GET', GET_DATASOURCES)
-        return response.json()
+        try:
+            response = self.client.request('GET', GET_DATASOURCES)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get all EDMs: {e}")
 
     def get_edm_by_name(self, edm_name: str) -> Dict[str, Any]:
         """
@@ -63,8 +66,12 @@ class EDMManager:
         validate_non_empty_string(edm_name, "edm_name")
 
         params = {"q": f"datasourceName={edm_name}"}
-        response = self.client.request('GET', GET_DATASOURCES, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_DATASOURCES, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get EDM by name '{edm_name}': {e}")
 
     def create_edm(self, edm_name: str, server_name: str) -> Dict[str, Any]:
         """
@@ -89,8 +96,12 @@ class EDMManager:
             "servername": server_name,
             "operation": "CREATE"
         }
-        response = self.client.execute_workflow('POST', CREATE_DATASOURCE, params=params)
-        return response.json()
+
+        try:
+            response = self.client.execute_workflow('POST', CREATE_DATASOURCE, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create EDM '{edm_name}': {e}")
     
     def duplicate_edm(
         self,
@@ -116,33 +127,36 @@ class EDMManager:
         if not dest_edm_name:
             dest_edm_name = f"np_{source_edm_name}"
 
-        portfolios_response = self.portfolio_manager.get_portfolios_by_edm_name(source_edm_name)
-        portfolio_ids = [portfolio['id'] for portfolio in portfolios_response['searchItems']]
+        try:
+            portfolios_response = self.portfolio_manager.get_portfolios_by_edm_name(source_edm_name)
+            portfolio_ids = [portfolio['id'] for portfolio in portfolios_response['searchItems']]
 
-        data = {
-            "createnew": True,
-            "exportType": "EDM",
-            "sourceDatasource": source_edm_name,
-            "destinationDatasource": dest_edm_name,
-            "exposureType": "PORTFOLIO",
-            "exposureIds": portfolio_ids,
-            "download": False,
-            "exportFormat": "BAK",
-            "exportOptions": {
-                "exportAccounts": True,
-                "exportLocations": True,
-                "exportPerilDetailsInfo": True,
-                "exportPolicies": True,
-                "exportReinsuranceInfo": True,
-                "exportTreaties": True
-            },
-            "preserveIds": True,
-            "sqlVersion": 2019,
-            "type": "ExposureExportInput"
-        }
+            data = {
+                "createnew": True,
+                "exportType": "EDM",
+                "sourceDatasource": source_edm_name,
+                "destinationDatasource": dest_edm_name,
+                "exposureType": "PORTFOLIO",
+                "exposureIds": portfolio_ids,
+                "download": False,
+                "exportFormat": "BAK",
+                "exportOptions": {
+                    "exportAccounts": True,
+                    "exportLocations": True,
+                    "exportPerilDetailsInfo": True,
+                    "exportPolicies": True,
+                    "exportReinsuranceInfo": True,
+                    "exportTreaties": True
+                },
+                "preserveIds": True,
+                "sqlVersion": 2019,
+                "type": "ExposureExportInput"
+            }
 
-        response = self.client.execute_workflow('POST', EXPORT_EDM, json=data)
-        return response.json()
+            response = self.client.execute_workflow('POST', EXPORT_EDM, json=data)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to duplicate EDM from '{source_edm_name}' to '{dest_edm_name}': {e}")
 
     def upgrade_edm_version(self, edm_name: str) -> Dict[str, Any]:
         """
@@ -164,8 +178,12 @@ class EDMManager:
             "datasourcename": edm_name,
             "operation": "EDM_DATA_UPGRADE"
         }
-        response = self.client.execute_workflow('POST', CREATE_DATASOURCE, params=params)
-        return response.json()
+
+        try:
+            response = self.client.execute_workflow('POST', CREATE_DATASOURCE, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to upgrade EDM version for '{edm_name}': {e}")
 
     def delete_edm(self, edm_name: str) -> Dict[str, Any]:
         """
@@ -183,8 +201,11 @@ class EDMManager:
         """
         validate_non_empty_string(edm_name, "edm_name")
 
-        response = self.client.execute_workflow('DELETE', DELETE_DATASOURCE.format(edm_name=edm_name))
-        return response.json()
+        try:
+            response = self.client.execute_workflow('DELETE', DELETE_DATASOURCE.format(edm_name=edm_name))
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to delete EDM '{edm_name}': {e}")
 
     def get_cedants_by_edm(self, edm_name: str) -> Dict[str, Any]:
         """
@@ -207,8 +228,12 @@ class EDMManager:
             "datasource": edm_name,
             "limit": 100
         }
-        response = self.client.request('GET', GET_CEDANTS, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_CEDANTS, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get cedants for EDM '{edm_name}': {e}")
 
     def get_lobs_by_edm(self, edm_name: str) -> Dict[str, Any]:
         """
@@ -231,6 +256,10 @@ class EDMManager:
             "datasource": edm_name,
             "limit": 100
         }
-        response = self.client.request('GET', GET_LOBS, params=params)
-        return response.json()
+
+        try:
+            response = self.client.request('GET', GET_LOBS, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get LOBs for EDM '{edm_name}': {e}")
     
