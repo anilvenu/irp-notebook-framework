@@ -10,8 +10,74 @@ Run these tests:
 """
 
 import pytest
-from helpers.irp_integration.utils import get_nested_field
+import os
+from pathlib import Path
+from helpers.irp_integration.utils import get_nested_field, get_workspace_root
 from helpers.irp_integration.exceptions import IRPAPIError
+
+
+# ============================================================================
+# Tests - Path Resolution
+# ============================================================================
+
+@pytest.mark.unit
+def test_get_workspace_root_from_workspace_dir():
+    """Test get_workspace_root when CWD is workspace directory"""
+    original_cwd = Path.cwd()
+    try:
+        # Change to workspace directory
+        workspace = original_cwd
+        while workspace.name != 'workspace' and workspace.parent != workspace:
+            workspace = workspace.parent
+        if workspace.name != 'workspace':
+            # We're not in workspace structure, find it differently
+            if (original_cwd / 'workspace').exists():
+                workspace = original_cwd / 'workspace'
+            else:
+                pytest.skip("Not in workspace directory structure")
+
+        os.chdir(workspace)
+        result = get_workspace_root()
+        assert result.name == 'workspace'
+        assert result.is_dir()
+    finally:
+        os.chdir(original_cwd)
+
+
+@pytest.mark.unit
+def test_get_workspace_root_from_nested_dir():
+    """Test get_workspace_root from deeply nested directory"""
+    original_cwd = Path.cwd()
+    try:
+        # Find workspace root first
+        workspace = original_cwd
+        while workspace.name != 'workspace' and workspace.parent != workspace:
+            workspace = workspace.parent
+        if workspace.name != 'workspace':
+            if (original_cwd / 'workspace').exists():
+                workspace = original_cwd / 'workspace'
+            else:
+                pytest.skip("Not in workspace directory structure")
+
+        # Change to a nested directory within workspace
+        nested_dir = workspace / 'workflows' / '_Tools'
+        if not nested_dir.exists():
+            pytest.skip("Test directory doesn't exist")
+
+        os.chdir(nested_dir)
+        result = get_workspace_root()
+        assert result.name == 'workspace'
+        assert result == workspace
+    finally:
+        os.chdir(original_cwd)
+
+
+@pytest.mark.unit
+def test_get_workspace_root_returns_path():
+    """Test get_workspace_root returns a Path object"""
+    result = get_workspace_root()
+    assert isinstance(result, Path)
+    assert result.is_absolute()
 
 
 # ============================================================================

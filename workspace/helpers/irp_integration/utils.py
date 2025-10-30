@@ -6,9 +6,33 @@ and reference data lookup operations.
 """
 
 import base64
+import os
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 import requests
 from .exceptions import IRPAPIError, IRPReferenceDataError
+
+
+def get_workspace_root() -> Path:
+    """
+    Get workspace root directory, working in both VS Code and JupyterLab.
+
+    Returns:
+        Path to workspace directory
+    """
+    cwd = Path.cwd()
+
+    # If we're in workspace or below it, navigate up to workspace
+    if 'workspace' in cwd.parts:
+        workspace_index = cwd.parts.index('workspace')
+        return Path(*cwd.parts[:workspace_index + 1])
+
+    # Otherwise check if workspace exists as subdirectory
+    if (cwd / 'workspace').exists():
+        return cwd / 'workspace'
+
+    raise IRPAPIError(f"Cannot find workspace directory from {cwd}")
+
 
 def get_location_header(
     response: requests.Response,
