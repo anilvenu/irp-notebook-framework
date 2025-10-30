@@ -20,12 +20,12 @@ Run these tests:
 
 import pytest
 import responses
-import requests
 import time
 from unittest.mock import patch, MagicMock
 from requests.exceptions import Timeout, ConnectionError
 
 from helpers.irp_integration.client import Client
+from helpers.irp_integration.exceptions import IRPAPIError, IRPValidationError, IRPWorkflowError
 
 
 # ==============================================================================
@@ -204,7 +204,7 @@ def test_no_retry_on_400_client_error(client):
 
     responses.add(responses.GET, url, status=400, json={'error': 'bad request'})
 
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(IRPAPIError):
         client.request('GET', '/test')
 
     # Should only be called once (no retries)
@@ -219,7 +219,7 @@ def test_no_retry_on_404_not_found(client):
 
     responses.add(responses.GET, url, status=404, json={'error': 'not found'})
 
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(IRPAPIError):
         client.request('GET', '/test')
 
     assert len(responses.calls) == 1
@@ -235,7 +235,7 @@ def test_retry_max_attempts_exhausted(client):
     for _ in range(6):
         responses.add(responses.GET, url, status=500)
 
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(IRPAPIError):
         client.request('GET', '/test')
 
     # Should attempt 6 times (1 original + 5 retries)
@@ -322,12 +322,14 @@ def test_custom_timeout_parameter(client):
 
 @pytest.mark.unit
 def test_timeout_exception_handling(client):
-    """Test timeout exception is raised properly"""
+    """Test timeout exception is wrapped in IRPAPIError"""
     url = 'https://api.test.com/test'
 
     with patch.object(client.session, 'request', side_effect=Timeout('Request timed out')):
-        with pytest.raises(Timeout):
+        with pytest.raises(IRPAPIError) as exc_info:
             client.request('GET', '/test', timeout=1)
+
+        assert 'Request error' in str(exc_info.value)
 
 
 # ==============================================================================
@@ -501,7 +503,7 @@ def test_http_error_with_json_response(client):
     error_response = {'error': 'validation failed', 'details': 'invalid input'}
     responses.add(responses.POST, url, status=400, json=error_response)
 
-    with pytest.raises(requests.HTTPError) as exc_info:
+    with pytest.raises(IRPAPIError) as exc_info:
         client.request('POST', '/test', json={'invalid': 'data'})
 
     # Verify error message includes server response
@@ -518,7 +520,7 @@ def test_http_error_with_text_response(client):
 
     responses.add(responses.GET, url, status=500, body='Internal server error occurred')
 
-    with pytest.raises(requests.HTTPError) as exc_info:
+    with pytest.raises(IRPAPIError) as exc_info:
         client.request('GET', '/test')
 
     error_message = str(exc_info.value)
@@ -533,7 +535,7 @@ def test_http_error_on_401_unauthorized(client):
 
     responses.add(responses.GET, url, status=401, json={'error': 'unauthorized'})
 
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(IRPAPIError):
         client.request('GET', '/test')
 
 
@@ -545,16 +547,18 @@ def test_http_error_on_403_forbidden(client):
 
     responses.add(responses.GET, url, status=403, json={'error': 'forbidden'})
 
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(IRPAPIError):
         client.request('GET', '/test')
 
 
 @pytest.mark.unit
 def test_connection_error_handling(client):
-    """Test connection error is propagated"""
+    """Test connection error is wrapped in IRPAPIError"""
     with patch.object(client.session, 'request', side_effect=ConnectionError('Connection failed')):
-        with pytest.raises(ConnectionError):
+        with pytest.raises(IRPAPIError) as exc_info:
             client.request('GET', '/test')
+
+        assert 'Request error' in str(exc_info.value)
 
 
 @pytest.mark.unit
@@ -570,79 +574,15 @@ def test_raise_for_status_called(client):
 
     # Error case - exception raised
     responses.add(responses.GET, url, status=404, json={'error': 'not found'})
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(IRPAPIError):
         client.request('GET', '/test')
 
 
 # ==============================================================================
 # WORKFLOW HELPER METHODS TESTS
 # ==============================================================================
-
-@pytest.mark.unit
-def test_get_location_header_present(client):
-    """Test get_location_header returns location when present"""
-    mock_response = MagicMock()
-    mock_response.headers = {'location': 'https://api.test.com/workflows/WF-12345'}
-
-    result = client.get_location_header(mock_response)
-
-    assert result == 'https://api.test.com/workflows/WF-12345'
-
-
-@pytest.mark.unit
-def test_get_location_header_missing(client):
-    """Test get_location_header returns empty string when missing"""
-    mock_response = MagicMock()
-    mock_response.headers = {}
-
-    result = client.get_location_header(mock_response)
-
-    assert result == ""
-
-
-@pytest.mark.unit
-def test_get_location_header_case_sensitivity(client):
-    """Test get_location_header is case-sensitive"""
-    mock_response = MagicMock()
-    mock_response.headers = {'Location': 'https://api.test.com/workflows/WF-12345'}  # Capital L
-
-    result = client.get_location_header(mock_response)
-
-    # Should return empty string as it looks for lowercase 'location'
-    assert result == ""
-
-
-@pytest.mark.unit
-def test_get_workflow_id_valid_location(client):
-    """Test get_workflow_id extracts ID from location header"""
-    mock_response = MagicMock()
-    mock_response.headers = {'location': 'https://api.test.com/workflows/WF-12345'}
-
-    result = client.get_workflow_id(mock_response)
-
-    assert result == 'WF-12345'
-
-
-@pytest.mark.unit
-def test_get_workflow_id_complex_path(client):
-    """Test get_workflow_id with complex path"""
-    mock_response = MagicMock()
-    mock_response.headers = {'location': 'https://api.test.com/v2/riskmodeler/workflows/abc-def-123'}
-
-    result = client.get_workflow_id(mock_response)
-
-    assert result == 'abc-def-123'
-
-
-@pytest.mark.unit
-def test_get_workflow_id_missing_location(client):
-    """Test get_workflow_id returns empty string when location missing"""
-    mock_response = MagicMock()
-    mock_response.headers = {}
-
-    result = client.get_workflow_id(mock_response)
-
-    assert result == ""
+# Note: get_location_header and get_workflow_id were moved to utils.py and are
+# tested separately. They are no longer methods on the Client class.
 
 
 # ==============================================================================
@@ -682,7 +622,7 @@ def test_poll_workflow_completes_after_progression(client, mock_workflow_respons
     responses.add(responses.GET, workflow_url, status=200, json=mock_workflow_response(status='RUNNING', progress=50))
     responses.add(responses.GET, workflow_url, status=200, json=mock_workflow_response(status='FINISHED', progress=100))
 
-    response = client.poll_workflow(workflow_url, interval=0.01)
+    response = client.poll_workflow(workflow_url, interval=1)
 
     assert response.status_code == 200
     assert response.json()['status'] == 'FINISHED'
@@ -703,7 +643,7 @@ def test_poll_workflow_fails(client, mock_workflow_response):
     responses.add(responses.GET, workflow_url, status=200, json=mock_workflow_response(status='RUNNING', progress=50))
     responses.add(responses.GET, workflow_url, status=200, json=mock_workflow_response(status='FAILED', progress=50))
 
-    response = client.poll_workflow(workflow_url, interval=0.01)
+    response = client.poll_workflow(workflow_url, interval=1)
 
     assert response.status_code == 200
     assert response.json()['status'] == 'FAILED'
@@ -718,7 +658,7 @@ def test_poll_workflow_cancelled(client, mock_workflow_response):
 
     responses.add(responses.GET, workflow_url, status=200, json=mock_workflow_response(status='CANCELLED', progress=30))
 
-    response = client.poll_workflow(workflow_url, interval=0.01)
+    response = client.poll_workflow(workflow_url, interval=1)
 
     assert response.status_code == 200
     assert response.json()['status'] == 'CANCELLED'
@@ -726,7 +666,7 @@ def test_poll_workflow_cancelled(client, mock_workflow_response):
 
 @pytest.mark.integration
 def test_poll_workflow_timeout(client):
-    """Test poll_workflow raises TimeoutError when timeout exceeded"""
+    """Test poll_workflow raises IRPWorkflowError when timeout exceeded"""
     workflow_url = 'https://api.test.com/workflows/WF-12345'
 
     # Mock a workflow that never completes
@@ -735,21 +675,21 @@ def test_poll_workflow_timeout(client):
         mock_response.json.return_value = {'status': 'RUNNING', 'progress': 50}
         mock_request.return_value = mock_response
 
-        with pytest.raises(TimeoutError) as exc_info:
-            client.poll_workflow(workflow_url, interval=0.01, timeout=0.05)
+        with pytest.raises(IRPWorkflowError) as exc_info:
+            client.poll_workflow(workflow_url, interval=1, timeout=1)
 
         assert 'did not complete' in str(exc_info.value)
 
 
 @pytest.mark.integration
 def test_poll_workflow_invalid_url(client):
-    """Test poll_workflow raises ValueError for invalid URL"""
-    with pytest.raises(ValueError) as exc_info:
+    """Test poll_workflow raises IRPValidationError for invalid URL"""
+    with pytest.raises(IRPValidationError) as exc_info:
         client.poll_workflow('', interval=1)
 
-    assert 'Invalid workflow URL' in str(exc_info.value)
+    assert 'workflow_url' in str(exc_info.value)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(IRPValidationError):
         client.poll_workflow(None, interval=1)
 
 
@@ -763,12 +703,12 @@ def test_poll_workflow_custom_interval(client, mock_workflow_response):
     responses.add(responses.GET, workflow_url, status=200, json=mock_workflow_response(status='FINISHED', progress=100))
 
     start_time = time.time()
-    response = client.poll_workflow(workflow_url, interval=0.1)
+    response = client.poll_workflow(workflow_url, interval=1)
     elapsed_time = time.time() - start_time
 
     assert response.json()['status'] == 'FINISHED'
-    # Should have waited at least the interval time
-    assert elapsed_time >= 0.1
+    # Should have waited at least the interval time (1 second)
+    assert elapsed_time >= 1.0
 
 
 # ==============================================================================
@@ -794,7 +734,7 @@ def test_poll_workflow_batch_single_page(client, mock_workflow_response):
     responses.add(responses.GET, workflows_url, status=200, json=batch_response)
 
     workflow_ids = ['WF-1', 'WF-2', 'WF-3']
-    response = client.poll_workflow_batch(workflow_ids, interval=0.01)
+    response = client.poll_workflow_batch(workflow_ids, interval=1)
 
     assert response.status_code == 200
     data = response.json()
@@ -832,7 +772,7 @@ def test_poll_workflow_batch_pagination(client, mock_workflow_response):
     responses.add(responses.GET, workflows_url, status=200, json=page2_response)
 
     workflow_ids = [f'WF-{i}' for i in range(150)]
-    response = client.poll_workflow_batch(workflow_ids, interval=0.01)
+    response = client.poll_workflow_batch(workflow_ids, interval=1)
 
     # Note: Due to client implementation, response.json() returns the last page
     data = response.json()
@@ -872,7 +812,7 @@ def test_poll_workflow_batch_progression_to_complete(client, mock_workflow_respo
     responses.add(responses.GET, workflows_url, status=200, json=response2)
 
     workflow_ids = ['WF-1', 'WF-2']
-    response = client.poll_workflow_batch(workflow_ids, interval=0.01)
+    response = client.poll_workflow_batch(workflow_ids, interval=1)
 
     assert len(responses.calls) == 2
     data = response.json()
@@ -898,7 +838,7 @@ def test_poll_workflow_batch_mixed_completion_statuses(client, mock_workflow_res
     responses.add(responses.GET, workflows_url, status=200, json=batch_response)
 
     workflow_ids = ['WF-1', 'WF-2', 'WF-3']
-    response = client.poll_workflow_batch(workflow_ids, interval=0.01)
+    response = client.poll_workflow_batch(workflow_ids, interval=1)
 
     data = response.json()
     assert len(data['workflows']) == 3
@@ -908,7 +848,7 @@ def test_poll_workflow_batch_mixed_completion_statuses(client, mock_workflow_res
 
 @pytest.mark.integration
 def test_poll_workflow_batch_timeout(client, mock_workflow_response):
-    """Test poll_workflow_batch raises TimeoutError when timeout exceeded"""
+    """Test poll_workflow_batch raises IRPWorkflowError when timeout exceeded"""
     # Mock request that always returns in-progress workflows
     with patch.object(client, 'request') as mock_request:
         mock_response = MagicMock()
@@ -919,8 +859,8 @@ def test_poll_workflow_batch_timeout(client, mock_workflow_response):
         mock_request.return_value = mock_response
 
         workflow_ids = ['WF-1']
-        with pytest.raises(TimeoutError) as exc_info:
-            client.poll_workflow_batch(workflow_ids, interval=0.01, timeout=0.05)
+        with pytest.raises(IRPWorkflowError) as exc_info:
+            client.poll_workflow_batch(workflow_ids, interval=1, timeout=1)
 
         assert 'Batch workflows did not complete' in str(exc_info.value)
 
@@ -942,11 +882,55 @@ def test_poll_workflow_batch_workflow_ids_in_query(client, mock_workflow_respons
     responses.add(responses.GET, workflows_url, status=200, json=batch_response)
 
     workflow_ids = ['WF-100', 'WF-200']
-    client.poll_workflow_batch(workflow_ids, interval=0.01)
+    client.poll_workflow_batch(workflow_ids, interval=1)
 
     # Verify workflow IDs were sent as comma-separated query param
     request_url = responses.calls[0].request.url
     assert 'ids=WF-100,WF-200' in request_url or 'ids=WF-100%2CWF-200' in request_url
+
+
+@pytest.mark.integration
+@responses.activate
+def test_poll_workflow_batch_missing_total_match_count(client):
+    """Test poll_workflow_batch raises IRPAPIError when totalMatchCount missing"""
+    workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
+
+    # Response missing required totalMatchCount field
+    batch_response = {
+        'workflows': [
+            {'id': 'WF-1', 'status': 'FINISHED', 'progress': 100}
+        ]
+    }
+
+    responses.add(responses.GET, workflows_url, status=200, json=batch_response)
+
+    workflow_ids = ['WF-1']
+    with pytest.raises(IRPAPIError) as exc_info:
+        client.poll_workflow_batch(workflow_ids, interval=1)
+
+    assert 'totalMatchCount' in str(exc_info.value)
+    assert 'workflow batch response' in str(exc_info.value)
+
+
+@pytest.mark.integration
+@responses.activate
+def test_poll_workflow_batch_missing_workflows_field(client):
+    """Test poll_workflow_batch handles missing workflows field gracefully"""
+    workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
+
+    # Response missing workflows field (should default to empty list)
+    batch_response = {
+        'totalMatchCount': 0
+    }
+
+    responses.add(responses.GET, workflows_url, status=200, json=batch_response)
+
+    workflow_ids = ['WF-1']
+    response = client.poll_workflow_batch(workflow_ids, interval=1)
+
+    # Should handle gracefully with default empty list
+    data = response.json()
+    assert data['totalMatchCount'] == 0
 
 
 # ==============================================================================
@@ -1032,7 +1016,7 @@ def test_execute_workflow_400_no_polling(client):
 
     responses.add(responses.POST, submit_url, status=400, json={'error': 'bad request'})
 
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(IRPAPIError):
         client.execute_workflow('POST', '/workflows', json={'invalid': 'data'})
 
     # Should only have one call (no polling)
