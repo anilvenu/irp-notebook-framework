@@ -394,28 +394,3 @@ def extract_analysis_id_from_workflow_response(workflow: Dict[str, Any]) -> Opti
                             'analysisId', 
                             required=True, 
                             context='extract analysis id')
-
-
-def validate_workflow_status(
-    workflow: Dict[str, Any],
-    expected_status: str = 'FINISHED',
-    context: str = "workflow"
-) -> None:
-    """
-    Validate workflow completed with expected status.
-
-    Args:
-        workflow: Workflow response dict
-        expected_status: Expected status value (default: 'FINISHED')
-        context: Context description for error message
-
-    Raises:
-        IRPAPIError: If workflow status is not as expected
-    """
-    status = workflow.get('status')
-    if status != expected_status:
-        workflow_id = workflow.get('id', 'unknown')
-        raise IRPAPIError(
-            f"{context} {workflow_id} has unexpected status: {status} "
-            f"(expected {expected_status})"
-        )
