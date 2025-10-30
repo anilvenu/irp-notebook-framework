@@ -8,7 +8,7 @@ and reference data lookup operations.
 import base64
 import os
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 import requests
 from .exceptions import IRPAPIError, IRPReferenceDataError
 
@@ -78,26 +78,6 @@ def extract_id_from_location_header(
             f"Could not extract ID from Location header: {location}"
         )
     return resource_id
-
-
-def extract_workflow_url_from_response(response: requests.Response) -> str:
-    """
-    Extract workflow URL from Location header.
-
-    Args:
-        response: HTTP response object
-
-    Returns:
-        Full workflow URL
-
-    Raises:
-        IRPAPIError: If Location header is missing
-    """
-    if 'location' not in response.headers:
-        raise IRPAPIError(
-            "Location header missing from workflow submission response"
-        )
-    return response.headers['location']
 
 
 def decode_base64_field(encoded_value: str, field_name: str) -> str:
@@ -200,163 +180,6 @@ def find_reference_data_by_name(
     return match
 
 
-def validate_response_has_field(
-    response_data: Dict[str, Any],
-    field_name: str,
-    context: str = "response"
-) -> None:
-    """
-    Validate that response contains required field.
-
-    Args:
-        response_data: Response dict
-        field_name: Required field name
-        context: Context description for error message
-
-    Raises:
-        IRPAPIError: If field is missing
-    """
-    if field_name not in response_data:
-        raise IRPAPIError(
-            f"{context} missing required field '{field_name}'"
-        )
-
-
-def get_nested_field(
-    data: Union[Dict[str, Any], List[Any]],
-    *keys: Union[str, int],
-    default: Any = None,
-    required: bool = False,
-    context: str = ""
-) -> Any:
-    """
-    Safely get nested field from dict/list with proper error handling.
-
-    This method supports both dict keys and list indices, allowing safe
-    traversal of complex nested structures.
-
-    Args:
-        data: Source dict or list
-        *keys: Sequence of keys/indices to traverse
-               - String keys for dict access
-               - Integer indices for list access
-        default: Default value if field not found (only used if required=False)
-        required: If True, raises IRPAPIError when field is missing
-        context: Context description for error messages
-
-    Returns:
-        Extracted value or default
-
-    Raises:
-        IRPAPIError: If required=True and field is missing/None
-
-    Examples:
-        # Dict access
-        value = get_nested_field(response, 'summary', 'exposureSetId')
-
-        # List access
-        id_val = get_nested_field(response, 'items', 0, 'id', required=True)
-
-        # With default
-        count = get_nested_field(response, 'count', default=0)
-
-        # With context for better errors
-        cedants = get_nested_field(
-            response, 'searchItems',
-            required=True,
-            context="cedants response"
-        )
-
-    Note:
-        For backward compatibility, you can still use dot notation with a
-        single string argument (e.g., 'summary.exposureSetId'), but the
-        new multi-argument style is preferred for list access and better
-        error messages.
-    """
-    # Backward compatibility: support dot notation in single string
-    if len(keys) == 1 and isinstance(keys[0], str) and '.' in keys[0]:
-        keys = tuple(keys[0].split('.'))
-
-    current = data
-    path = []
-
-    try:
-        for key in keys:
-            path.append(str(key))
-
-            # Handle dict access
-            if isinstance(current, dict):
-                if not isinstance(key, str):
-                    if required:
-                        raise IRPAPIError(
-                            f"Cannot use integer key '{key}' for dict access "
-                            f"at '{'.'.join(path[:-1])}'"
-                            f"{f' in {context}' if context else ''}"
-                        )
-                    return default
-                if key not in current:
-                    if required:
-                        raise IRPAPIError(
-                            f"Missing required key '{'.'.join(path)}'"
-                            f"{f' in {context}' if context else ''}"
-                        )
-                    return default
-                current = current[key]
-
-            # Handle list/tuple access
-            elif isinstance(current, (list, tuple)):
-                if not isinstance(key, int):
-                    if required:
-                        raise IRPAPIError(
-                            f"Cannot index list with non-integer key '{key}' "
-                            f"at '{'.'.join(path[:-1])}'"
-                            f"{f' in {context}' if context else ''}"
-                        )
-                    return default
-
-                if key < 0 or key >= len(current):
-                    if required:
-                        raise IRPAPIError(
-                            f"List index {key} out of range at '{'.'.join(path[:-1])}' "
-                            f"(length: {len(current)})"
-                            f"{f' in {context}' if context else ''}"
-                        )
-                    return default
-
-                current = current[key]
-
-            # Handle None or invalid types
-            else:
-                if required:
-                    if current is None:
-                        raise IRPAPIError(
-                            f"Cannot access '{key}' on None value "
-                            f"at '{'.'.join(path[:-1])}'"
-                            f"{f' in {context}' if context else ''}"
-                        )
-                    raise IRPAPIError(
-                        f"Cannot access key '{key}' on non-dict/list type "
-                        f"{type(current).__name__} at '{'.'.join(path[:-1])}'"
-                        f"{f' in {context}' if context else ''}"
-                    )
-                return default
-
-            # Check if result is None when required
-            if required and current is None:
-                raise IRPAPIError(
-                    f"Required value at '{'.'.join(path)}' is None"
-                    f"{f' in {context}' if context else ''}"
-                )
-
-    except (KeyError, IndexError, TypeError) as e:
-        if required:
-            raise IRPAPIError(
-                f"Failed to access '{'.'.join(path)}'"
-                f"{f' in {context}' if context else ''}: {e}"
-            ) from e
-        return default
-
-    return current
 
 
 def build_analysis_currency_dict() -> Dict[str, str]:
@@ -386,9 +209,13 @@ def extract_analysis_id_from_workflow_response(workflow: Dict[str, Any]) -> Opti
 
     Returns:
         Analysis ID if found, None otherwise
+
+    Raises:
+        IRPAPIError: If required fields are missing from workflow response
     """
-    return get_nested_field(workflow, 
-                            'output', 
-                            'analysisId', 
-                            required=True, 
-                            context='extract analysis id')
+    try:
+        return workflow['output']['analysisId']
+    except (KeyError, TypeError) as e:
+        raise IRPAPIError(
+            f"Missing required field in workflow response: {e}"
+        ) from e

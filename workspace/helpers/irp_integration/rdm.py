@@ -10,7 +10,6 @@ from .client import Client
 from .constants import EXPORT_TO_RDM
 from .exceptions import IRPAPIError
 from .validators import validate_non_empty_string, validate_list_not_empty
-from .utils import get_nested_field
 
 class RDMManager:
     """Manager for RDM export operations."""
@@ -60,10 +59,13 @@ class RDMManager:
 
         try:
             analyses = self.analysis_manager.get_analyses_by_ids(analysis_ids)
-            resourceUris = [
-                get_nested_field(analysis, 'uri', required=True, context=f"analysis data")
-                for analysis in analyses
-            ]
+
+            resourceUris = []
+            for analysis in analyses:
+                try:
+                    resourceUris.append(analysis['uri'])
+                except (KeyError, TypeError) as e:
+                    raise IRPAPIError(f"Missing 'uri' in analysis data: {e}") from e
 
             if not resourceUris:
                 raise IRPAPIError(

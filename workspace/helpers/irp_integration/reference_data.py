@@ -10,7 +10,7 @@ from .client import Client
 from .constants import GET_CURRENCIES, GET_TAGS, CREATE_TAG, GET_MODEL_PROFILES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME
 from .exceptions import IRPAPIError
 from .validators import validate_non_empty_string, validate_list_not_empty
-from .utils import extract_id_from_location_header, get_nested_field
+from .utils import extract_id_from_location_header
 
 class ReferenceDataManager:
     """Manager for reference data operations."""
@@ -238,19 +238,21 @@ class ReferenceDataManager:
         for tag_name in tag_names:
             tag_search_response = self.get_tag_by_name(tag_name)
             if len(tag_search_response) > 0:
-                tag_id = get_nested_field(
-                    tag_search_response, 0, 'tagId',
-                    required=True,
-                    context=f"tag search response for '{tag_name}'"
-                )
+                try:
+                    tag_id = tag_search_response[0]['tagId']
+                except (KeyError, IndexError, TypeError) as e:
+                    raise IRPAPIError(
+                        f"Failed to extract tag ID from search response for '{tag_name}': {e}"
+                    ) from e
                 tag_ids.append(int(tag_id))
             else:
                 created_tag = self.create_tag(tag_name)
-                tag_id = get_nested_field(
-                    created_tag, 'id',
-                    required=True,
-                    context=f"created tag response for '{tag_name}'"
-                )
+                try:
+                    tag_id = created_tag['id']
+                except (KeyError, TypeError) as e:
+                    raise IRPAPIError(
+                        f"Failed to extract tag ID from created tag response for '{tag_name}': {e}"
+                    ) from e
                 tag_ids.append(int(tag_id))
 
         return tag_ids

@@ -10,7 +10,6 @@ from .client import Client
 from .constants import GET_DATASOURCES, CREATE_DATASOURCE, DELETE_DATASOURCE, EXPORT_EDM, GET_CEDANTS, GET_LOBS
 from .exceptions import IRPAPIError
 from .validators import validate_non_empty_string
-from .utils import get_nested_field
 
 class EDMManager:
     """Manager for EDM (Exposure Data Management) operations."""
@@ -130,15 +129,20 @@ class EDMManager:
 
         try:
             portfolios_response = self.portfolio_manager.get_portfolios_by_edm_name(source_edm_name)
-            search_items = get_nested_field(
-                portfolios_response, 'searchItems',
-                required=True,
-                context=f"portfolios response for EDM '{source_edm_name}'"
-            )
-            portfolio_ids = [
-                get_nested_field(portfolio, 'id', required=True, context="portfolio data")
-                for portfolio in search_items
-            ]
+
+            try:
+                search_items = portfolios_response['searchItems']
+            except (KeyError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Missing 'searchItems' in portfolios response for EDM '{source_edm_name}': {e}"
+                ) from e
+
+            portfolio_ids = []
+            for portfolio in search_items:
+                try:
+                    portfolio_ids.append(portfolio['id'])
+                except (KeyError, TypeError) as e:
+                    raise IRPAPIError(f"Missing 'id' in portfolio data: {e}") from e
 
             data = {
                 "createnew": True,

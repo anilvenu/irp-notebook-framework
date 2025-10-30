@@ -10,7 +10,7 @@ from .client import Client
 from .constants import GET_ANALYSES, GET_PLATFORM_ANALYSES, ANALYZE_PORTFOLIO, CREATE_ANALYSIS_GROUP
 from .exceptions import IRPAPIError, IRPReferenceDataError
 from .validators import validate_non_empty_string, validate_positive_int, validate_list_not_empty
-from .utils import extract_id_from_location_header, build_analysis_currency_dict, get_nested_field
+from .utils import extract_id_from_location_header, build_analysis_currency_dict
 
 class AnalysisManager:
     """Manager for analysis operations."""
@@ -151,24 +151,27 @@ class AnalysisManager:
         if event_rate_scheme_response.get('count', 0) == 0:
             raise IRPReferenceDataError(f"Event rate scheme '{event_rate_scheme_name}' not found")
 
-        # Safely extract nested IDs with proper error handling
-        event_rate_scheme_id = get_nested_field(
-            event_rate_scheme_response, 'items', 0, 'eventRateSchemeId',
-            required=True,
-            context=f"event rate scheme '{event_rate_scheme_name}'"
-        )
+        # Extract nested IDs with proper error handling
+        try:
+            event_rate_scheme_id = event_rate_scheme_response['items'][0]['eventRateSchemeId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract event rate scheme ID for '{event_rate_scheme_name}': {e}"
+            ) from e
 
-        model_profile_id = get_nested_field(
-            model_profile_response, 'items', 0, 'id',
-            required=True,
-            context=f"model profile '{analysis_profile_name}'"
-        )
+        try:
+            model_profile_id = model_profile_response['items'][0]['id']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract model profile ID for '{analysis_profile_name}': {e}"
+            ) from e
 
-        output_profile_id = get_nested_field(
-            output_profile_response, 0, 'id',
-            required=True,
-            context=f"output profile '{output_profile_name}'"
-        )
+        try:
+            output_profile_id = output_profile_response[0]['id']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract output profile ID for '{output_profile_name}': {e}"
+            ) from e
 
         data = {
             "currency": currency,
@@ -339,24 +342,27 @@ class AnalysisManager:
         if event_rate_scheme_response.get('count', 0) == 0:
             raise IRPReferenceDataError(f"Event rate scheme '{event_rate_scheme_name}' not found")
 
-        # Safely extract nested IDs
-        model_profile_id = get_nested_field(
-            model_profile_response, 'items', 0, 'id',
-            required=True,
-            context=f"model profile '{analysis_profile_name}'"
-        )
+        # Extract nested IDs with proper error handling
+        try:
+            model_profile_id = model_profile_response['items'][0]['id']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract model profile ID for '{analysis_profile_name}': {e}"
+            ) from e
 
-        output_profile_id = get_nested_field(
-            output_profile_response, 0, 'id',
-            required=True,
-            context=f"output profile '{output_profile_name}'"
-        )
+        try:
+            output_profile_id = output_profile_response[0]['id']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract output profile ID for '{output_profile_name}': {e}"
+            ) from e
 
-        event_rate_scheme_id = get_nested_field(
-            event_rate_scheme_response, 'items', 0, 'eventRateSchemeId',
-            required=True,
-            context=f"event rate scheme '{event_rate_scheme_name}'"
-        )
+        try:
+            event_rate_scheme_id = event_rate_scheme_response['items'][0]['eventRateSchemeId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract event rate scheme ID for '{event_rate_scheme_name}': {e}"
+            ) from e
 
         return self.analyze_portfolio(
             job_name,

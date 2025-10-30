@@ -17,7 +17,7 @@ from .constants import (
 )
 from .exceptions import IRPAPIError, IRPValidationError, IRPReferenceDataError
 from .validators import validate_non_empty_string, validate_positive_int
-from .utils import find_reference_data_by_name, extract_id_from_location_header, get_nested_field
+from .utils import find_reference_data_by_name, extract_id_from_location_header
 
 
 class TreatyManager:
@@ -366,30 +366,34 @@ class TreatyManager:
 
         # Fetch required reference data
         cedant_response = self.edm_manager.get_cedants_by_edm(edm_name)
-        cedant_data = get_nested_field(
-            cedant_response, 'searchItems',
-            required=True,
-            context=f"cedants response for EDM '{edm_name}'"
-        )
+        try:
+            cedant_data = cedant_response['searchItems']
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(
+                f"Missing 'searchItems' in cedants response for EDM '{edm_name}': {e}"
+            ) from e
+
         if not cedant_data:
             raise IRPReferenceDataError(f"No cedants found in EDM '{edm_name}'")
 
         lob_response = self.edm_manager.get_lobs_by_edm(edm_name)
-        lob_data = get_nested_field(
-            lob_response, 'searchItems',
-            required=True,
-            context=f"LOBs response for EDM '{edm_name}'"
-        )
+        try:
+            lob_data = lob_response['searchItems']
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(
+                f"Missing 'searchItems' in LOBs response for EDM '{edm_name}': {e}"
+            ) from e
+
         if not lob_data:
             raise IRPReferenceDataError(f"No LOBs found in EDM '{edm_name}'")
 
         # Look up treaty type
         treaty_type_data = self.get_treaty_types_by_edm(edm_name)
-        treaty_type_values = get_nested_field(
-            treaty_type_data, 'entityItems', 'values',
-            required=True,
-            context="treaty type data"
-        )
+        try:
+            treaty_type_values = treaty_type_data['entityItems']['values']
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(f"Missing required fields in treaty type data: {e}") from e
+
         treaty_type = find_reference_data_by_name(
             treaty_type_values,
             treaty_type_name,
@@ -398,11 +402,11 @@ class TreatyManager:
 
         # Look up attachment basis
         attachment_basis_data = self.get_treaty_attachment_bases_by_edm(edm_name)
-        attachment_basis_values = get_nested_field(
-            attachment_basis_data, 'entityItems', 'values',
-            required=True,
-            context="attachment basis data"
-        )
+        try:
+            attachment_basis_values = attachment_basis_data['entityItems']['values']
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(f"Missing required fields in attachment basis data: {e}") from e
+
         attachment_basis = find_reference_data_by_name(
             attachment_basis_values,
             attachment_basis_name,
@@ -411,11 +415,11 @@ class TreatyManager:
 
         # Look up attachment level
         attachment_level_data = self.get_treaty_attachment_levels_by_edm(edm_name)
-        attachment_level_values = get_nested_field(
-            attachment_level_data, 'entityItems', 'values',
-            required=True,
-            context="attachment level data"
-        )
+        try:
+            attachment_level_values = attachment_level_data['entityItems']['values']
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(f"Missing required fields in attachment level data: {e}") from e
+
         attachment_level = find_reference_data_by_name(
             attachment_level_values,
             attachment_level_name,
@@ -424,11 +428,11 @@ class TreatyManager:
 
         # Look up currency
         currency_data = self.reference_data_manager.get_currencies()
-        currency_values = get_nested_field(
-            currency_data, 'entityItems', 'values',
-            required=True,
-            context="currency data"
-        )
+        try:
+            currency_values = currency_data['entityItems']['values']
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(f"Missing required fields in currency data: {e}") from e
+
         currency = find_reference_data_by_name(
             currency_values,
             currency_name,
@@ -447,8 +451,8 @@ class TreatyManager:
             "effectDate": effect_date,
             "expireDate": expire_date,
             "currency": {
-                'code': get_nested_field(currency, 'code', required=True, context="currency"),
-                'name': get_nested_field(currency, 'name', required=True, context="currency")
+                'code': currency['code'],
+                'name': currency['name']
             },
             "attachBasis": attachment_basis,
             "attachLevel": attachment_level,
@@ -477,11 +481,10 @@ class TreatyManager:
         # Create treaty
         treaty_response = self.create_treaty(edm_name, treaty_data)
 
-        treaty_id = get_nested_field(
-            treaty_response, 'id',
-            required=True,
-            context="treaty creation response"
-        )
+        try:
+            treaty_id = treaty_response['id']
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(f"Missing 'id' in treaty creation response: {e}") from e
 
         result: Dict[str, Any] = {
             'id': treaty_id,
@@ -490,10 +493,12 @@ class TreatyManager:
 
         # Optionally assign LOBs
         if auto_assign_lobs:
-            lob_ids = [
-                get_nested_field(lob, 'id', required=True, context=f"LOB data")
-                for lob in lob_data
-            ]
+            lob_ids = []
+            for lob in lob_data:
+                try:
+                    lob_ids.append(lob['id'])
+                except (KeyError, TypeError) as e:
+                    raise IRPAPIError(f"Missing 'id' in LOB data: {e}") from e
             lob_assignment = self.assign_lobs(
                 edm_name,
                 treaty_id,

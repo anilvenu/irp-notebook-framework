@@ -14,7 +14,7 @@ from requests.adapters import HTTPAdapter
 from .constants import GET_WORKFLOWS, WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES
 from .exceptions import IRPAPIError, IRPWorkflowError
 from .validators import validate_non_empty_string, validate_positive_int
-from .utils import get_location_header, get_nested_field
+from .utils import get_location_header
 
 class Client:
 
@@ -208,16 +208,15 @@ class Client:
                 }
                 response = self.request('GET', GET_WORKFLOWS, params=params)
                 response_data = response.json()
-                total_match_count = get_nested_field(
-                    response_data, 'totalMatchCount',
-                    required=True,
-                    context="workflow batch response"
-                )
-                workflows = get_nested_field(
-                    response_data, 'workflows',
-                    default=[],
-                    context="workflow batch response"
-                )
+
+                try:
+                    total_match_count = response_data['totalMatchCount']
+                except (KeyError, TypeError) as e:
+                    raise IRPAPIError(
+                        f"Missing 'totalMatchCount' in workflow batch response: {e}"
+                    ) from e
+
+                workflows = response_data.get('workflows', [])
 
                 all_workflows.extend(workflows)
 
