@@ -17,7 +17,7 @@ from .constants import (
 )
 from .exceptions import IRPAPIError, IRPValidationError, IRPReferenceDataError
 from .validators import validate_non_empty_string, validate_positive_int
-from .utils import find_reference_data_by_name, extract_id_from_location_header
+from .utils import find_reference_data_by_name, extract_id_from_location_header, get_nested_field
 
 
 class TreatyManager:
@@ -365,42 +365,72 @@ class TreatyManager:
         validate_non_empty_string(expire_date, "expire_date")
 
         # Fetch required reference data
-        cedant_data = self.edm_manager.get_cedants_by_edm(edm_name)["searchItems"]
+        cedant_response = self.edm_manager.get_cedants_by_edm(edm_name)
+        cedant_data = get_nested_field(
+            cedant_response, 'searchItems',
+            required=True,
+            context=f"cedants response for EDM '{edm_name}'"
+        )
         if not cedant_data:
             raise IRPReferenceDataError(f"No cedants found in EDM '{edm_name}'")
 
-        lob_data = self.edm_manager.get_lobs_by_edm(edm_name)["searchItems"]
+        lob_response = self.edm_manager.get_lobs_by_edm(edm_name)
+        lob_data = get_nested_field(
+            lob_response, 'searchItems',
+            required=True,
+            context=f"LOBs response for EDM '{edm_name}'"
+        )
         if not lob_data:
             raise IRPReferenceDataError(f"No LOBs found in EDM '{edm_name}'")
 
         # Look up treaty type
         treaty_type_data = self.get_treaty_types_by_edm(edm_name)
+        treaty_type_values = get_nested_field(
+            treaty_type_data, 'entityItems', 'values',
+            required=True,
+            context="treaty type data"
+        )
         treaty_type = find_reference_data_by_name(
-            treaty_type_data["entityItems"]["values"],
+            treaty_type_values,
             treaty_type_name,
             data_type="treaty type"
         )
 
         # Look up attachment basis
         attachment_basis_data = self.get_treaty_attachment_bases_by_edm(edm_name)
+        attachment_basis_values = get_nested_field(
+            attachment_basis_data, 'entityItems', 'values',
+            required=True,
+            context="attachment basis data"
+        )
         attachment_basis = find_reference_data_by_name(
-            attachment_basis_data["entityItems"]["values"],
+            attachment_basis_values,
             attachment_basis_name,
             data_type="attachment basis"
         )
 
         # Look up attachment level
         attachment_level_data = self.get_treaty_attachment_levels_by_edm(edm_name)
+        attachment_level_values = get_nested_field(
+            attachment_level_data, 'entityItems', 'values',
+            required=True,
+            context="attachment level data"
+        )
         attachment_level = find_reference_data_by_name(
-            attachment_level_data["entityItems"]["values"],
+            attachment_level_values,
             attachment_level_name,
             data_type="attachment level"
         )
 
         # Look up currency
         currency_data = self.reference_data_manager.get_currencies()
+        currency_values = get_nested_field(
+            currency_data, 'entityItems', 'values',
+            required=True,
+            context="currency data"
+        )
         currency = find_reference_data_by_name(
-            currency_data["entityItems"]["values"],
+            currency_values,
             currency_name,
             data_type="currency"
         )
@@ -416,7 +446,10 @@ class TreatyManager:
             "cedant": cedant_data[0],
             "effectDate": effect_date,
             "expireDate": expire_date,
-            "currency": {'code': currency['code'], 'name': currency['name']},
+            "currency": {
+                'code': get_nested_field(currency, 'code', required=True, context="currency"),
+                'name': get_nested_field(currency, 'name', required=True, context="currency")
+            },
             "attachBasis": attachment_basis,
             "attachLevel": attachment_level,
             "pcntCovered": pcnt_covered,
@@ -444,17 +477,26 @@ class TreatyManager:
         # Create treaty
         treaty_response = self.create_treaty(edm_name, treaty_data)
 
+        treaty_id = get_nested_field(
+            treaty_response, 'id',
+            required=True,
+            context="treaty creation response"
+        )
+
         result: Dict[str, Any] = {
-            'id': treaty_response['id'],
+            'id': treaty_id,
             'treaty_name': treaty_name
         }
 
         # Optionally assign LOBs
         if auto_assign_lobs:
-            lob_ids = [lob['id'] for lob in lob_data]
+            lob_ids = [
+                get_nested_field(lob, 'id', required=True, context=f"LOB data")
+                for lob in lob_data
+            ]
             lob_assignment = self.assign_lobs(
                 edm_name,
-                treaty_response['id'],
+                treaty_id,
                 lob_ids
             )
             result['lob_assignment'] = lob_assignment

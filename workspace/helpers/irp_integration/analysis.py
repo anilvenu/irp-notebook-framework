@@ -10,7 +10,7 @@ from .client import Client
 from .constants import GET_ANALYSES, GET_PLATFORM_ANALYSES, ANALYZE_PORTFOLIO, CREATE_ANALYSIS_GROUP
 from .exceptions import IRPAPIError, IRPReferenceDataError
 from .validators import validate_non_empty_string, validate_positive_int, validate_list_not_empty
-from .utils import extract_id_from_location_header, build_analysis_currency_dict
+from .utils import extract_id_from_location_header, build_analysis_currency_dict, get_nested_field
 
 class AnalysisManager:
     """Manager for analysis operations."""
@@ -151,14 +151,33 @@ class AnalysisManager:
         if event_rate_scheme_response.get('count', 0) == 0:
             raise IRPReferenceDataError(f"Event rate scheme '{event_rate_scheme_name}' not found")
 
+        # Safely extract nested IDs with proper error handling
+        event_rate_scheme_id = get_nested_field(
+            event_rate_scheme_response, 'items', 0, 'eventRateSchemeId',
+            required=True,
+            context=f"event rate scheme '{event_rate_scheme_name}'"
+        )
+
+        model_profile_id = get_nested_field(
+            model_profile_response, 'items', 0, 'id',
+            required=True,
+            context=f"model profile '{analysis_profile_name}'"
+        )
+
+        output_profile_id = get_nested_field(
+            output_profile_response, 0, 'id',
+            required=True,
+            context=f"output profile '{output_profile_name}'"
+        )
+
         data = {
             "currency": currency,
             "edm": edm_name,
-            "eventRateSchemeId": event_rate_scheme_response['items'][0]['eventRateSchemeId'],
+            "eventRateSchemeId": event_rate_scheme_id,
             "exposureType": "PORTFOLIO",
             "id": portfolio_id,
-            "modelProfileId": model_profile_response['items'][0]['id'],
-            "outputProfileId": output_profile_response[0]['id'],
+            "modelProfileId": model_profile_id,
+            "outputProfileId": output_profile_id,
             "treaties": treaty_ids,
             "tagIds": tag_ids,
             "globalAnalysisSettings": global_analysis_settings,
@@ -320,13 +339,32 @@ class AnalysisManager:
         if event_rate_scheme_response.get('count', 0) == 0:
             raise IRPReferenceDataError(f"Event rate scheme '{event_rate_scheme_name}' not found")
 
+        # Safely extract nested IDs
+        model_profile_id = get_nested_field(
+            model_profile_response, 'items', 0, 'id',
+            required=True,
+            context=f"model profile '{analysis_profile_name}'"
+        )
+
+        output_profile_id = get_nested_field(
+            output_profile_response, 0, 'id',
+            required=True,
+            context=f"output profile '{output_profile_name}'"
+        )
+
+        event_rate_scheme_id = get_nested_field(
+            event_rate_scheme_response, 'items', 0, 'eventRateSchemeId',
+            required=True,
+            context=f"event rate scheme '{event_rate_scheme_name}'"
+        )
+
         return self.analyze_portfolio(
             job_name,
             edm_name,
             portfolio_id,
-            model_profile_response['items'][0]['id'],
-            output_profile_response[0]['id'],
-            event_rate_scheme_response['items'][0]['eventRateSchemeId'],
+            model_profile_id,
+            output_profile_id,
+            event_rate_scheme_id,
             treaty_ids
         )
     

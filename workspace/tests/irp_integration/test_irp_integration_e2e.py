@@ -137,8 +137,6 @@ def test_complete_workflow_edm_to_rdm(irp_client, unique_name, test_data_dir, cl
     # ========================================================================
     print("\n[Step 3/10] Executing MRI Import...")
 
-    # New simplified approach using import_from_files() convenience method
-    print("  Using import_from_files() convenience method...")
     import_response = irp_client.mri_import.import_from_files(
         edm_name=edm_name,
         portfolio_id=portfolio_id,
@@ -147,60 +145,6 @@ def test_complete_workflow_edm_to_rdm(irp_client, unique_name, test_data_dir, cl
         mapping_file="mapping.json",
         working_dir=str(test_data_dir)
     )
-
-    # OLD APPROACH (kept for reference - can be removed):
-    # # Create AWS bucket
-    # print("  Creating AWS bucket...")
-    # bucket_response = irp_client.mri_import.create_aws_bucket()
-    # assert bucket_response is not None, "Bucket creation should return response"
-    # assert 'location' in bucket_response.headers, "Bucket response should have location header"
-    #
-    # bucket_url = bucket_response.headers['location']
-    # bucket_id = bucket_url.split('/')[-1]
-    # print(f"  ✓ Bucket created: {bucket_id}")
-    #
-    # # Upload accounts file
-    # print("  Uploading accounts file...")
-    # accounts_file_path = test_data_dir / "test_accounts.csv"
-    # assert accounts_file_path.exists(), f"Accounts file not found: {accounts_file_path}"
-    #
-    # accounts_credentials = irp_client.mri_import.get_file_credentials(
-    #     bucket_url, "test_accounts.csv", 100, "account"
-    # )
-    # irp_client.mri_import.upload_file_to_s3(accounts_credentials, str(accounts_file_path))
-    # print(f"  ✓ Accounts file uploaded")
-    #
-    # # Upload locations file
-    # print("  Uploading locations file...")
-    # locations_file_path = test_data_dir / "test_locations.csv"
-    # assert locations_file_path.exists(), f"Locations file not found: {locations_file_path}"
-    #
-    # locations_credentials = irp_client.mri_import.get_file_credentials(
-    #     bucket_url, "test_locations.csv", 100, "location"
-    # )
-    # irp_client.mri_import.upload_file_to_s3(locations_credentials, str(locations_file_path))
-    # print(f"  ✓ Locations file uploaded")
-    #
-    # # Upload mapping file
-    # print("  Uploading mapping file...")
-    # mapping_file_path = test_data_dir / "mapping.json"
-    # assert mapping_file_path.exists(), f"Mapping file not found: {mapping_file_path}"
-    #
-    # mapping_file_id = irp_client.mri_import.upload_mapping_file(
-    #     str(mapping_file_path), bucket_id
-    # ).json()
-    # print(f"  ✓ Mapping file uploaded: {mapping_file_id}")
-    #
-    # # Execute MRI import
-    # print("  Executing MRI import workflow...")
-    # import_response = irp_client.mri_import.execute_mri_import(
-    #     edm_name,
-    #     int(portfolio_id),
-    #     int(bucket_id),
-    #     accounts_credentials['file_id'],
-    #     locations_credentials['file_id'],
-    #     mapping_file_id
-    # )
 
     assert import_response is not None, "MRI import response should not be None"
     assert import_response['status'] == 'FINISHED', f"MRI import should finish successfully, got {import_response['status']}"
@@ -216,8 +160,6 @@ def test_complete_workflow_edm_to_rdm(irp_client, unique_name, test_data_dir, cl
     # ========================================================================
     print("\n[Step 4/10] Creating Treaty...")
 
-    # New simplified approach using create_treaty_from_names() convenience method
-    print("  Using create_treaty_from_names() convenience method...")
     treaty_response = irp_client.treaty.create_treaty_from_names(
         edm_name=edm_name,
         treaty_name=treaty_name,
@@ -245,84 +187,6 @@ def test_complete_workflow_edm_to_rdm(irp_client, unique_name, test_data_dir, cl
 
     assert 'id' in treaty_response, "Treaty response should contain id"
     treaty_id = treaty_response['id']
-
-    # OLD APPROACH (kept for reference):
-    # # Get required reference data
-    # cedant_data = irp_client.edm.get_cedants_by_edm(edm_name)["searchItems"]
-    # lob_data = irp_client.edm.get_lobs_by_edm(edm_name)["searchItems"]
-    #
-    # assert len(cedant_data) > 0, "Should have at least one cedant"
-    # assert len(lob_data) > 0, "Should have at least one LOB"
-    #
-    # treaty_type_data = irp_client.treaty.get_treaty_types_by_edm(edm_name)["entityItems"]["values"]
-    # treaty_type_match = next(
-    #     (item for item in treaty_type_data if item["name"] == TREATY_TYPE_NAME),
-    #     None
-    # )
-    # assert treaty_type_match is not None, f"Treaty type '{TREATY_TYPE_NAME}' not found"
-    #
-    # attachment_basis_data = irp_client.treaty.get_treaty_attachment_bases_by_edm(edm_name)["entityItems"]["values"]
-    # attachment_basis_match = next(
-    #     (item for item in attachment_basis_data if item["name"] == ATTACHMENT_BASIS),
-    #     None
-    # )
-    # assert attachment_basis_match is not None, f"Attachment basis '{ATTACHMENT_BASIS}' not found"
-    #
-    # attachment_level_data = irp_client.treaty.get_treaty_attachment_levels_by_edm(edm_name)["entityItems"]["values"]
-    # attachment_level_match = next(
-    #     (item for item in attachment_level_data if item["name"] == ATTACHMENT_LEVEL),
-    #     None
-    # )
-    # assert attachment_level_match is not None, f"Attachment level '{ATTACHMENT_LEVEL}' not found"
-    #
-    # currency_data = irp_client.reference_data.get_currencies()["entityItems"]["values"]
-    # currency_match = next(
-    #     (item for item in currency_data if item["name"] == CURRENCY_NAME),
-    #     None
-    # )
-    # assert currency_match is not None, f"Currency '{CURRENCY_NAME}' not found"
-    #
-    # # Create treaty
-    # treaty_data = {
-    #     "treatyNumber": treaty_name,
-    #     "treatyName": treaty_name,
-    #     "treatyType": treaty_type_match,
-    #     "riskLimit": 3000000,
-    #     "occurLimit": 9000000,
-    #     "attachPt": 2000000,
-    #     "cedant": cedant_data[0],
-    #     "effectDate": "2025-10-15T17:49:10.637Z",
-    #     "expireDate": "2026-10-15T17:49:10.637Z",
-    #     "currency": {'code': currency_match['code'], 'name': currency_match['name']},
-    #     "attachBasis": attachment_basis_match,
-    #     "attachLevel": attachment_level_match,
-    #     "pcntCovered": 100,
-    #     "pcntPlaced": 95,
-    #     "pcntRiShare": 100,
-    #     "pcntRetent": 100,
-    #     "premium": 0,
-    #     "numOfReinst": 99,
-    #     "reinstCharge": 0,
-    #     "aggregateLimit": 0,
-    #     "aggregateDeductible": 0,
-    #     "priority": 1,
-    #     "retentAmt": "",
-    #     "isValid": True,
-    #     "userId1": "",
-    #     "userId2": "",
-    #     "maolAmount": "",
-    #     "lobs": lob_data,
-    #     "tagIds": []
-    # }
-    #
-    # treaty_response = irp_client.treaty.create_treaty(edm_name, treaty_data)
-    # assert 'id' in treaty_response, "Treaty response should contain id"
-    # treaty_id = treaty_response['id']
-    #
-    # # Assign LOBs to treaty
-    # lob_ids = [lob['id'] for lob in lob_data]
-    # lob_assignment = irp_client.treaty.assign_lobs(edm_name, treaty_id, lob_ids)
-    # assert lob_assignment is not None, "LOB assignment should return response"
 
     print(f"✓ Treaty created successfully: {treaty_name}")
     print(f"  Treaty ID: {treaty_id}")

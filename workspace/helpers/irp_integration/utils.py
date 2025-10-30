@@ -6,7 +6,7 @@ and reference data lookup operations.
 """
 
 import base64
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 import requests
 from .exceptions import IRPAPIError, IRPReferenceDataError
 
@@ -225,28 +225,138 @@ def validate_response_has_field(
 
 
 def get_nested_field(
-    data: Dict[str, Any],
-    field_path: str,
-    default: Any = None
+    data: Union[Dict[str, Any], List[Any]],
+    *keys: Union[str, int],
+    default: Any = None,
+    required: bool = False,
+    context: str = ""
 ) -> Any:
     """
-    Get nested field from dict using dot notation.
+    Safely get nested field from dict/list with proper error handling.
+
+    This method supports both dict keys and list indices, allowing safe
+    traversal of complex nested structures.
 
     Args:
-        data: Dict to search
-        field_path: Field path (e.g., "summary.exposureSetId")
-        default: Default value if field not found
+        data: Source dict or list
+        *keys: Sequence of keys/indices to traverse
+               - String keys for dict access
+               - Integer indices for list access
+        default: Default value if field not found (only used if required=False)
+        required: If True, raises IRPAPIError when field is missing
+        context: Context description for error messages
 
     Returns:
-        Field value or default
-    """
-    fields = field_path.split('.')
-    current = data
+        Extracted value or default
 
-    for field in fields:
-        if not isinstance(current, dict) or field not in current:
-            return default
-        current = current[field]
+    Raises:
+        IRPAPIError: If required=True and field is missing/None
+
+    Examples:
+        # Dict access
+        value = get_nested_field(response, 'summary', 'exposureSetId')
+
+        # List access
+        id_val = get_nested_field(response, 'items', 0, 'id', required=True)
+
+        # With default
+        count = get_nested_field(response, 'count', default=0)
+
+        # With context for better errors
+        cedants = get_nested_field(
+            response, 'searchItems',
+            required=True,
+            context="cedants response"
+        )
+
+    Note:
+        For backward compatibility, you can still use dot notation with a
+        single string argument (e.g., 'summary.exposureSetId'), but the
+        new multi-argument style is preferred for list access and better
+        error messages.
+    """
+    # Backward compatibility: support dot notation in single string
+    if len(keys) == 1 and isinstance(keys[0], str) and '.' in keys[0]:
+        keys = tuple(keys[0].split('.'))
+
+    current = data
+    path = []
+
+    try:
+        for key in keys:
+            path.append(str(key))
+
+            # Handle dict access
+            if isinstance(current, dict):
+                if not isinstance(key, str):
+                    if required:
+                        raise IRPAPIError(
+                            f"Cannot use integer key '{key}' for dict access "
+                            f"at '{'.'.join(path[:-1])}'"
+                            f"{f' in {context}' if context else ''}"
+                        )
+                    return default
+                if key not in current:
+                    if required:
+                        raise IRPAPIError(
+                            f"Missing required key '{'.'.join(path)}'"
+                            f"{f' in {context}' if context else ''}"
+                        )
+                    return default
+                current = current[key]
+
+            # Handle list/tuple access
+            elif isinstance(current, (list, tuple)):
+                if not isinstance(key, int):
+                    if required:
+                        raise IRPAPIError(
+                            f"Cannot index list with non-integer key '{key}' "
+                            f"at '{'.'.join(path[:-1])}'"
+                            f"{f' in {context}' if context else ''}"
+                        )
+                    return default
+
+                if key < 0 or key >= len(current):
+                    if required:
+                        raise IRPAPIError(
+                            f"List index {key} out of range at '{'.'.join(path[:-1])}' "
+                            f"(length: {len(current)})"
+                            f"{f' in {context}' if context else ''}"
+                        )
+                    return default
+
+                current = current[key]
+
+            # Handle None or invalid types
+            else:
+                if required:
+                    if current is None:
+                        raise IRPAPIError(
+                            f"Cannot access '{key}' on None value "
+                            f"at '{'.'.join(path[:-1])}'"
+                            f"{f' in {context}' if context else ''}"
+                        )
+                    raise IRPAPIError(
+                        f"Cannot access key '{key}' on non-dict/list type "
+                        f"{type(current).__name__} at '{'.'.join(path[:-1])}'"
+                        f"{f' in {context}' if context else ''}"
+                    )
+                return default
+
+            # Check if result is None when required
+            if required and current is None:
+                raise IRPAPIError(
+                    f"Required value at '{'.'.join(path)}' is None"
+                    f"{f' in {context}' if context else ''}"
+                )
+
+    except (KeyError, IndexError, TypeError) as e:
+        if required:
+            raise IRPAPIError(
+                f"Failed to access '{'.'.join(path)}'"
+                f"{f' in {context}' if context else ''}: {e}"
+            ) from e
+        return default
 
     return current
 
@@ -269,7 +379,7 @@ def build_analysis_currency_dict() -> Dict[str, str]:
     }
 
 
-def extract_analysis_id_from_workflow(workflow: Dict[str, Any]) -> Optional[str]:
+def extract_analysis_id_from_workflow_response(workflow: Dict[str, Any]) -> Optional[str]:
     """
     Extract analysis ID from workflow response.
 
@@ -279,7 +389,11 @@ def extract_analysis_id_from_workflow(workflow: Dict[str, Any]) -> Optional[str]
     Returns:
         Analysis ID if found, None otherwise
     """
-    return get_nested_field(workflow, 'output.analysisId')
+    return get_nested_field(workflow, 
+                            'output', 
+                            'analysisId', 
+                            required=True, 
+                            context='extract analysis id')
 
 
 def validate_workflow_status(

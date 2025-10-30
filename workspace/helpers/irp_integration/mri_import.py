@@ -265,7 +265,7 @@ class MRIImportManager:
     def import_from_files(
         self,
         edm_name: str,
-        portfolio_id: str,
+        portfolio_id: int,
         accounts_file: str,
         locations_file: str,
         mapping_file: str,

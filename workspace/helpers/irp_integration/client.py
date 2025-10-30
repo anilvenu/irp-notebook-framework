@@ -11,17 +11,14 @@ import os
 from typing import Dict, List, Any, Optional, Union
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-from .constants import GET_WORKFLOWS
-from .exceptions import IRPAPIError, IRPValidationError, IRPWorkflowError
+from .constants import GET_WORKFLOWS, WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES
+from .exceptions import IRPAPIError, IRPWorkflowError
 from .validators import validate_non_empty_string, validate_positive_int
-from .utils import get_location_header
+from .utils import get_location_header, get_nested_field
 
 class Client:
 
     """Client for Moody's Risk Modeler API."""
-
-    WORKFLOW_COMPLETED = ['FINISHED', 'FAILED', 'CANCELLED'] # https://developer.rms.com/risk-modeler/docs/workflow-engine#polling-workflow-job-and-operation-statuses
-    WORKFLOW_IN_PROGRESS = ['QUEUED', 'PENDING', 'RUNNING', 'CANCEL_REQUESTED', 'CANCELLING']
 
     def __init__(self) -> None:
         """
@@ -159,7 +156,7 @@ class Client:
             progress = workflow_data.get('progress', '')
             print(f"Workflow status: {status}; Percent complete: {progress}")
 
-            if status in self.WORKFLOW_COMPLETED:
+            if status in WORKFLOW_COMPLETED_STATUSES:
                 return response
 
             if time.time() - start > timeout:
@@ -211,8 +208,16 @@ class Client:
                 }
                 response = self.request('GET', GET_WORKFLOWS, params=params)
                 response_data = response.json()
-                total_match_count = response_data['totalMatchCount']
-                workflows = response_data.get('workflows', [])
+                total_match_count = get_nested_field(
+                    response_data, 'totalMatchCount',
+                    required=True,
+                    context="workflow batch response"
+                )
+                workflows = get_nested_field(
+                    response_data, 'workflows',
+                    default=[],
+                    context="workflow batch response"
+                )
 
                 all_workflows.extend(workflows)
 
@@ -227,7 +232,7 @@ class Client:
             all_completed = True
             for workflow in all_workflows:
                 status = workflow.get('status', '')
-                if status in self.WORKFLOW_IN_PROGRESS:
+                if status in WORKFLOW_IN_PROGRESS_STATUSES:
                     all_completed = False
                     break
 

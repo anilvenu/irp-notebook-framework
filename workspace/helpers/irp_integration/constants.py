@@ -3,6 +3,10 @@
 # Workflow endpoints
 GET_WORKFLOWS = '/riskmodeler/v1/workflows'
 
+# Workflow statuses
+WORKFLOW_COMPLETED_STATUSES = ['FINISHED', 'FAILED', 'CANCELLED'] # https://developer.rms.com/risk-modeler/docs/workflow-engine#polling-workflow-job-and-operation-statuses
+WORKFLOW_IN_PROGRESS_STATUSES = ['QUEUED', 'PENDING', 'RUNNING', 'CANCEL_REQUESTED', 'CANCELLING']
+
 # EDM/Datasource endpoints
 GET_DATASOURCES = '/riskmodeler/v2/datasources'
 CREATE_DATASOURCE = '/riskmodeler/v2/datasources'
