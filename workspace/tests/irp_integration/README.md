@@ -9,6 +9,7 @@ irp_integration/
 ├── __init__.py                    # Package initialization
 ├── conftest.py                    # Shared fixtures for API tests
 ├── test_client.py                 # HTTP client unit tests (retry, timeout, polling)
+├── test_utils.py                  # Utility function unit tests (get_nested_field)
 ├── test_irp_integration_e2e.py    # End-to-end workflow tests
 └── fixtures/                      # Test data files
     ├── test_accounts.csv          # Sample account data (10 records)
@@ -48,6 +49,9 @@ pytest workspace/tests/irp_integration/ -v -s
 # Run HTTP client tests (fast, fully mocked, no API required)
 pytest workspace/tests/irp_integration/test_client.py -v
 
+# Run utility function tests (fast, no API required)
+pytest workspace/tests/irp_integration/test_utils.py -v
+
 # Run E2E workflow tests (slow, requires API credentials)
 pytest workspace/tests/irp_integration/test_irp_integration_e2e.py -v -s
 ```
@@ -60,6 +64,9 @@ pytest workspace/tests/irp_integration/test_irp_integration_e2e.py -v -s
 
 # Run only client tests
 ./test.sh workspace/tests/irp_integration/test_client.py -v
+
+# Run only utility tests
+./test.sh workspace/tests/irp_integration/test_utils.py -v
 ```
 
 ### Run with Marker Filters
@@ -175,6 +182,99 @@ pytest workspace/tests/irp_integration/test_client.py::test_retry_on_429_rate_li
 - ✅ **100% Coverage** - Every line of client.py tested
 - ✅ **Comprehensive** - All error paths and edge cases covered
 
+## Utility Function Tests (test_utils.py)
+
+The `test_utils.py` file contains comprehensive unit tests for utility functions in the `irp_integration.utils` module. These tests are **fully isolated** and do not require API credentials, database, or network connectivity.
+
+### Test Coverage: get_nested_field function
+
+**41 tests covering:**
+
+1. **Basic Dict Access** (5 tests)
+   - Simple single-level dict key access
+   - Multiple nested dict keys
+   - Missing keys with default values
+   - Missing keys with required=True (raises error)
+   - Existing keys ignore default values
+
+2. **Basic List Access** (5 tests)
+   - Valid list index access
+   - Out of range indices with default
+   - Out of range with required=True (raises error)
+   - Negative index handling
+   - Boundary indices (first and last)
+
+3. **Mixed Dict/List Access** (3 tests)
+   - Dict key followed by list index
+   - List index followed by dict key
+   - Complex nested structures with multiple levels
+
+4. **Type Mismatch Errors** (4 tests)
+   - Integer key on dict with default
+   - Integer key on dict with required=True
+   - String key on list with default
+   - String key on list with required=True
+
+5. **None Handling** (4 tests)
+   - None as intermediate value returns default
+   - None as intermediate value with required=True
+   - None as final value with required=False
+   - None as final value with required=True
+
+6. **Invalid Type Handling** (3 tests)
+   - Accessing key on string returns default
+   - Accessing key on int/float returns default
+   - Invalid type with required=True raises error
+
+7. **Backward Compatibility - Dot Notation** (3 tests)
+   - Old style: `'key1.key2.key3'`
+   - Comparison with multi-arg syntax
+   - Limitations with list indices
+
+8. **Context Parameter** (2 tests)
+   - Error messages include context
+   - Error messages work without context
+
+9. **Path Building** (1 test)
+   - Error messages show full attempted path
+
+10. **Edge Cases** (4 tests)
+    - No keys provided returns original data
+    - Empty dict with keys
+    - Empty list with index
+    - Tuple access (works like list)
+
+11. **Real-World Usage Patterns** (3 tests)
+    - Workflow response parsing (Moody's API)
+    - List item access with required=True
+    - Count with default value pattern
+
+12. **Exception Details** (4 tests)
+    - Exception chaining with `from e`
+    - KeyError wrapped in IRPAPIError
+    - IndexError wrapped in IRPAPIError
+    - TypeError wrapped in IRPAPIError
+
+### Running Utils Tests
+
+```bash
+# Fast execution (~2-3 seconds for all 41 tests)
+pytest workspace/tests/irp_integration/test_utils.py -v
+
+# With coverage report
+pytest workspace/tests/irp_integration/test_utils.py --cov=helpers.irp_integration.utils
+
+# Run specific test
+pytest workspace/tests/irp_integration/test_utils.py::test_get_nested_field_simple_dict_key -v
+```
+
+### Key Features
+
+- ✅ **No Dependencies** - Pure unit tests with no external requirements
+- ✅ **Fast** - Complete test suite runs in ~2-3 seconds
+- ✅ **Comprehensive** - All success paths, error paths, and edge cases covered
+- ✅ **Real-World Patterns** - Tests based on actual Moody's API response handling
+
 ## E2E Workflow Test (test_irp_integration_e2e.py)
 
 The `test_complete_workflow_edm_to_rdm` test validates the complete Moody's API integration workflow:
@@ -286,9 +386,10 @@ When adding new tests to this directory:
 | File | Tests | Coverage | Runtime | API Required | Description |
 |------|-------|----------|---------|--------------|-------------|
 | `test_client.py` | 60 | 100% | ~21s | ❌ No | HTTP client retry, timeout, polling |
+| `test_utils.py` | 41 | TBD | ~2-3s | ❌ No | Utility functions (get_nested_field) |
 | `test_irp_integration_e2e.py` | 1 | N/A | 10-15min | ✅ Yes | Complete workflow validation |
 
-### Total: 61 tests
+### Total: 102 tests
 
 ## Future Tests
 
