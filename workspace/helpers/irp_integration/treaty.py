@@ -5,7 +5,7 @@ Handles treaty-related operations including creation, retrieval,
 and Line of Business (LOB) assignments.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from .client import Client
 from .constants import (
     GET_TREATIES,
