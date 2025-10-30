@@ -76,32 +76,6 @@ def extract_workflow_url_from_response(response: requests.Response) -> str:
     return response.headers['location']
 
 
-def parse_workflow_response(response: requests.Response) -> Dict[str, Any]:
-    """
-    Parse and validate workflow response structure.
-
-    Args:
-        response: HTTP response from workflow endpoint
-
-    Returns:
-        Parsed response dict
-
-    Raises:
-        IRPAPIError: If response structure is invalid
-    """
-    try:
-        data = response.json()
-    except Exception as e:
-        raise IRPAPIError(f"Failed to parse workflow response as JSON: {e}")
-
-    if not isinstance(data, dict):
-        raise IRPAPIError(
-            f"Workflow response must be dict, got {type(data).__name__}"
-        )
-
-    return data
-
-
 def decode_base64_field(encoded_value: str, field_name: str) -> str:
     """
     Decode a base64-encoded field value.

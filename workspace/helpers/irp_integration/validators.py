@@ -50,27 +50,6 @@ def validate_positive_int(value: Any, param_name: str) -> None:
         )
 
 
-def validate_non_negative_number(value: Any, param_name: str) -> None:
-    """
-    Validate that a value is a non-negative number (int or float).
-
-    Args:
-        value: Value to validate
-        param_name: Parameter name for error message
-
-    Raises:
-        IRPValidationError: If value is not a non-negative number
-    """
-    if not isinstance(value, (int, float)):
-        raise IRPValidationError(
-            f"{param_name} must be a number, got {type(value).__name__}"
-        )
-    if value < 0:
-        raise IRPValidationError(
-            f"{param_name} cannot be negative, got {value}"
-        )
-
-
 def validate_file_exists(file_path: str, param_name: str = "file_path") -> None:
     """
     Validate that a file exists at the given path.
@@ -109,55 +88,3 @@ def validate_list_not_empty(value: Any, param_name: str) -> None:
         )
     if len(value) == 0:
         raise IRPValidationError(f"{param_name} cannot be empty")
-
-
-def validate_dict_has_keys(value: Any, required_keys: List[str], param_name: str) -> None:
-    """
-    Validate that a dict contains all required keys.
-
-    Args:
-        value: Dictionary to validate
-        required_keys: List of required key names
-        param_name: Parameter name for error message
-
-    Raises:
-        IRPValidationError: If value is not a dict or missing required keys
-    """
-    if not isinstance(value, dict):
-        raise IRPValidationError(
-            f"{param_name} must be a dict, got {type(value).__name__}"
-        )
-    missing_keys = [key for key in required_keys if key not in value]
-    if missing_keys:
-        raise IRPValidationError(
-            f"{param_name} missing required keys: {', '.join(missing_keys)}"
-        )
-
-
-def validate_workflow_id(workflow_id: Any, param_name: str = "workflow_id") -> None:
-    """
-    Validate a workflow ID (must be positive integer).
-
-    Args:
-        workflow_id: Workflow ID to validate
-        param_name: Parameter name for error message
-
-    Raises:
-        IRPValidationError: If workflow_id is invalid
-    """
-    validate_positive_int(workflow_id, param_name)
-
-
-def validate_edm_name(edm_name: str) -> None:
-    """
-    Validate EDM name format.
-
-    Args:
-        edm_name: EDM name to validate
-
-    Raises:
-        IRPValidationError: If EDM name is invalid
-    """
-    validate_non_empty_string(edm_name, "edm_name")
-    # Add additional EDM-specific validation if needed
-    # e.g., length limits, character restrictions, etc.
