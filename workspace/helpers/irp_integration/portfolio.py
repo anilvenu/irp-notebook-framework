@@ -6,7 +6,7 @@ Handles portfolio creation, retrieval, and geocoding/hazard operations.
 
 from typing import Dict, Any, Optional
 from .client import Client
-from .constants import CREATE_PORTFOLIO, GET_PORTFOLIOS, GET_PORTFOLIO_BY_ID, PORTFOLIO_GEOHAZ, SEARCH_PORTFOLIOS
+from .constants import CREATE_PORTFOLIO, PORTFOLIO_GEOHAZ, SEARCH_PORTFOLIOS
 from .exceptions import IRPAPIError
 from .validators import validate_non_empty_string, validate_positive_int
 from .utils import extract_id_from_location_header
@@ -68,7 +68,7 @@ class PortfolioManager:
             description: Portfolio description (default: "")
 
         Returns:
-            Dict with portfolio ID
+            Portfolio ID of created portfolio
 
         Raises:
             IRPValidationError: If inputs are invalid
@@ -89,62 +89,9 @@ class PortfolioManager:
             portfolio_id = extract_id_from_location_header(response, "portfolio creation")
             return int(portfolio_id)
         except Exception as e:
-            raise IRPAPIError(f"Failed to create portfolio '{portfolio_name}' in EDM id '{exposure_id}': {e}")
+            raise IRPAPIError(f"Failed to create portfolio '{portfolio_name}' in exposure id '{exposure_id}': {e}")
 
-    def get_portfolios_by_edm_name(self, edm_name: str) -> Dict[str, Any]:
-        """
-        Retrieve all portfolios for an EDM.
 
-        Args:
-            edm_name: Name of EDM datasource
-
-        Returns:
-            Dict containing portfolio list
-
-        Raises:
-            IRPValidationError: If edm_name is invalid
-            IRPAPIError: If request fails
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-
-        params = {"datasource": edm_name}
-
-        try:
-            response = self.client.request('GET', GET_PORTFOLIOS, params=params)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get portfolios for EDM '{edm_name}': {e}")
-
-    def get_portfolio_by_edm_name_and_id(
-        self,
-        edm_name: str,
-        portfolio_id: int
-    ) -> Dict[str, Any]:
-        """
-        Retrieve specific portfolio by ID.
-
-        Args:
-            edm_name: Name of EDM datasource
-            portfolio_id: Portfolio ID
-
-        Returns:
-            Dict containing portfolio details
-
-        Raises:
-            IRPValidationError: If inputs are invalid
-            IRPAPIError: If request fails
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(portfolio_id, "portfolio_id")
-
-        params = {"datasource": edm_name}
-
-        try:
-            response = self.client.request('GET', GET_PORTFOLIO_BY_ID.format(portfolio_id=portfolio_id), params=params)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get portfolio {portfolio_id} from EDM '{edm_name}': {e}")
-    
     def geohaz_portfolio(
         self,
         edm_name: str,
