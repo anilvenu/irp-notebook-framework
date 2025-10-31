@@ -5,11 +5,12 @@ Handles datasource creation, duplication, deletion, and
 associated data retrieval (cedants, LOBs).
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from .client import Client
-from .constants import GET_DATASOURCES, CREATE_DATASOURCE, DELETE_DATASOURCE, EXPORT_EDM, GET_CEDANTS, GET_LOBS
+from .constants import SEARCH_DATABASE_SERVERS, SEARCH_EXPOSURE_SETS, CREATE_EXPOSURE_SET, SEARCH_EDMS, CREATE_EDM, UPGRADE_EDM_DATA_VERSION, DELETE_EDM, GET_CEDANTS, GET_LOBS
 from .exceptions import IRPAPIError
-from .validators import validate_non_empty_string
+from .validators import validate_non_empty_string, validate_positive_int
+from .utils import extract_id_from_location_header
 
 class EDMManager:
     """Manager for EDM (Exposure Data Management) operations."""
@@ -33,222 +34,188 @@ class EDMManager:
             self._portfolio_manager = PortfolioManager(self.client)
         return self._portfolio_manager
 
-    def get_all_edms(self) -> Dict[str, Any]:
+
+    def search_database_servers(self, filter: str = "") -> List[Dict[str, Any]]:
         """
-        Retrieve all EDMs (datasources).
+        Search database servers.
+
+        Args:
+            filter: Optional filter string for server names
+
+        Returns:
+            Dict containing list of database servers
+        """
+        params = {}
+        if filter:
+            params['filter'] = filter
+        try:
+            response = self.client.request('GET', SEARCH_DATABASE_SERVERS, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to search database servers: {e}")
+
+
+    def search_exposure_sets(self, filter: str = "") -> List[Dict[str, Any]]:
+        """
+        Search exposure sets.
+
+        Args:
+            filter: Optional filter string for exposure set names
+
+        Returns:
+            Dict containing list of exposure sets
+        """
+        params = {}
+        if filter:
+            params['filter'] = filter
+        try:
+            response = self.client.request('GET', SEARCH_EXPOSURE_SETS, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to search exposure sets: {e}")
+        
+    
+    def create_exposure_set(self, name: str) -> int:
+        """
+        Create a new exposure set.
+
+        Args:
+            name: Name of the exposure set
+
+        Returns:
+            The exposure set ID
+        """
+        validate_non_empty_string(name, "name")
+        data = {"exposureSetName": name}
+        try:
+            response = self.client.request('POST', CREATE_EXPOSURE_SET, json=data)
+            exposure_set_id = extract_id_from_location_header(response, "exposure set creation")
+            return int(exposure_set_id)
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create exposure set '{name}': {e}")
+
+
+    def search_edms(self, filter: str = "") -> List[Dict[str, Any]]:
+        """
+        Search EDMs (exposures).
+
+        Args:
+            filter: Optional filter string for EDM names
 
         Returns:
             Dict containing list of EDMs
-
-        Raises:
-            IRPAPIError: If request fails
         """
+        params = {}
+        if filter:
+            params['filter'] = filter
         try:
-            response = self.client.request('GET', GET_DATASOURCES)
+            response = self.client.request('GET', SEARCH_EDMS, params=params)
             return response.json()
         except Exception as e:
-            raise IRPAPIError(f"Failed to get all EDMs: {e}")
+            raise IRPAPIError(f"Failed to search EDMs: {e}")
+        
 
-    def get_edm_by_name(self, edm_name: str) -> Dict[str, Any]:
+    def submit_create_edm_job(self, exposure_set_id: int, edm_name: str, server_id: int) -> int:
         """
-        Retrieve EDM by name.
+        Submit job to create a new EDM (exposure).
 
         Args:
-            edm_name: Name of the EDM datasource
+            exposure_set_id: ID of the exposure set
+            edm_name: Name of the EDM
+            server_id: ID of the database server
 
         Returns:
-            Dict containing EDM details
-
-        Raises:
-            IRPValidationError: If edm_name is invalid
-            IRPAPIError: If request fails
+            The EDM ID
         """
+        validate_positive_int(exposure_set_id, "exposure_set_id")
         validate_non_empty_string(edm_name, "edm_name")
-
-        params = {"q": f"datasourceName={edm_name}"}
-
-        try:
-            response = self.client.request('GET', GET_DATASOURCES, params=params)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get EDM by name '{edm_name}': {e}")
-
-    def create_edm(self, edm_name: str, server_name: str) -> Dict[str, Any]:
-        """
-        Create new EDM datasource.
-
-        Args:
-            edm_name: Name for the new datasource
-            server_name: Server name for the datasource
-
-        Returns:
-            Workflow response dict
-
-        Raises:
-            IRPValidationError: If inputs are invalid
-            IRPWorkflowError: If workflow fails or times out
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_non_empty_string(server_name, "server_name")
-
-        params = {
-            "datasourcename": edm_name,
-            "servername": server_name,
-            "operation": "CREATE"
+        validate_positive_int(server_id, "server_id")
+        data = {
+            "exposureName": edm_name,
+            "serverId": server_id
         }
-
         try:
-            response = self.client.execute_workflow('POST', CREATE_DATASOURCE, params=params)
-            return response.json()
+            response = self.client.request(
+                'POST',
+                CREATE_EDM.format(exposureSetId=exposure_set_id),
+                json=data
+            )
+            job_id = extract_id_from_location_header(response, "EDM creation")
+            return int(job_id)
         except Exception as e:
             raise IRPAPIError(f"Failed to create EDM '{edm_name}': {e}")
-    
-    def duplicate_edm(
-        self,
-        source_edm_name: str,
-        dest_edm_name: str = ""
-    ) -> Dict[str, Any]:
+
+
+    def submit_upgrade_edm_data_version_job(self, exposure_id: int, edm_version: str) -> int:
         """
-        Duplicate EDM with all portfolios and settings.
+        Submit job to upgrade EDM data version.
 
         Args:
-            source_edm_name: Name of source EDM to duplicate
-            dest_edm_name: Name for destination EDM (default: "np_{source_edm_name}")
+            exposure_id: ID of the exposure (EDM)
 
         Returns:
-            Workflow response dict
-
-        Raises:
-            IRPValidationError: If source_edm_name is invalid
-            IRPWorkflowError: If workflow fails or times out
+            The job ID
         """
-        validate_non_empty_string(source_edm_name, "source_edm_name")
-
-        if not dest_edm_name:
-            dest_edm_name = f"np_{source_edm_name}"
-
+        validate_positive_int(exposure_id, "exposure_id")
+        validate_non_empty_string(edm_version, "edm_version")
         try:
-            portfolios_response = self.portfolio_manager.get_portfolios_by_edm_name(source_edm_name)
-
-            try:
-                search_items = portfolios_response['searchItems']
-            except (KeyError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Missing 'searchItems' in portfolios response for EDM '{source_edm_name}': {e}"
-                ) from e
-
-            portfolio_ids = []
-            for portfolio in search_items:
-                try:
-                    portfolio_ids.append(portfolio['id'])
-                except (KeyError, TypeError) as e:
-                    raise IRPAPIError(f"Missing 'id' in portfolio data: {e}") from e
-
-            data = {
-                "createnew": True,
-                "exportType": "EDM",
-                "sourceDatasource": source_edm_name,
-                "destinationDatasource": dest_edm_name,
-                "exposureType": "PORTFOLIO",
-                "exposureIds": portfolio_ids,
-                "download": False,
-                "exportFormat": "BAK",
-                "exportOptions": {
-                    "exportAccounts": True,
-                    "exportLocations": True,
-                    "exportPerilDetailsInfo": True,
-                    "exportPolicies": True,
-                    "exportReinsuranceInfo": True,
-                    "exportTreaties": True
-                },
-                "preserveIds": True,
-                "sqlVersion": 2019,
-                "type": "ExposureExportInput"
-            }
-
-            response = self.client.execute_workflow('POST', EXPORT_EDM, json=data)
-            return response.json()
+            data = {"edmDataVersion": edm_version}
+            response = self.client.request(
+                'POST',
+                UPGRADE_EDM_DATA_VERSION.format(exposureId=exposure_id),
+                json=data
+            )
+            job_id = extract_id_from_location_header(response, "EDM data version upgrade")
+            return int(job_id)
         except Exception as e:
-            raise IRPAPIError(f"Failed to duplicate EDM from '{source_edm_name}' to '{dest_edm_name}': {e}")
+            raise IRPAPIError(f"Failed to upgrade EDM data version for exposure ID '{exposure_id}': {e}")
 
-    def upgrade_edm_version(self, edm_name: str) -> Dict[str, Any]:
+
+    def submit_delete_edm_job(self, exposure_id: int) -> int:
         """
-        Upgrade EDM data version.
+        Submit job to delete an EDM (exposure).
 
         Args:
-            edm_name: Name of EDM to upgrade
+            exposure_id: ID of the exposure (EDM)
 
         Returns:
-            Workflow response dict
-
-        Raises:
-            IRPValidationError: If edm_name is invalid
-            IRPWorkflowError: If workflow fails or times out
+            The job ID
         """
-        validate_non_empty_string(edm_name, "edm_name")
-
-        params = {
-            "datasourcename": edm_name,
-            "operation": "EDM_DATA_UPGRADE"
-        }
-
+        validate_positive_int(exposure_id, "exposure_id")
         try:
-            response = self.client.execute_workflow('POST', CREATE_DATASOURCE, params=params)
-            return response.json()
+            response = self.client.request(
+                'DELETE',
+                DELETE_EDM.format(exposureId=exposure_id)
+            )
+            job_id = extract_id_from_location_header(response, "EDM deletion")
+            return int(job_id)
         except Exception as e:
-            raise IRPAPIError(f"Failed to upgrade EDM version for '{edm_name}': {e}")
+            raise IRPAPIError(f"Failed to delete EDM with exposure ID '{exposure_id}': {e}")
 
-    def delete_edm(self, edm_name: str) -> Dict[str, Any]:
-        """
-        Delete EDM datasource.
 
-        Args:
-            edm_name: Name of EDM to delete
-
-        Returns:
-            Workflow response dict
-
-        Raises:
-            IRPValidationError: If edm_name is invalid
-            IRPWorkflowError: If workflow fails or times out
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-
-        try:
-            response = self.client.execute_workflow('DELETE', DELETE_DATASOURCE.format(edm_name=edm_name))
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to delete EDM '{edm_name}': {e}")
-
-    def get_cedants_by_edm(self, edm_name: str) -> Dict[str, Any]:
+    def get_cedants_by_edm(self, exposure_id: int) -> Dict[str, Any]:
         """
         Retrieve cedants for an EDM.
 
         Args:
-            edm_name: Name of EDM
+            exposure_id: Exposure ID
 
         Returns:
             Dict containing cedant list
 
         Raises:
-            IRPValidationError: If edm_name is invalid
+            IRPValidationError: If exposure_id is invalid
             IRPAPIError: If request fails
         """
-        validate_non_empty_string(edm_name, "edm_name")
-
-        params = {
-            "fields": "id, name",
-            "datasource": edm_name,
-            "limit": 100
-        }
-
+        validate_positive_int(exposure_id, "edm_name")
         try:
-            response = self.client.request('GET', GET_CEDANTS, params=params)
+            response = self.client.request('GET', GET_CEDANTS.format(exposureId=exposure_id))
             return response.json()
         except Exception as e:
-            raise IRPAPIError(f"Failed to get cedants for EDM '{edm_name}': {e}")
+            raise IRPAPIError(f"Failed to get cedants for exposure ID '{exposure_id}': {e}")
 
-    def get_lobs_by_edm(self, edm_name: str) -> Dict[str, Any]:
+
+    def get_lobs_by_edm(self, exposure_id: int) -> Dict[str, Any]:
         """
         Retrieve lines of business (LOBs) for an EDM.
 
@@ -262,17 +229,9 @@ class EDMManager:
             IRPValidationError: If edm_name is invalid
             IRPAPIError: If request fails
         """
-        validate_non_empty_string(edm_name, "edm_name")
-
-        params = {
-            "fields": "id, name",
-            "datasource": edm_name,
-            "limit": 100
-        }
-
+        validate_positive_int(exposure_id, "edm_name")
         try:
-            response = self.client.request('GET', GET_LOBS, params=params)
+            response = self.client.request('GET', GET_LOBS.format(exposureId=exposure_id))
             return response.json()
         except Exception as e:
-            raise IRPAPIError(f"Failed to get LOBs for EDM '{edm_name}': {e}")
-    
+            raise IRPAPIError(f"Failed to get LOBs for exposure ID '{exposure_id}': {e}")

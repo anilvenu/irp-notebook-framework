@@ -2,33 +2,51 @@
 
 # Workflow endpoints
 GET_WORKFLOWS = '/riskmodeler/v1/workflows'
+GET_WORKFLOW_BY_ID = '/riskmodeler/v1/workflows/{workflow_id}'
+GET_JOBS = '/platform/riskdata/v1/jobs'
+GET_JOB_BY_ID = '/platform/riskdata/v1/jobs/{job_id}'
 
 # Workflow statuses
 WORKFLOW_COMPLETED_STATUSES = ['FINISHED', 'FAILED', 'CANCELLED'] # https://developer.rms.com/risk-modeler/docs/workflow-engine#polling-workflow-job-and-operation-statuses
 WORKFLOW_IN_PROGRESS_STATUSES = ['QUEUED', 'PENDING', 'RUNNING', 'CANCEL_REQUESTED', 'CANCELLING']
 
 # EDM/Datasource endpoints
+SEARCH_DATABASE_SERVERS = '/platform/riskdata/v1/dataservers'
+SEARCH_EXPOSURE_SETS = '/platform/riskdata/v1/exposuresets'
+CREATE_EXPOSURE_SET = '/platform/riskdata/v1/exposuresets'
+SEARCH_EDMS = '/platform/riskdata/v1/exposures'
+CREATE_EDM = '/platform/riskdata/v1/exposuresets/{exposureSetId}/exposures'
+UPGRADE_EDM_DATA_VERSION = '/platform/riskdata/v1/exposures/{exposureId}/data-upgrade'
+DELETE_EDM = '/platform/riskdata/v1/exposures/{exposureId}'
+GET_CEDANTS = '/platform/riskdata/v1/exposures/{exposureId}/cedants'
+GET_LOBS = '/platform/riskdata/v1/exposures/{exposureId}/lobs'
+
 GET_DATASOURCES = '/riskmodeler/v2/datasources'
-CREATE_DATASOURCE = '/riskmodeler/v2/datasources'
+# CREATE_DATASOURCE = '/riskmodeler/v2/datasources'
 DELETE_DATASOURCE = '/riskmodeler/v2/datasources/{edm_name}'
-EXPORT_EDM = '/riskmodeler/v2/exports'
-GET_CEDANTS = '/riskmodeler/v1/cedants'
-GET_LOBS = '/riskmodeler/v1/lobs'
+# EXPORT_EDM = '/riskmodeler/v2/exports'
+EXPORT_EDM = '/platform/riskdata/v1/exports'
+
 
 # MRI Import Endpoints
 CREATE_AWS_BUCKET = '/riskmodeler/v1/storage'
 CREATE_MAPPING = '/riskmodeler/v1/imports/createmapping/{bucket_id}'
-EXECUTE_IMPORT = '/riskmodeler/v1/imports'
+# EXECUTE_IMPORT = '/riskmodeler/v1/imports'
+EXECUTE_IMPORT = '/platform/riskdata/v1/imports'
 
 # Portfolio endpoints
-CREATE_PORTFOLIO = '/riskmodeler/v2/portfolios'
+# CREATE_PORTFOLIO = '/riskmodeler/v2/portfolios'
 GET_PORTFOLIOS = '/riskmodeler/v2/portfolios'
-GET_PORTFOLIO_BY_ID = '/riskmodeler/v2/portfolios/{portfolio_id}'
+# GET_PORTFOLIO_BY_ID = '/riskmodeler/v2/portfolios/{portfolio_id}'
 PORTFOLIO_GEOHAZ = '/riskmodeler/v2/portfolios/{portfolio_id}/geohaz'
 ANALYZE_PORTFOLIO = '/riskmodeler/v2/portfolios/{portfolio_id}/process'
+SEARCH_PORTFOLIOS = '/platform/riskdata/v1/exposures/{exposureId}/portfolios'
+CREATE_PORTFOLIO = '/platform/riskdata/v1/exposures/{exposureId}/portfolios'
+GET_PORTFOLIO_BY_ID = '/platform/riskdata/v1/exposures/{exposureId}/portfolios/{id}'
 
 # Treaty endpoints
-GET_TREATIES = '/riskmodeler/v1/treaties'
+# GET_TREATIES = '/riskmodeler/v1/treaties'
+GET_TREATIES = '/platform/riskdata/v1/treaties'
 CREATE_TREATY = '/riskmodeler/v1/treaties'
 ASSIGN_TREATY_LOBS = '/riskmodeler/v1/treaties/lob/batch'
 GET_TREATY_TYPES = '/riskmodeler/v1/domains/RMS/tablespace/System/entities/TreatyType/values'
