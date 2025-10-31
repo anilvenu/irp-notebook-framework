@@ -6,7 +6,7 @@ Handles portfolio creation, retrieval, and geocoding/hazard operations.
 
 from typing import Dict, Any, Optional
 from .client import Client
-from .constants import CREATE_PORTFOLIO, GET_PORTFOLIOS, GET_PORTFOLIO_BY_ID, PORTFOLIO_GEOHAZ
+from .constants import CREATE_PORTFOLIO, GET_PORTFOLIOS, GET_PORTFOLIO_BY_ID, PORTFOLIO_GEOHAZ, SEARCH_PORTFOLIOS
 from .exceptions import IRPAPIError
 from .validators import validate_non_empty_string, validate_positive_int
 from .utils import extract_id_from_location_header
@@ -23,18 +23,46 @@ class PortfolioManager:
         """
         self.client = client
 
+    
+    def search_portfolios(self, exposure_id: int, filter: str = "") -> Dict[str, Any]:
+        """
+        Search portfolios within an exposure.
+
+        Args:
+            exposure_id: Exposure ID
+            filter: Optional filter string for portfolio names
+
+        Returns:
+            Dict containing list of portfolios
+        """
+        validate_positive_int(exposure_id, "exposure_id")
+
+        params = {}
+        if filter:
+            params['filter'] = filter
+
+        try:
+            response = self.client.request(
+                'GET',
+                SEARCH_PORTFOLIOS.format(exposureId=exposure_id),
+                params=params
+            )
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to search portfolios for exposure ID '{exposure_id}': {e}")
+
     def create_portfolio(
         self,
-        edm_name: str,
+        exposure_id: int,
         portfolio_name: str,
         portfolio_number: str = "1",
         description: str = ""
-    ) -> Dict[str, int]:
+    ) -> int:
         """
         Create new portfolio in EDM.
 
         Args:
-            edm_name: Name of EDM datasource
+            exposure_id: ID of EDM datasource
             portfolio_name: Name for new portfolio
             portfolio_number: Portfolio number (default: "1")
             description: Portfolio description (default: "")
@@ -46,23 +74,22 @@ class PortfolioManager:
             IRPValidationError: If inputs are invalid
             IRPAPIError: If request fails
         """
-        validate_non_empty_string(edm_name, "edm_name")
+        validate_positive_int(exposure_id, "exposure_id")
         validate_non_empty_string(portfolio_name, "portfolio_name")
         validate_non_empty_string(portfolio_number, "portfolio_number")
 
-        params = {"datasource": edm_name}
         data = {
-            "name": portfolio_name,
-            "number": portfolio_number,
+            "portfolioName": portfolio_name,
+            "portfolioNumber": portfolio_number,
             "description": description,
         }
 
         try:
-            response = self.client.request('POST', CREATE_PORTFOLIO, params=params, json=data)
+            response = self.client.request('POST', CREATE_PORTFOLIO.format(exposureId=exposure_id), json=data)
             portfolio_id = extract_id_from_location_header(response, "portfolio creation")
-            return {'id': int(portfolio_id)}
+            return int(portfolio_id)
         except Exception as e:
-            raise IRPAPIError(f"Failed to create portfolio '{portfolio_name}' in EDM '{edm_name}': {e}")
+            raise IRPAPIError(f"Failed to create portfolio '{portfolio_name}' in EDM id '{exposure_id}': {e}")
 
     def get_portfolios_by_edm_name(self, edm_name: str) -> Dict[str, Any]:
         """

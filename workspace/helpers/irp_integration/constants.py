@@ -35,14 +35,16 @@ CREATE_MAPPING = '/riskmodeler/v1/imports/createmapping/{bucket_id}'
 EXECUTE_IMPORT = '/platform/riskdata/v1/imports'
 
 # Portfolio endpoints
+SEARCH_PORTFOLIOS = '/platform/riskdata/v1/exposures/{exposureId}/portfolios'
+CREATE_PORTFOLIO = '/platform/riskdata/v1/exposures/{exposureId}/portfolios'
+GET_PORTFOLIO_BY_ID = '/platform/riskdata/v1/exposures/{exposureId}/portfolios/{id}'
+
+
 # CREATE_PORTFOLIO = '/riskmodeler/v2/portfolios'
 GET_PORTFOLIOS = '/riskmodeler/v2/portfolios'
 # GET_PORTFOLIO_BY_ID = '/riskmodeler/v2/portfolios/{portfolio_id}'
 PORTFOLIO_GEOHAZ = '/riskmodeler/v2/portfolios/{portfolio_id}/geohaz'
 ANALYZE_PORTFOLIO = '/riskmodeler/v2/portfolios/{portfolio_id}/process'
-SEARCH_PORTFOLIOS = '/platform/riskdata/v1/exposures/{exposureId}/portfolios'
-CREATE_PORTFOLIO = '/platform/riskdata/v1/exposures/{exposureId}/portfolios'
-GET_PORTFOLIO_BY_ID = '/platform/riskdata/v1/exposures/{exposureId}/portfolios/{id}'
 
 # Treaty endpoints
 # GET_TREATIES = '/riskmodeler/v1/treaties'
