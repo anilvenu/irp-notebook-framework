@@ -51,6 +51,7 @@ class PortfolioManager:
         except Exception as e:
             raise IRPAPIError(f"Failed to search portfolios for exposure ID '{exposure_id}': {e}")
 
+
     def create_portfolio(
         self,
         exposure_id: int,
