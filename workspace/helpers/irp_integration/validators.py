@@ -88,3 +88,24 @@ def validate_list_not_empty(value: Any, param_name: str) -> None:
         )
     if len(value) == 0:
         raise IRPValidationError(f"{param_name} cannot be empty")
+    
+
+def validate_positive_float(value: Any, param_name: str) -> None:
+    """
+    Validate that a value is a positive float.
+
+    Args:
+        value: Value to validate
+        param_name: Parameter name for error message
+
+    Raises:
+        IRPValidationError: If value is not a positive float
+    """
+    if not isinstance(value, (float, int)):
+        raise IRPValidationError(
+            f"{param_name} must be a float, got {type(value).__name__}"
+        )
+    if value <= 0:
+        raise IRPValidationError(
+            f"{param_name} must be positive, got {value}"
+        )

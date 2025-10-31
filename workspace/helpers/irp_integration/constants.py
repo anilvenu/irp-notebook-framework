@@ -47,9 +47,32 @@ PORTFOLIO_GEOHAZ = '/riskmodeler/v2/portfolios/{portfolio_id}/geohaz'
 ANALYZE_PORTFOLIO = '/riskmodeler/v2/portfolios/{portfolio_id}/process'
 
 # Treaty endpoints
+SEARCH_TREATIES = 'platform/riskdata/v1/exposures/{exposureId}/treaties'
+CREATE_TREATY = '/platform/riskdata/v1/exposures/{exposureId}/treaties'
+TREATY_TYPES = {
+    'Catastrophe': 'CATA',
+    'Corporate Catastrophe': 'CORP',
+    'Non-Catastrophe': 'NCAT',
+    'Quota Share': 'QUOT',
+    'Stop Loss': 'STOP',
+    'Surplus Share': 'SURP',
+    'Working Excess': 'WORK'
+}
+TREATY_ATTACHMENT_BASES = {
+    'Losses Ocurring': 'L',
+    'Risks Attaching': 'R'
+}
+TREATY_ATTACHMENT_LEVELS = {
+    'Account': 'ACCT',
+    'Portfolio': 'PORT',
+    'Policy': 'POL',
+    'Location': 'LOC'
+}
+CREATE_TREATY_LOB = 'platform/riskdata/v1/exposures/{exposureId}/treaties/{id}/lob'
+
 # GET_TREATIES = '/riskmodeler/v1/treaties'
 GET_TREATIES = '/platform/riskdata/v1/treaties'
-CREATE_TREATY = '/riskmodeler/v1/treaties'
+# CREATE_TREATY = '/riskmodeler/v1/treaties'
 ASSIGN_TREATY_LOBS = '/riskmodeler/v1/treaties/lob/batch'
 GET_TREATY_TYPES = '/riskmodeler/v1/domains/RMS/tablespace/System/entities/TreatyType/values'
 GET_TREATY_ATTACHMENT_BASES = '/riskmodeler/v1/domains/RMS/tablespace/System/entities/AttachBasis/values'

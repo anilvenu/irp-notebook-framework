@@ -193,7 +193,7 @@ class EDMManager:
             raise IRPAPIError(f"Failed to delete EDM with exposure ID '{exposure_id}': {e}")
 
 
-    def get_cedants_by_edm(self, exposure_id: int) -> Dict[str, Any]:
+    def get_cedants_by_edm(self, exposure_id: int) -> List[Dict[str, Any]]:
         """
         Retrieve cedants for an EDM.
 
@@ -201,7 +201,7 @@ class EDMManager:
             exposure_id: Exposure ID
 
         Returns:
-            Dict containing cedant list
+            List of cedant data
 
         Raises:
             IRPValidationError: If exposure_id is invalid

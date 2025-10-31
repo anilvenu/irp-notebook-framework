@@ -13,10 +13,14 @@ from .constants import (
     ASSIGN_TREATY_LOBS,
     GET_TREATY_TYPES,
     GET_TREATY_ATTACHMENT_BASES,
-    GET_TREATY_ATTACHMENT_LEVELS
+    GET_TREATY_ATTACHMENT_LEVELS,
+    SEARCH_TREATIES,
+    TREATY_TYPES,
+    TREATY_ATTACHMENT_BASES,
+    TREATY_ATTACHMENT_LEVELS
 )
 from .exceptions import IRPAPIError, IRPValidationError, IRPReferenceDataError
-from .validators import validate_non_empty_string, validate_positive_int
+from .validators import validate_non_empty_string, validate_positive_int, validate_positive_float
 from .utils import find_reference_data_by_name, extract_id_from_location_header
 
 
@@ -51,6 +55,187 @@ class TreatyManager:
             from .reference_data import ReferenceDataManager
             self._reference_data_manager = ReferenceDataManager(self.client)
         return self._reference_data_manager
+
+
+    def search_treaties(self, exposure_id: int, filter: str = '') -> Dict[str, Any]:
+        """
+        Search treaties for a given exposure ID.
+
+        Args:
+            exposure_id: Exposure ID
+            filter: Optional filter string
+
+        Returns:
+            Dict with treaty search results
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If API request fails
+        """
+        validate_positive_int(exposure_id, "exposure_id")
+        params = {}
+        if filter:
+            params['filter'] = filter
+        try:
+            response = self.client.request('GET', SEARCH_TREATIES.format(exposureId=exposure_id), params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to search treaties: {e}")
+
+
+    def create_treaty(
+            self,
+            exposure_id: int,
+            treaty_name: str,
+            treaty_number: str,
+            treaty_type: str,
+            per_risk_limit: float,
+            occurrence_limit: float,
+            attachment_point: float,
+            inception_date: str,
+            expiration_date: str,
+            currency_code: str,
+            attachment_basis: str,
+            attachment_level: str,
+            pct_covered: float,
+            pct_placed: float,
+            pct_share: float,
+            pct_retention: float,
+            premium: float,
+            num_reinstatements: int,
+            pct_reinstatement_charge: float,
+            aggregate_limit: float,
+            aggregate_deductible: float,
+            priority: int,
+            producer_name: str
+    ) -> int:
+        """
+        Create a treaty with provided parameters.
+
+        Args:
+            treaty_name: Treaty name
+            treaty_number: Treaty number (max 20 chars)
+            type: Treaty type (must be in TREATY_TYPES)
+            per_risk_limit: Per risk limit amount
+            occurrence_limit: Occurrence limit amount
+            attachment_point: Attachment point amount
+            inception_date: Inception date (ISO format)
+            expiration_date: Expiration date (ISO format)
+            currency_code: Currency code (e.g., "USD")
+            attachment_basis: Attachment basis (must be in TREATY_ATTACHMENT_BASES)
+            attachment_level: Attachment level (must be in TREATY_ATTACHMENT_LEVELS)
+            pct_covered: Percent covered
+            pct_placed: Percent placed
+            pct_share: Percent share
+            pct_retention: Percent retention
+            premium: Premium amount
+            num_reinstatements: Number of reinstatements
+            pct_reinstatement_charge: Percent reinstatement charge
+            aggregate_limit: Aggregate limit amount
+            aggregate_deductible: Aggregate deductible amount
+            priority: Priority
+            producer_name: Producer name
+
+        Returns:
+            Treaty ID of the created treaty
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If treaty creation fails
+        """
+        validate_positive_int(exposure_id, "exposure_id")
+        validate_non_empty_string(treaty_name, "treaty_name")
+        validate_non_empty_string(treaty_number, "treaty_number")
+        validate_non_empty_string(treaty_type, "treaty_type")
+        validate_non_empty_string(inception_date, "inception_date")
+        validate_non_empty_string(expiration_date, "expiration_date")
+        validate_non_empty_string(currency_code, "currency")
+        validate_non_empty_string(attachment_basis, "attachment_basis")
+        validate_non_empty_string(attachment_level, "attachment_level")
+        validate_non_empty_string(producer_name, "producer_name")
+        validate_positive_float(per_risk_limit, "per_risk_limit")
+        validate_positive_float(occurrence_limit, "occurrence_limit")
+        validate_positive_float(attachment_point, "attachment_point")
+        validate_positive_float(pct_covered, "pct_covered")
+        validate_positive_float(pct_placed, "pct_placed")
+        validate_positive_float(pct_share, "pct_share")
+        validate_positive_float(pct_retention, "pct_retention")
+        validate_positive_float(premium, "premium")
+        validate_positive_int(num_reinstatements, "num_reinstatements")
+        validate_positive_float(pct_reinstatement_charge, "pct_reinstatement_charge")
+        validate_positive_float(aggregate_limit, "aggregate_limit")
+        validate_positive_float(aggregate_deductible, "aggregate_deductible")
+
+        if treaty_type not in TREATY_TYPES:
+            raise IRPValidationError(
+                f"Invalid treaty_type '{treaty_type}'. Must be one of: {list(TREATY_TYPES.keys())}"
+            )
+
+        if attachment_basis not in TREATY_ATTACHMENT_BASES:
+            raise IRPValidationError(
+                f"Invalid attachment_basis '{attachment_basis}'. Must be one of: {list(TREATY_ATTACHMENT_BASES.keys())}"
+            )
+
+        if attachment_level not in TREATY_ATTACHMENT_LEVELS:
+            raise IRPValidationError(
+                f"Invalid attachment_level '{attachment_level}'. Must be one of: {list(TREATY_ATTACHMENT_LEVELS.keys())}"
+            )
+        
+        try:
+            cedant_response = self.edm_manager.get_cedants_by_edm(exposure_id)
+            if not cedant_response:
+                raise IRPReferenceDataError(f"No cedants found for exposure ID '{exposure_id}'")
+            if len(cedant_response) > 0:
+                raise IRPReferenceDataError(f"Multiple cedants found for exposure ID '{exposure_id}'")
+            cedant = cedant_response[0]
+        except Exception as e:
+            raise IRPAPIError(f"Failed to retrieve cedants for exposure ID '{exposure_id}': {e}")
+
+        try:
+            cedant_data = {
+                "cedantId": cedant["cedantId"],
+                "cedantName": cedant["cedantName"]
+            }
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(
+                f"Missing required fields in cedant data for exposure ID '{exposure_id}': {e}"
+            ) from e
+
+        data = {
+            "treatyName": treaty_name,
+            "treatyNumber": treaty_number[:20],  # Truncate to 20 chars
+            "treatyType": TREATY_TYPES[treaty_type],
+            "riskLimit": per_risk_limit,
+            "occurrenceLimit": occurrence_limit,
+            "attachmentPoint": attachment_point,
+            "effectiveDate": inception_date,
+            "expirationDate": expiration_date,
+            "currency": {
+                "id": 1,
+                "code": currency_code,
+                "name": currency_code
+            },
+            "attachmentBasis": TREATY_ATTACHMENT_BASES[attachment_basis],
+            "attachmentLevel": TREATY_ATTACHMENT_LEVELS[attachment_level],
+            "percentageCovered": pct_covered,
+            "percentagePlaced": pct_placed,
+            "percentageRiShare": pct_share,
+            "percentageRetention": pct_retention,
+            "premium": premium,
+            "numberOfReinstatements": num_reinstatements,
+            "reinstatementCharge": pct_reinstatement_charge,
+            "aggregateLimit": aggregate_limit,
+            "aggregateDeductible": aggregate_deductible,
+            "priority": priority,
+            "cedant": cedant_data
+        }
+
+        try:
+            response = self.client.request('POST', CREATE_TREATY.format(exposureId=exposure_id), json=data)
+            treaty_id = extract_id_from_location_header(response, "treaty creation")
+            return int(treaty_id)
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create treaty '{treaty_name}': {e}")
 
     def get_treaties_by_edm(self, edm_name: str, limit: int = 100) -> Dict[str, Any]:
         """
@@ -115,73 +300,6 @@ class TreatyManager:
         except Exception as e:
             raise IRPAPIError(f"Failed to get treaty types: {e}")
 
-    def get_treaty_attachment_bases_by_edm(
-        self,
-        edm_name: str,
-        limit: int = 100
-    ) -> Dict[str, Any]:
-        """
-        Get available treaty attachment bases for an EDM.
-
-        Args:
-            edm_name: EDM name
-            limit: Maximum number to return (default: 100)
-
-        Returns:
-            Dict with attachment bases data
-
-        Raises:
-            IRPValidationError: If parameters are invalid
-            IRPAPIError: If API request fails
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(limit, "limit")
-
-        params = {
-            "fields": "code,name",
-            "datasource": edm_name,
-            "limit": limit
-        }
-
-        try:
-            response = self.client.request('GET', GET_TREATY_ATTACHMENT_BASES, params=params)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get treaty attachment bases: {e}")
-
-    def get_treaty_attachment_levels_by_edm(
-        self,
-        edm_name: str,
-        limit: int = 100
-    ) -> Dict[str, Any]:
-        """
-        Get available treaty attachment levels for an EDM.
-
-        Args:
-            edm_name: EDM name
-            limit: Maximum number to return (default: 100)
-
-        Returns:
-            Dict with attachment levels data
-
-        Raises:
-            IRPValidationError: If parameters are invalid
-            IRPAPIError: If API request fails
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(limit, "limit")
-
-        params = {
-            "fields": "code,name",
-            "datasource": edm_name,
-            "limit": limit
-        }
-
-        try:
-            response = self.client.request('GET', GET_TREATY_ATTACHMENT_LEVELS, params=params)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get treaty attachment levels: {e}")
 
     def create_treaty(
         self,
