@@ -35,115 +35,327 @@ class ConfigurationError(Exception):
     pass
 
 
-class ConfigurationTransformer:
-    """
-    Transform configuration data into job configurations based on batch type.
-
-    Uses a registry pattern to map batch types to transformation functions.
-    Each transformation function takes a configuration dict and returns a list
-    of job configuration dicts.
-    """
-
-    # Registry mapping batch type to transformation function
-    _transformers = {}
-
-    @classmethod
-    def register(cls, batch_type: str):
-        """
-        Decorator to register a transformation function for a batch type.
-
-        Usage:
-            @ConfigurationTransformer.register('my_batch_type')
-            def transform_my_type(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-                # Transform logic here
-                return [job_config1, job_config2, ...]
-
-        Args:
-            batch_type: The batch type identifier
-        """
-        def decorator(func):
-            cls._transformers[batch_type] = func
-            return func
-        return decorator
-
-    @classmethod
-    def create_job_configurations(
-        cls,
-        batch_type: str,
-        configuration: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """
-        Transform configuration into job configurations based on batch type.
-
-        Args:
-            batch_type: The type of batch (e.g., 'default', 'portfolio', etc.)
-            configuration: The configuration dictionary to transform
-
-        Returns:
-            List of job configuration dictionaries
-
-        Raises:
-            ConfigurationError: If batch type is not registered
-        """
-        if batch_type not in cls._transformers:
-            raise ConfigurationError(
-                f"No transformer registered for batch type '{batch_type}'. "
-                f"Available types: {list(cls._transformers.keys())}"
-            )
-
-        transformer_func = cls._transformers[batch_type]
-        return transformer_func(configuration)
-
-    @classmethod
-    def list_types(cls) -> List[str]:
-        """
-        Get list of registered batch types.
-
-        Returns:
-            List of registered batch type names
-        """
-        return list(cls._transformers.keys())
-
-
 # ============================================================================
-# TRANSFORMERS
+# TRANSFORMERS - Helper Functions
 # ============================================================================
 
-@ConfigurationTransformer.register('default')
-def transform_default(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _extract_metadata(config: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Default transformer - creates a single job configuration by copying config as-is.
+    Extract metadata from configuration.
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        List containing a single job configuration
+        Metadata dictionary
+    """
+    return config.get('Metadata', {})
+
+
+# ============================================================================
+# TRANSFORMERS - Batch Type Functions
+# ============================================================================
+
+def transform_edm_creation(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for EDM Creation batch type.
+    Creates one job configuration per database row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per database)
+    """
+    metadata = _extract_metadata(config)
+    databases = config.get('Databases', [])
+
+    job_configs = []
+    for db_row in databases:
+        job_config = {
+            'Metadata': metadata,
+            **db_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_portfolio_creation(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Portfolio Creation batch type.
+    Creates one job configuration per portfolio row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per portfolio)
+    """
+    metadata = _extract_metadata(config)
+    portfolios = config.get('Portfolios', [])
+
+    job_configs = []
+    for portfolio_row in portfolios:
+        job_config = {
+            'Metadata': metadata,
+            **portfolio_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_mri_import(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for MRI Import batch type.
+    Creates one job configuration per portfolio row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per portfolio)
+    """
+    metadata = _extract_metadata(config)
+    portfolios = config.get('Portfolios', [])
+
+    job_configs = []
+    for portfolio_row in portfolios:
+        job_config = {
+            'Metadata': metadata,
+            **portfolio_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_create_reinsurance_treaties(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Create Reinsurance Treaties batch type.
+    Creates one job configuration per treaty row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per treaty)
+    """
+    metadata = _extract_metadata(config)
+    treaties = config.get('Reinsurance Treaties', [])
+
+    job_configs = []
+    for treaty_row in treaties:
+        job_config = {
+            'Metadata': metadata,
+            **treaty_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_edm_db_upgrade(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for EDM DB Upgrade batch type.
+    Creates one job configuration per database row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per database)
+    """
+    metadata = _extract_metadata(config)
+    databases = config.get('Databases', [])
+
+    job_configs = []
+    for db_row in databases:
+        job_config = {
+            'Metadata': metadata,
+            **db_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_geohaz(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for GeoHaz batch type.
+    Creates one job configuration per portfolio row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per portfolio)
+    """
+    metadata = _extract_metadata(config)
+    portfolios = config.get('Portfolios', [])
+
+    job_configs = []
+    for portfolio_row in portfolios:
+        job_config = {
+            'Metadata': metadata,
+            **portfolio_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_portfolio_mapping(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Portfolio Mapping batch type.
+    Creates one job configuration per portfolio row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per portfolio)
+    """
+    metadata = _extract_metadata(config)
+    portfolios = config.get('Portfolios', [])
+
+    job_configs = []
+    for portfolio_row in portfolios:
+        job_config = {
+            'Metadata': metadata,
+            **portfolio_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_analysis(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Analysis batch type.
+    Creates one job configuration per analysis table row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per analysis)
+    """
+    metadata = _extract_metadata(config)
+    analysis_table = config.get('Analysis Table', [])
+
+    job_configs = []
+    for analysis_row in analysis_table:
+        job_config = {
+            'Metadata': metadata,
+            **analysis_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_grouping(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Grouping batch type.
+    Creates one job configuration per group.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per group)
+    """
+    metadata = _extract_metadata(config)
+    groupings = config.get('Groupings', [])
+
+    job_configs = []
+    for group_row in groupings:
+        job_config = {
+            'Metadata': metadata,
+            **group_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Export to RDM batch type.
+    Creates one job configuration per group.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per group)
+    """
+    metadata = _extract_metadata(config)
+    groupings = config.get('Groupings', [])
+
+    job_configs = []
+    for group_row in groupings:
+        job_config = {
+            'Metadata': metadata,
+            **group_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_staging_etl(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Staging ETL batch type.
+    Creates one job configuration per database row.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per database)
+    """
+    metadata = _extract_metadata(config)
+    databases = config.get('Databases', [])
+
+    job_configs = []
+    for db_row in databases:
+        job_config = {
+            'Metadata': metadata,
+            **db_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+# ============================================================================
+# TRANSFORMERS - Test-Only Functions
+# ============================================================================
+
+def transform_test_default(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Test-only transformer: creates single job with config as-is.
+
+    Used for testing batch/job workflows without coupling to business logic.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List containing a single job configuration (copy of input)
     """
     return [config.copy()]
 
 
-@ConfigurationTransformer.register('passthrough')
-def transform_passthrough(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def transform_test_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Passthrough transformer - returns config unchanged (no copy).
+    Test-only transformer: creates multiple jobs from 'jobs' list.
 
-    Args:
-        config: Configuration dictionary
-
-    Returns:
-        List containing the original configuration
-    """
-    return [config]
-
-
-@ConfigurationTransformer.register('multi_job')
-def transform_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Multi-job transformer - creates multiple job configurations from a list.
-
-    Expects config to have a 'jobs' key with a list of job configurations.
-    If 'jobs' key doesn't exist, falls back to single job.
+    Used for testing multi-job batch handling. If config has a 'jobs' key
+    with a list, returns that list. Otherwise, returns single job.
 
     Args:
         config: Configuration dictionary with optional 'jobs' key
@@ -154,6 +366,56 @@ def transform_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     if 'jobs' in config and isinstance(config['jobs'], list):
         return config['jobs']
     return [config.copy()]
+
+
+# ============================================================================
+# TRANSFORMERS - Batch Type Registry
+# ============================================================================
+
+BATCH_TYPE_TRANSFORMERS = {
+    # Business transformers (11)
+    'EDM Creation': transform_edm_creation,
+    'Portfolio Creation': transform_portfolio_creation,
+    'MRI Import': transform_mri_import,
+    'Create Reinsurance Treaties': transform_create_reinsurance_treaties,
+    'EDM DB Upgrade': transform_edm_db_upgrade,
+    'GeoHaz': transform_geohaz,
+    'Portfolio Mapping': transform_portfolio_mapping,
+    'Analysis': transform_analysis,
+    'Grouping': transform_grouping,
+    'Export to RDM': transform_export_to_rdm,
+    'Staging ETL': transform_staging_etl,
+    # Test-only transformers (2)
+    'test_default': transform_test_default,
+    'test_multi_job': transform_test_multi_job,
+}
+
+
+def create_job_configurations(
+    batch_type: str,
+    configuration: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """
+    Transform configuration into job configurations based on batch type.
+
+    Args:
+        batch_type: The type of batch (e.g., 'EDM Creation', 'Portfolio Creation', etc.)
+        configuration: The configuration dictionary to transform
+
+    Returns:
+        List of job configuration dictionaries
+
+    Raises:
+        ConfigurationError: If batch type is not recognized
+    """
+    if batch_type not in BATCH_TYPE_TRANSFORMERS:
+        available_types = list(BATCH_TYPE_TRANSFORMERS.keys())
+        raise ConfigurationError(
+            f"Unknown batch type '{batch_type}'. Available types: {available_types}"
+        )
+
+    transformer_func = BATCH_TYPE_TRANSFORMERS[batch_type]
+    return transformer_func(configuration)
 
 
 # ============================================================================
