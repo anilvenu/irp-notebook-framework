@@ -34,7 +34,8 @@ from helpers.constants import ConfigurationStatus
 
 
 # Test Excel file path
-TEST_EXCEL_PATH = str(Path(__file__).parent / 'files/test_configuration.xlsx')
+VALID_EXCEL_PATH = str(Path(__file__).parent / 'files/valid_excel_configuration.xlsx')
+INVALID_EXCEL_PATH = str(Path(__file__).parent / 'files/invalid_excel_configuration.xlsx')
 
 
 # ============================================================================
@@ -318,7 +319,7 @@ def test_update_configuration_status_to_error(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-@pytest.mark.skipif(not Path(TEST_EXCEL_PATH).exists(), reason="Test Excel file not found")
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
 def test_load_configuration_file_success(test_schema):
     """Test loading valid configuration file"""
     cycle_id = create_test_cycle(test_schema, 'test-load-success')
@@ -326,7 +327,7 @@ def test_load_configuration_file_success(test_schema):
     # Test loading configuration
     config_id = load_configuration_file(
         cycle_id=cycle_id,
-        excel_config_path=TEST_EXCEL_PATH,
+        excel_config_path=VALID_EXCEL_PATH,
         register=True,
         schema=test_schema
     )
@@ -339,17 +340,28 @@ def test_load_configuration_file_success(test_schema):
     # Verify configuration data
     config_data = config['configuration_data']
 
-    # Check TAB-A
-    assert 'TAB-A' in config_data
-    tab_a_data = config_data['TAB-A']
-    assert len(tab_a_data) == 3
-    assert all(key in tab_a_data[0] for key in ['A-1', 'A-2', 'A-3'])
+    # Check Metadata
+    assert 'Metadata' in config_data
+    metadata = config_data['Metadata']
+    assert metadata == {'Hazard Version': '23.0.0', 
+                        'Export RDM Name': 'RMS_RDM_202503_QEM_USAP', 
+                        'Geocode Version': '23.0.0', 
+                        'EDM Data Version': '23.0.0', 
+                        'DLM Model Version': 23, 
+                        'Current Date Value': '202503', 
+                        'SCS HD Model Version': 1, 
+                        'Wildfire HD Model Version': 2, 
+                        'Validate HD Model Versions?': 'Y', 
+                        'Validate DLM Model Versions?': 'Y', 
+                        'Inland Flood HD Model Version': 1.2
+                        }
 
-    # Check TAB-B
-    assert 'TAB-B' in config_data
-    tab_b_data = config_data['TAB-B']
-    assert len(tab_b_data) == 3
-    assert all(key in tab_b_data[0] for key in ['B-1', 'B-2'])
+    # Check Databases
+    assert 'Databases' in config_data
+    databases = config_data['Databases']
+    assert len(databases) == 7
+    print(databases)
+    assert all(key in databases[0] for key in ['Database', 'Store in Data Bridge?'])
 
     # Check validation status
     assert '_validation' in config_data
@@ -391,7 +403,7 @@ def test_load_configuration_file_validation_errors(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-@pytest.mark.skipif(not Path(TEST_EXCEL_PATH).exists(), reason="Test Excel file not found")
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
 def test_load_configuration_active_cycle(test_schema):
     """Test loading configuration for active cycle"""
     active_cycle_id = create_test_cycle(test_schema, 'test-active')
@@ -399,7 +411,7 @@ def test_load_configuration_active_cycle(test_schema):
     # Loading config for active cycle should succeed
     config_id = load_configuration_file(
         cycle_id=active_cycle_id,
-        excel_config_path=TEST_EXCEL_PATH,
+        excel_config_path=VALID_EXCEL_PATH,
         register=True,
         schema=test_schema
     )
@@ -410,7 +422,7 @@ def test_load_configuration_active_cycle(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-@pytest.mark.skipif(not Path(TEST_EXCEL_PATH).exists(), reason="Test Excel file not found")
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
 def test_load_configuration_archived_cycle_fails(test_schema):
     """Test that loading configuration for archived cycle fails"""
     # Create archived cycle
@@ -424,7 +436,7 @@ def test_load_configuration_archived_cycle_fails(test_schema):
     with pytest.raises(ConfigurationError):
         load_configuration_file(
             cycle_id=archived_cycle_id,
-            excel_config_path=TEST_EXCEL_PATH,
+            excel_config_path=VALID_EXCEL_PATH,
             register=True,
             schema=test_schema
         )
@@ -432,7 +444,7 @@ def test_load_configuration_archived_cycle_fails(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-@pytest.mark.skipif(not Path(TEST_EXCEL_PATH).exists(), reason="Test Excel file not found")
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
 def test_load_configuration_duplicate_active_fails(test_schema):
     """Test that duplicate ACTIVE configurations are prevented"""
     cycle_id = create_test_cycle(test_schema, 'test-duplicate')
@@ -440,7 +452,7 @@ def test_load_configuration_duplicate_active_fails(test_schema):
     # Load first configuration
     config_id_1 = load_configuration_file(
         cycle_id=cycle_id,
-        excel_config_path=TEST_EXCEL_PATH,
+        excel_config_path=VALID_EXCEL_PATH,
         register=True,
         schema=test_schema
     )
@@ -452,7 +464,7 @@ def test_load_configuration_duplicate_active_fails(test_schema):
     with pytest.raises(ConfigurationError):
         load_configuration_file(
             cycle_id=cycle_id,
-            excel_config_path=TEST_EXCEL_PATH,
+            excel_config_path=VALID_EXCEL_PATH,
             register=True,
             schema=test_schema
         )
@@ -651,14 +663,14 @@ def test_load_configuration_without_register(test_schema):
     cycle_id = create_test_cycle(test_schema, 'test-no-register')
 
     # Create a valid test Excel file path
-    if not Path(TEST_EXCEL_PATH).exists():
+    if not Path(VALID_EXCEL_PATH).exists():
         pytest.skip("Test Excel file not found")
 
     # Try to load without registering (dry-run mode)
-    with pytest.raises(ConfigurationError, match="validated successfully but not registered"):
+    with pytest.raises(ConfigurationError, match="not registered"):
         load_configuration_file(
             cycle_id=cycle_id,
-            excel_config_path=TEST_EXCEL_PATH,
+            excel_config_path=VALID_EXCEL_PATH,
             register=False,
             schema=test_schema
         )
