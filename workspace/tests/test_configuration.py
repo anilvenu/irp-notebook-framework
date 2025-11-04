@@ -665,6 +665,109 @@ def test_transform_staging_etl():
 
 
 @pytest.mark.unit
+def test_transform_edm_db_upgrade():
+    """Test EDM DB Upgrade transformer creates one job per database"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Databases': [
+            {'Database': 'RMS_EDM_202503_DB1', 'Store in Data Bridge?': 'Y'},
+            {'Database': 'RMS_EDM_202503_DB2', 'Store in Data Bridge?': 'N'}
+        ]
+    }
+
+    result = create_job_configurations('EDM DB Upgrade', config)
+
+    assert len(result) == 2, "Should create one job per database"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Database'] == 'RMS_EDM_202503_DB1'
+    assert result[0]['Store in Data Bridge?'] == 'Y'
+    assert result[1]['Database'] == 'RMS_EDM_202503_DB2'
+    assert result[1]['Store in Data Bridge?'] == 'N'
+
+
+@pytest.mark.unit
+def test_transform_geohaz():
+    """Test GeoHaz transformer creates one job per portfolio"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Portfolios': [
+            {'Portfolio': 'PORTFOLIO_1', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file1.csv'},
+            {'Portfolio': 'PORTFOLIO_2', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file2.csv'}
+        ]
+    }
+
+    result = create_job_configurations('GeoHaz', config)
+
+    assert len(result) == 2, "Should create one job per portfolio"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Portfolio'] == 'PORTFOLIO_1'
+    assert result[0]['Import File'] == 'file1.csv'
+    assert result[1]['Portfolio'] == 'PORTFOLIO_2'
+    assert result[1]['Import File'] == 'file2.csv'
+
+
+@pytest.mark.unit
+def test_transform_portfolio_mapping():
+    """Test Portfolio Mapping transformer creates one job per portfolio"""
+    config = {
+        'Metadata': {'Current Date Value': '202503', 'EDM Data Version': 'v1.2.3'},
+        'Portfolios': [
+            {'Portfolio': 'PORTFOLIO_A', 'Database': 'RMS_EDM_202503_DB1', 'Base Portfolio?': 'Y'},
+            {'Portfolio': 'PORTFOLIO_B', 'Database': 'RMS_EDM_202503_DB1', 'Base Portfolio?': 'N'},
+            {'Portfolio': 'PORTFOLIO_C', 'Database': 'RMS_EDM_202503_DB2', 'Base Portfolio?': 'Y'}
+        ]
+    }
+
+    result = create_job_configurations('Portfolio Mapping', config)
+
+    assert len(result) == 3, "Should create one job per portfolio"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Portfolio'] == 'PORTFOLIO_A'
+    assert result[0]['Base Portfolio?'] == 'Y'
+    assert result[1]['Portfolio'] == 'PORTFOLIO_B'
+    assert result[1]['Base Portfolio?'] == 'N'
+    assert result[2]['Portfolio'] == 'PORTFOLIO_C'
+    assert result[2]['Database'] == 'RMS_EDM_202503_DB2'
+
+
+@pytest.mark.unit
+def test_get_transformer_list():
+    """Test get_transformer_list() function"""
+    from helpers.configuration import get_transformer_list
+
+    # Get list without test transformers
+    transformers = get_transformer_list(include_test=False)
+
+    assert isinstance(transformers, list)
+    assert len(transformers) > 0
+    assert 'EDM Creation' in transformers
+    assert 'Portfolio Creation' in transformers
+    assert 'Analysis' in transformers
+    assert transformers == sorted(transformers), "List should be sorted"
+
+    # Verify test transformers are excluded
+    assert not any(t.startswith('test_') for t in transformers), "Test transformers should be excluded"
+
+
+@pytest.mark.unit
+def test_get_transformer_list_with_test():
+    """Test get_transformer_list() with include_test=True"""
+    from helpers.configuration import get_transformer_list
+
+    # Get list with test transformers
+    transformers = get_transformer_list(include_test=True)
+
+    assert isinstance(transformers, list)
+    assert len(transformers) > 0
+
+    # Get list without test transformers for comparison
+    transformers_no_test = get_transformer_list(include_test=False)
+
+    # List with test should be longer or equal
+    assert len(transformers) >= len(transformers_no_test)
+
+
+@pytest.mark.unit
 def test_transformer_empty_data():
     """Test transformer with empty data"""
     config = {
