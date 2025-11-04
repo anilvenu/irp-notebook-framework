@@ -100,7 +100,7 @@ def decode_base64_field(encoded_value: str, field_name: str) -> str:
         raise IRPAPIError(
             f"Failed to decode base64 field '{field_name}': {e}"
         )
-
+    
 
 def decode_mri_credentials(response_json: Dict[str, Any]) -> Dict[str, str]:
     """
@@ -129,6 +129,40 @@ def decode_mri_credentials(response_json: Dict[str, Any]) -> Dict[str, str]:
             'aws_session_token': decode_base64_field(response_json['sessionToken'], 'sessionToken'),
             's3_path': decode_base64_field(response_json['s3Path'], 's3Path'),
             's3_region': decode_base64_field(response_json['s3Region'], 's3Region')
+        }
+    except IRPAPIError:
+        raise
+    except Exception as e:
+        raise IRPAPIError(f"Failed to decode MRI credentials: {e}")
+
+
+def decode_presign_params(presign_params: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Decode base64 credentials from MRI import file credentials response.
+
+    Args:
+        response_json: Response JSON containing encoded credentials
+
+    Returns:
+        Dict with decoded credential fields
+
+    Raises:
+        IRPAPIError: If required fields missing or decoding fails
+    """
+    required_fields = ['accessKeyId', 'secretAccessKey', 'sessionToken', 'path', 'region']
+    missing = [f for f in required_fields if f not in presign_params]
+    if missing:
+        raise IRPAPIError(
+            f"Presign params response missing fields: {', '.join(missing)}"
+        )
+
+    try:
+        return {
+            'aws_access_key_id': decode_base64_field(presign_params['accessKeyId'], 'accessKeyId'),
+            'aws_secret_access_key': decode_base64_field(presign_params['secretAccessKey'], 'secretAccessKey'),
+            'aws_session_token': decode_base64_field(presign_params['sessionToken'], 'sessionToken'),
+            's3_path': decode_base64_field(presign_params['path'], 'path'),
+            's3_region': decode_base64_field(presign_params['region'], 'region')
         }
     except IRPAPIError:
         raise

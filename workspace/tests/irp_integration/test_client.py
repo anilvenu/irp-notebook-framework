@@ -25,7 +25,7 @@ from unittest.mock import patch, MagicMock
 from requests.exceptions import Timeout, ConnectionError
 
 from helpers.irp_integration.client import Client
-from helpers.irp_integration.exceptions import IRPAPIError, IRPValidationError, IRPWorkflowError
+from helpers.irp_integration.exceptions import IRPAPIError, IRPValidationError, IRPWorkflowError, IRPJobError
 
 
 # ==============================================================================
@@ -712,13 +712,137 @@ def test_poll_workflow_custom_interval(client, mock_workflow_response):
 
 
 # ==============================================================================
+# GET WORKFLOW TESTS (by ID)
+# ==============================================================================
+
+@pytest.mark.integration
+@responses.activate
+def test_get_workflow_by_id(client, mock_workflow_response):
+    """Test get_workflow retrieves workflow by ID"""
+    workflow_url = 'https://api.test.com/riskmodeler/v1/workflows/12345'
+
+    responses.add(
+        responses.GET,
+        workflow_url,
+        status=200,
+        json=mock_workflow_response(status='RUNNING', progress=50)
+    )
+
+    workflow_data = client.get_workflow(12345)
+
+    assert workflow_data['id'] == 'WF-12345'
+    assert workflow_data['status'] == 'RUNNING'
+    assert workflow_data['progress'] == 50
+
+
+@pytest.mark.integration
+@responses.activate
+def test_get_workflow_finished(client, mock_workflow_response):
+    """Test get_workflow with finished workflow"""
+    workflow_url = 'https://api.test.com/riskmodeler/v1/workflows/99999'
+
+    responses.add(
+        responses.GET,
+        workflow_url,
+        status=200,
+        json=mock_workflow_response(status='FINISHED', progress=100)
+    )
+
+    workflow_data = client.get_workflow(99999)
+
+    assert workflow_data['status'] == 'FINISHED'
+    assert workflow_data['progress'] == 100
+
+
+@pytest.mark.integration
+def test_get_workflow_invalid_id(client):
+    """Test get_workflow raises IRPValidationError for invalid workflow ID"""
+    with pytest.raises(IRPValidationError) as exc_info:
+        client.get_workflow(0)
+
+    assert 'workflow_id' in str(exc_info.value)
+
+    with pytest.raises(IRPValidationError):
+        client.get_workflow(-1)
+
+
+# ==============================================================================
+# POLL WORKFLOW TO COMPLETION TESTS (by ID)
+# ==============================================================================
+
+@pytest.mark.integration
+@responses.activate
+def test_poll_workflow_to_completion_by_id(client, mock_workflow_response, capsys):
+    """Test poll_workflow_to_completion using workflow ID"""
+    workflow_url = 'https://api.test.com/riskmodeler/v1/workflows/12345'
+
+    # Workflow progresses: RUNNING -> FINISHED
+    responses.add(responses.GET, workflow_url, status=200, json=mock_workflow_response(status='RUNNING', progress=50))
+    responses.add(responses.GET, workflow_url, status=200, json=mock_workflow_response(status='FINISHED', progress=100))
+
+    workflow_data = client.poll_workflow_to_completion(12345, interval=1)
+
+    assert workflow_data['status'] == 'FINISHED'
+    assert workflow_data['progress'] == 100
+    assert len(responses.calls) == 2
+
+    # Verify polling messages were printed
+    captured = capsys.readouterr()
+    assert 'Polling risk data job ID 12345' in captured.out
+    assert 'FINISHED' in captured.out
+
+
+@pytest.mark.integration
+@responses.activate
+def test_poll_workflow_to_completion_immediate_finish(client, mock_workflow_response):
+    """Test poll_workflow_to_completion when already finished"""
+    workflow_url = 'https://api.test.com/riskmodeler/v1/workflows/12345'
+
+    responses.add(
+        responses.GET,
+        workflow_url,
+        status=200,
+        json=mock_workflow_response(status='FINISHED', progress=100)
+    )
+
+    workflow_data = client.poll_workflow_to_completion(12345, interval=1)
+
+    assert workflow_data['status'] == 'FINISHED'
+    assert len(responses.calls) == 1  # Only polled once
+
+
+@pytest.mark.integration
+def test_poll_workflow_to_completion_timeout(client):
+    """Test poll_workflow_to_completion raises IRPJobError when timeout exceeded"""
+    # Mock a workflow that never completes
+    with patch.object(client, 'get_workflow') as mock_get_workflow:
+        mock_get_workflow.return_value = {'status': 'RUNNING', 'progress': 50}
+
+        with pytest.raises(IRPJobError) as exc_info:
+            client.poll_workflow_to_completion(12345, interval=1, timeout=1)
+
+        assert 'did not complete' in str(exc_info.value)
+        assert '12345' in str(exc_info.value)
+
+
+@pytest.mark.integration
+def test_poll_workflow_to_completion_invalid_id(client):
+    """Test poll_workflow_to_completion raises IRPValidationError for invalid ID"""
+    with pytest.raises(IRPValidationError):
+        client.poll_workflow_to_completion(0, interval=1)
+
+    with pytest.raises(IRPValidationError):
+        client.poll_workflow_to_completion(-5, interval=1)
+
+
+# ==============================================================================
 # BATCH WORKFLOW POLLING TESTS
 # ==============================================================================
 
 @pytest.mark.integration
 @responses.activate
-def test_poll_workflow_batch_single_page(client, mock_workflow_response):
-    """Test poll_workflow_batch with single page of results"""
+def test_poll_workflow_batch_to_completion_single_page(client, mock_workflow_response):
+    """Test poll_workflow_batch_to_completion with single page of results"""
     workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
 
     # All workflows complete immediately
@@ -733,8 +857,8 @@ def test_poll_workflow_batch_single_page(client, mock_workflow_response):
 
     responses.add(responses.GET, workflows_url, status=200, json=batch_response)
 
-    workflow_ids = ['WF-1', 'WF-2', 'WF-3']
-    response = client.poll_workflow_batch(workflow_ids, interval=1)
+    workflow_ids = [1, 2, 3]
+    response = client.poll_workflow_batch_to_completion(workflow_ids, interval=1)
 
     assert response.status_code == 200
     data = response.json()
@@ -744,8 +868,8 @@ def test_poll_workflow_batch_single_page(client, mock_workflow_response):
 
 @pytest.mark.integration
 @responses.activate
-def test_poll_workflow_batch_pagination(client, mock_workflow_response):
-    """Test poll_workflow_batch handles pagination correctly"""
+def test_poll_workflow_batch_to_completion_pagination(client, mock_workflow_response):
+    """Test poll_workflow_batch_to_completion handles pagination correctly"""
     workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
 
     # Note: The current client implementation has a bug where it modifies response_data
@@ -771,8 +895,8 @@ def test_poll_workflow_batch_pagination(client, mock_workflow_response):
     responses.add(responses.GET, workflows_url, status=200, json=page1_response)
     responses.add(responses.GET, workflows_url, status=200, json=page2_response)
 
-    workflow_ids = [f'WF-{i}' for i in range(150)]
-    response = client.poll_workflow_batch(workflow_ids, interval=1)
+    workflow_ids = [i for i in range(150)]
+    response = client.poll_workflow_batch_to_completion(workflow_ids, interval=1)
 
     # Note: Due to client implementation, response.json() returns the last page
     data = response.json()
@@ -786,8 +910,8 @@ def test_poll_workflow_batch_pagination(client, mock_workflow_response):
 
 @pytest.mark.integration
 @responses.activate
-def test_poll_workflow_batch_progression_to_complete(client, mock_workflow_response):
-    """Test poll_workflow_batch progresses workflows to completion"""
+def test_poll_workflow_batch_to_completion_progression_to_complete(client, mock_workflow_response):
+    """Test poll_workflow_batch_to_completion progresses workflows to completion"""
     workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
 
     # First poll - some in progress
@@ -811,8 +935,8 @@ def test_poll_workflow_batch_progression_to_complete(client, mock_workflow_respo
     responses.add(responses.GET, workflows_url, status=200, json=response1)
     responses.add(responses.GET, workflows_url, status=200, json=response2)
 
-    workflow_ids = ['WF-1', 'WF-2']
-    response = client.poll_workflow_batch(workflow_ids, interval=1)
+    workflow_ids = [1, 2]
+    response = client.poll_workflow_batch_to_completion(workflow_ids, interval=1)
 
     assert len(responses.calls) == 2
     data = response.json()
@@ -822,8 +946,8 @@ def test_poll_workflow_batch_progression_to_complete(client, mock_workflow_respo
 
 @pytest.mark.integration
 @responses.activate
-def test_poll_workflow_batch_mixed_completion_statuses(client, mock_workflow_response):
-    """Test poll_workflow_batch with mixed FINISHED, FAILED, CANCELLED"""
+def test_poll_workflow_batch_to_completion_mixed_completion_statuses(client, mock_workflow_response):
+    """Test poll_workflow_batch_to_completion with mixed FINISHED, FAILED, CANCELLED"""
     workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
 
     batch_response = {
@@ -837,8 +961,8 @@ def test_poll_workflow_batch_mixed_completion_statuses(client, mock_workflow_res
 
     responses.add(responses.GET, workflows_url, status=200, json=batch_response)
 
-    workflow_ids = ['WF-1', 'WF-2', 'WF-3']
-    response = client.poll_workflow_batch(workflow_ids, interval=1)
+    workflow_ids = [1, 2, 3]
+    response = client.poll_workflow_batch_to_completion(workflow_ids, interval=1)
 
     data = response.json()
     assert len(data['workflows']) == 3
@@ -847,8 +971,8 @@ def test_poll_workflow_batch_mixed_completion_statuses(client, mock_workflow_res
 
 
 @pytest.mark.integration
-def test_poll_workflow_batch_timeout(client, mock_workflow_response):
-    """Test poll_workflow_batch raises IRPWorkflowError when timeout exceeded"""
+def test_poll_workflow_batch_to_completion_timeout(client, mock_workflow_response):
+    """Test poll_workflow_batch_to_completion raises IRPWorkflowError when timeout exceeded"""
     # Mock request that always returns in-progress workflows
     with patch.object(client, 'request') as mock_request:
         mock_response = MagicMock()
@@ -858,17 +982,17 @@ def test_poll_workflow_batch_timeout(client, mock_workflow_response):
         }
         mock_request.return_value = mock_response
 
-        workflow_ids = ['WF-1']
+        workflow_ids = [1]
         with pytest.raises(IRPWorkflowError) as exc_info:
-            client.poll_workflow_batch(workflow_ids, interval=1, timeout=1)
+            client.poll_workflow_batch_to_completion(workflow_ids, interval=1, timeout=1)
 
         assert 'Batch workflows did not complete' in str(exc_info.value)
 
 
 @pytest.mark.integration
 @responses.activate
-def test_poll_workflow_batch_workflow_ids_in_query(client, mock_workflow_response):
-    """Test poll_workflow_batch includes workflow IDs in query params"""
+def test_poll_workflow_batch_to_completion_workflow_ids_in_query(client, mock_workflow_response):
+    """Test poll_workflow_batch_to_completion includes workflow IDs in query params"""
     workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
 
     batch_response = {
@@ -881,18 +1005,18 @@ def test_poll_workflow_batch_workflow_ids_in_query(client, mock_workflow_respons
 
     responses.add(responses.GET, workflows_url, status=200, json=batch_response)
 
-    workflow_ids = ['WF-100', 'WF-200']
-    client.poll_workflow_batch(workflow_ids, interval=1)
+    workflow_ids = [100, 200]
+    client.poll_workflow_batch_to_completion(workflow_ids, interval=1)
 
     # Verify workflow IDs were sent as comma-separated query param
     request_url = responses.calls[0].request.url
-    assert 'ids=WF-100,WF-200' in request_url or 'ids=WF-100%2CWF-200' in request_url
+    assert 'ids=100,200' in request_url or 'ids=100%2C200' in request_url
 
 
 @pytest.mark.integration
 @responses.activate
-def test_poll_workflow_batch_missing_total_match_count(client):
-    """Test poll_workflow_batch raises IRPAPIError when totalMatchCount missing"""
+def test_poll_workflow_batch_to_completion_missing_total_match_count(client):
+    """Test poll_workflow_batch_to_completion raises IRPAPIError when totalMatchCount missing"""
     workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
 
     # Response missing required totalMatchCount field
@@ -904,9 +1028,9 @@ def test_poll_workflow_batch_missing_total_match_count(client):
 
     responses.add(responses.GET, workflows_url, status=200, json=batch_response)
 
-    workflow_ids = ['WF-1']
+    workflow_ids = [1]
     with pytest.raises(IRPAPIError) as exc_info:
-        client.poll_workflow_batch(workflow_ids, interval=1)
+        client.poll_workflow_batch_to_completion(workflow_ids, interval=1)
 
     assert 'totalMatchCount' in str(exc_info.value)
     assert 'workflow batch response' in str(exc_info.value)
@@ -914,8 +1038,8 @@ def test_poll_workflow_batch_missing_total_match_count(client):
 
 @pytest.mark.integration
 @responses.activate
-def test_poll_workflow_batch_missing_workflows_field(client):
-    """Test poll_workflow_batch handles missing workflows field gracefully"""
+def test_poll_workflow_batch_to_completion_missing_workflows_field(client):
+    """Test poll_workflow_batch_to_completion handles missing workflows field gracefully"""
     workflows_url = 'https://api.test.com/riskmodeler/v1/workflows'
 
     # Response missing workflows field (should default to empty list)
@@ -925,8 +1049,8 @@ def test_poll_workflow_batch_missing_workflows_field(client):
 
     responses.add(responses.GET, workflows_url, status=200, json=batch_response)
 
-    workflow_ids = ['WF-1']
-    response = client.poll_workflow_batch(workflow_ids, interval=1)
+    workflow_ids = [1]
+    response = client.poll_workflow_batch_to_completion(workflow_ids, interval=1)
 
     # Should handle gracefully with default empty list
     data = response.json()

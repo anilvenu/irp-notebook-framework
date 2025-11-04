@@ -5,16 +5,15 @@ This test file validates the complete workflow against Moody's API, mirroring
 the workflow demonstrated in IRP_Integration_Demo.ipynb.
 
 Workflow:
-1. Create EDM
-2. Create Portfolio
+1. Create EDM(s) - batch submission
+2. Create Portfolio(s) - batch submission
 3. Upload files and execute MRI Import
-4. Create Treaty
-5. Upgrade EDM version
-6. GeoHaz (geocoding + hazard)
-7. Execute single analysis
-8. Execute batch analyses
-9. Create analysis group
-10. Export to RDM
+4. Create Treaty/Treaties - batch submission
+5. Upgrade EDM version - batch submission
+6. GeoHaz (geocoding + hazard) - batch submission
+7. Execute batch analyses
+8. Create analysis group(s) - batch submission
+9. Export to RDM
 
 Requirements:
 - RISK_MODELER_BASE_URL environment variable
@@ -37,6 +36,8 @@ from pathlib import Path
 
 # EDM/Server configuration
 SERVER_NAME = "databridge-1"
+EDM_DATA_VERSION = "22"
+GEOHAZ_VERSION = "22.0"
 
 # Analysis configuration
 ANALYSIS_PROFILE_NAME = "DLM CBHU v23"
@@ -58,7 +59,7 @@ ATTACHMENT_LEVEL = "Location"
 @pytest.mark.moody_api
 @pytest.mark.e2e
 @pytest.mark.slow
-def test_complete_workflow_edm_to_rdm(irp_client, unique_name, test_data_dir, cleanup_edms):
+def test_complete_workflow_edm_to_rdm(irp_client, unique_name, cleanup_edms):
     """
     Complete E2E workflow from EDM creation to RDM export.
 
@@ -66,28 +67,29 @@ def test_complete_workflow_edm_to_rdm(irp_client, unique_name, test_data_dir, cl
     following the same workflow as IRP_Integration_Demo.ipynb.
 
     Steps:
-    1. Create EDM
-    2. Create Portfolio
+    1. Create EDM (batch submission)
+    2. Create Portfolio (batch submission)
     3. MRI Import (upload files and import data)
-    4. Create Treaty
-    5. Upgrade EDM version
-    6. GeoHaz (geocoding and hazard processing)
-    7. Execute single analysis
-    8. Execute batch analyses (2 analyses with different event rates)
-    9. Create analysis group
-    10. Export analyses to RDM
+    4. Create Treaty (batch submission)
+    5. Upgrade EDM version (batch submission)
+    6. GeoHaz (geocoding and hazard processing - batch submission)
+    7. Execute batch analyses (2 analyses with different event rates)
+    8. Create analysis group (batch submission)
+    9. Export analyses to RDM
 
     Args:
         irp_client: IRPClient fixture
         unique_name: Unique name generator fixture
-        test_data_dir: Path to test data fixtures
         cleanup_edms: List to track EDMs for cleanup
     """
     # Generate unique names for this test run
     edm_name = f"{unique_name}_EDM"
     portfolio_name = f"{unique_name}_Portfolio"
     treaty_name = f"{unique_name}_Treaty"
-    analysis_job_name = f"{unique_name}_Analysis"
+    analysis_job_name_2023 = f"{unique_name}_2023"
+    analysis_job_name_2025 = f"{unique_name}_2025"
+    analysis_group_name = f"{unique_name}_Group"
+    analysis_tag_name = f"{unique_name}_TAG"
     rdm_name = f"{unique_name}_RDM"
 
     # Track for cleanup
@@ -101,251 +103,234 @@ def test_complete_workflow_edm_to_rdm(irp_client, unique_name, test_data_dir, cl
     # ========================================================================
     # Step 1: Create EDM
     # ========================================================================
-    print("\n[Step 1/10] Creating EDM...")
-    edm_response = irp_client.edm.create_edm(edm_name, SERVER_NAME)
+    print("\n[Step 1/9] Creating EDM...")
+    job_ids = irp_client.edm.submit_create_edm_jobs([
+        {
+            "edm_name": edm_name,
+            "server_name": SERVER_NAME
+        }
+    ])
 
-    assert edm_response is not None, "EDM creation response should not be None"
+    assert len(job_ids) == 1, "Should submit exactly one EDM creation job"
+    print(f"  Submitted EDM creation job: {job_ids[0]}")
+
+    edm_responses = irp_client.job.poll_risk_data_job_batch_to_completion(job_ids)
+
+    assert len(edm_responses) == 1, "Should receive exactly one EDM creation response"
+    edm_response = edm_responses[0]
     assert edm_response['status'] == 'FINISHED', f"EDM creation should finish successfully, got {edm_response['status']}"
-    assert 'summary' in edm_response, "EDM response should contain summary"
-    assert 'exposureSetId' in edm_response['summary'], "EDM summary should contain exposureSetId"
 
-    exposure_set_id = edm_response['summary']['exposureSetId']
     print(f"✓ EDM created successfully: {edm_name}")
-    print(f"  Exposure Set ID: {exposure_set_id}")
 
     # ========================================================================
     # Step 2: Create Portfolio
     # ========================================================================
-    print("\n[Step 2/10] Creating Portfolio...")
-    portfolio_response = irp_client.portfolio.create_portfolio(edm_name, portfolio_name)
+    print("\n[Step 2/9] Creating Portfolio...")
+    portfolio_ids = irp_client.portfolio.create_portfolios([
+        {
+            "edm_name": edm_name,
+            "portfolio_name": portfolio_name,
+            "portfolio_number": portfolio_name,
+            "description": f"{portfolio_name} created via IRP Notebook Framework"
+        }
+    ])
 
-    assert portfolio_response is not None, "Portfolio creation response should not be None"
-    assert 'id' in portfolio_response, "Portfolio response should contain id"
-
-    portfolio_id = portfolio_response['id']
+    assert len(portfolio_ids) == 1, "Should create exactly one portfolio"
+    portfolio_id = portfolio_ids[0]
     print(f"✓ Portfolio created successfully: {portfolio_name}")
     print(f"  Portfolio ID: {portfolio_id}")
-
-    # Verify portfolio was created
-    portfolios = irp_client.portfolio.get_portfolios_by_edm_name(edm_name)
-    assert 'searchItems' in portfolios, "Get portfolios should return searchItems"
-    assert len(portfolios['searchItems']) > 0, "Should find at least one portfolio"
-    print(f"  Verified portfolio exists in EDM")
 
     # ========================================================================
     # Step 3: MRI Import
     # ========================================================================
-    print("\n[Step 3/10] Executing MRI Import...")
+    print("\n[Step 3/9] Executing MRI Import...")
 
     import_response = irp_client.mri_import.import_from_files(
         edm_name=edm_name,
-        portfolio_id=portfolio_id,
+        portfolio_name=portfolio_name,
         accounts_file="test_accounts.csv",
         locations_file="test_locations.csv",
-        mapping_file="mapping.json",
-        working_dir=str(test_data_dir)
+        mapping_file="mapping.json"
     )
 
     assert import_response is not None, "MRI import response should not be None"
     assert import_response['status'] == 'FINISHED', f"MRI import should finish successfully, got {import_response['status']}"
-    assert 'summary' in import_response, "Import response should contain summary"
-    assert 'importSummary' in import_response['summary'], "Import summary should contain importSummary"
 
-    import_summary = import_response['summary']['importSummary']
     print(f"✓ MRI Import completed successfully")
-    print(f"  {import_summary}")
 
     # ========================================================================
     # Step 4: Create Treaty
     # ========================================================================
-    print("\n[Step 4/10] Creating Treaty...")
+    print("\n[Step 4/9] Creating Treaty...")
 
-    treaty_response = irp_client.treaty.create_treaty_from_names(
-        edm_name=edm_name,
-        treaty_name=treaty_name,
-        treaty_type_name=TREATY_TYPE_NAME,
-        currency_name=CURRENCY_NAME,
-        attachment_basis_name=ATTACHMENT_BASIS,
-        attachment_level_name=ATTACHMENT_LEVEL,
-        risk_limit=3000000,
-        occur_limit=9000000,
-        attach_pt=2000000,
-        pcnt_covered=100,
-        pcnt_placed=95,
-        pcnt_ri_share=100,
-        pcnt_retent=100,
-        premium=0,
-        num_of_reinst=99,
-        reinst_charge=0,
-        aggregate_limit=0,
-        aggregate_deductible=0,
-        priority=1,
-        effect_date="2025-10-15T17:49:10.637Z",
-        expire_date="2026-10-15T17:49:10.637Z",
-        auto_assign_lobs=True
-    )
+    treaty_ids = irp_client.treaty.create_treaties([
+        {
+            "edm_name": edm_name,
+            "treaty_name": treaty_name,
+            "treaty_number": treaty_name,
+            "treaty_type": TREATY_TYPE_NAME,
+            "per_risk_limit": 30000000.00,
+            "occurrence_limit": 90000000.00,
+            "attachment_point": 2000000.00,
+            "inception_date": "2025-01-01T00:00:00.000Z",
+            "expiration_date": "2030-01-01T00:00:00.000Z",
+            "currency_name": CURRENCY_NAME,
+            "attachment_basis": ATTACHMENT_BASIS,
+            "attachment_level": ATTACHMENT_LEVEL,
+            "pct_covered": 100.0,
+            "pct_placed": 95.00,
+            "pct_share": 100.00,
+            "pct_retention": 100.00,
+            "premium": 0.00,
+            "num_reinstatements": 99,
+            "pct_reinstatement_charge": 0.00,
+            "aggregate_limit": 0.00,
+            "aggregate_deductible": 0.00,
+            "priority": 1
+        }
+    ])
 
-    assert 'id' in treaty_response, "Treaty response should contain id"
-    treaty_id = treaty_response['id']
+    assert len(treaty_ids) == 1, "Should create exactly one treaty"
+    treaty_id = treaty_ids[0]
 
     print(f"✓ Treaty created successfully: {treaty_name}")
     print(f"  Treaty ID: {treaty_id}")
-    print(f"  LOBs assigned: {treaty_response.get('lobs_assigned', 'N/A')}")
 
     # ========================================================================
     # Step 5: Upgrade EDM Version
     # ========================================================================
-    print("\n[Step 5/10] Upgrading EDM version...")
-    upgrade_response = irp_client.edm.upgrade_edm_version(edm_name)
+    print("\n[Step 5/9] Upgrading EDM version...")
+    upgrade_job_ids = irp_client.edm.submit_upgrade_edm_data_version_jobs([
+        {
+            "edm_name": edm_name,
+            "edm_version": EDM_DATA_VERSION
+        }
+    ])
 
-    assert upgrade_response is not None, "Upgrade response should not be None"
+    assert len(upgrade_job_ids) == 1, "Should submit exactly one upgrade job"
+    print(f"  Submitted upgrade job: {upgrade_job_ids[0]}")
+
+    upgrade_responses = irp_client.edm.poll_data_version_upgrade_job_batch_to_completion(upgrade_job_ids)
+
+    assert len(upgrade_responses) == 1, "Should receive exactly one upgrade response"
+    upgrade_response = upgrade_responses[0]
     assert upgrade_response['status'] == 'FINISHED', f"EDM upgrade should finish successfully, got {upgrade_response['status']}"
 
-    if 'jobs' in upgrade_response and len(upgrade_response['jobs']) > 0:
-        data_version = upgrade_response['jobs'][0].get('output', {}).get('dataVersion', 'Unknown')
-        print(f"✓ EDM upgraded successfully")
-        print(f"  Data Version: {data_version}")
-    else:
-        print(f"✓ EDM upgraded successfully")
+    print(f"✓ EDM upgraded successfully to version {EDM_DATA_VERSION}")
 
     # ========================================================================
     # Step 6: GeoHaz (Geocoding + Hazard)
     # ========================================================================
-    print("\n[Step 6/10] Running GeoHaz workflow...")
-    geohaz_response = irp_client.portfolio.geohaz_portfolio(
-        edm_name,
-        portfolio_id,
-        geocode=True,
-        hazard_eq=True,
-        hazard_ws=True
-    )
+    print("\n[Step 6/9] Running GeoHaz workflow...")
+    geohaz_job_ids = irp_client.portfolio.submit_geohaz_jobs([
+        {
+            "edm_name": edm_name,
+            "portfolio_name": portfolio_name,
+            "version": GEOHAZ_VERSION,
+            "hazard_eq": True,
+            "hazard_ws": True
+        }
+    ])
 
-    assert geohaz_response is not None, "GeoHaz response should not be None"
+    assert len(geohaz_job_ids) == 1, "Should submit exactly one GeoHaz job"
+    print(f"  Submitted GeoHaz job: {geohaz_job_ids[0]}")
+
+    geohaz_responses = irp_client.portfolio.poll_geohaz_job_batch_to_completion(geohaz_job_ids)
+
+    assert len(geohaz_responses) == 1, "Should receive exactly one GeoHaz response"
+    geohaz_response = geohaz_responses[0]
     assert geohaz_response['status'] == 'FINISHED', f"GeoHaz should finish successfully, got {geohaz_response['status']}"
-    assert 'summary' in geohaz_response, "GeoHaz response should contain summary"
 
     print(f"✓ GeoHaz completed successfully")
-    if 'Li Geocode Summary' in geohaz_response['summary']:
-        print(f"  Geocode: {geohaz_response['summary']['Li Geocode Summary']}")
-    if 'Li Hazard Summary' in geohaz_response['summary']:
-        print(f"  Hazard: {geohaz_response['summary']['Li Hazard Summary']}")
 
     # ========================================================================
-    # Step 7: Execute Single Analysis
+    # Step 7: Execute Batch Analyses
     # ========================================================================
-    print("\n[Step 7/10] Executing single analysis...")
-    analysis_response = irp_client.analysis.execute_analysis(
-        analysis_job_name,
-        edm_name,
-        portfolio_id,
-        ANALYSIS_PROFILE_NAME,
-        OUTPUT_PROFILE_NAME,
-        EVENT_RATE_SCHEME_2025,
-        [treaty_id]
-    )
+    print("\n[Step 7/9] Executing batch analyses...")
 
-    assert analysis_response is not None, "Analysis response should not be None"
-    assert analysis_response['status'] == 'FINISHED', f"Analysis should finish successfully, got {analysis_response['status']}"
-    assert 'output' in analysis_response, "Analysis response should contain output"
-    assert 'analysisId' in analysis_response['output'], "Analysis output should contain analysisId"
+    analysis_job_ids = irp_client.analysis.submit_portfolio_analysis_jobs([
+        {
+            "edm_name": edm_name,
+            "job_name": analysis_job_name_2023,
+            "portfolio_name": portfolio_name,
+            "analysis_profile_name": ANALYSIS_PROFILE_NAME,
+            "output_profile_name": OUTPUT_PROFILE_NAME,
+            "event_rate_scheme_name": EVENT_RATE_SCHEME_2023,
+            "treaty_names": [treaty_name],
+            "tag_names": [analysis_tag_name]
+        },
+        {
+            "edm_name": edm_name,
+            "job_name": analysis_job_name_2025,
+            "portfolio_name": portfolio_name,
+            "analysis_profile_name": ANALYSIS_PROFILE_NAME,
+            "output_profile_name": OUTPUT_PROFILE_NAME,
+            "event_rate_scheme_name": EVENT_RATE_SCHEME_2025,
+            "treaty_names": [treaty_name],
+            "tag_names": [analysis_tag_name]
+        }
+    ])
 
-    single_analysis_id = analysis_response['output']['analysisId']
-    print(f"✓ Analysis completed successfully")
-    print(f"  Analysis ID: {single_analysis_id}")
+    assert len(analysis_job_ids) == 2, "Should submit exactly two analysis jobs"
+    print(f"  Submitted analysis jobs: {analysis_job_ids}")
 
-    # ========================================================================
-    # Step 8: Execute Batch Analyses
-    # ========================================================================
-    print("\n[Step 8/10] Executing batch analyses...")
+    analysis_batch_response = irp_client.analysis.poll_analysis_job_batch_to_completion(analysis_job_ids)
 
-    # Submit first analysis
-    print("  Submitting analysis with 2023 event rates...")
-    workflow_id1 = irp_client.analysis.submit_analysis_job(
-        f"{analysis_job_name}_2023",
-        edm_name,
-        portfolio_id,
-        ANALYSIS_PROFILE_NAME,
-        OUTPUT_PROFILE_NAME,
-        EVENT_RATE_SCHEME_2023,
-        [treaty_id],
-        [f"{unique_name}_tag"]
-    )
-    assert workflow_id1 > 0, "Workflow ID should be positive"
-    print(f"  ✓ Workflow 1 submitted: {workflow_id1}")
-
-    # Submit second analysis
-    print("  Submitting analysis with 2025 event rates...")
-    workflow_id2 = irp_client.analysis.submit_analysis_job(
-        f"{analysis_job_name}_2025",
-        edm_name,
-        portfolio_id,
-        ANALYSIS_PROFILE_NAME,
-        OUTPUT_PROFILE_NAME,
-        EVENT_RATE_SCHEME_2025,
-        [treaty_id],
-        [f"{unique_name}_tag"]
-    )
-    assert workflow_id2 > 0, "Workflow ID should be positive"
-    print(f"  ✓ Workflow 2 submitted: {workflow_id2}")
-
-    # Poll batch workflows
-    print("  Polling batch workflows...")
-    batch_response = irp_client.analysis.poll_analysis_job_batch([workflow_id1, workflow_id2])
-
-    assert batch_response is not None, "Batch response should not be None"
-    assert 'workflows' in batch_response, "Batch response should contain workflows"
-    assert len(batch_response['workflows']) == 2, "Should have 2 workflows in response"
-
-    # Extract analysis IDs
-    analysis_ids = []
-    for workflow in batch_response['workflows']:
-        assert workflow['status'] == 'FINISHED', f"Workflow {workflow['id']} should finish successfully"
-        assert 'output' in workflow, f"Workflow {workflow['id']} should have output"
-        assert 'analysisId' in workflow['output'], f"Workflow {workflow['id']} should have analysisId"
-        analysis_ids.append(workflow['output']['analysisId'])
+    assert len(analysis_batch_response) == 2, "Should receive exactly two analysis responses"
+    for analysis_response in analysis_batch_response:
+        assert analysis_response['status'] == 'FINISHED', f"Analysis should finish successfully, got {analysis_response['status']}"
 
     print(f"✓ Batch analyses completed successfully")
-    print(f"  Analysis IDs: {analysis_ids}")
 
     # ========================================================================
-    # Step 9: Create Analysis Group
+    # Step 8: Create Analysis Group
     # ========================================================================
-    print("\n[Step 9/10] Creating analysis group...")
-    group_name = f"{unique_name}_Group"
-    group_response = irp_client.analysis.create_analysis_group(analysis_ids, group_name)
+    print("\n[Step 8/9] Creating analysis group...")
 
-    assert group_response is not None, "Group response should not be None"
-    assert group_response['status'] == 'FINISHED', f"Group creation should finish successfully, got {group_response['status']}"
-    assert 'output' in group_response, "Group response should contain output"
-    assert 'analysisId' in group_response['output'], "Group output should contain analysisId"
+    grouping_job_ids = irp_client.analysis.submit_analysis_grouping_jobs([
+        {
+            "group_name": analysis_group_name,
+            "analysis_names": [analysis_job_name_2023, analysis_job_name_2025]
+        }
+    ])
 
-    group_analysis_id = group_response['output']['analysisId']
-    print(f"✓ Analysis group created successfully")
-    print(f"  Group Name: {group_name}")
-    print(f"  Group Analysis ID: {group_analysis_id}")
+    assert len(grouping_job_ids) == 1, "Should submit exactly one grouping job"
+    print(f"  Submitted grouping job: {grouping_job_ids[0]}")
+
+    grouping_responses = irp_client.analysis.poll_analysis_grouping_job_batch_to_completion(grouping_job_ids)
+
+    assert len(grouping_responses) == 1, "Should receive exactly one grouping response"
+    grouping_response = grouping_responses[0]
+    assert grouping_response['status'] == 'FINISHED', f"Grouping should finish successfully, got {grouping_response['status']}"
+
+    print(f"✓ Analysis group created successfully: {analysis_group_name}")
 
     # ========================================================================
-    # Step 10: Export to RDM
+    # Step 9: Export to RDM
     # ========================================================================
-    print("\n[Step 10/10] Exporting analyses to RDM...")
+    print("\n[Step 9/9] Exporting analyses to RDM...")
 
     # Export all analyses including the group
-    all_analysis_ids = [single_analysis_id, group_analysis_id] + analysis_ids
-    rdm_response = irp_client.rdm.export_analyses_to_rdm(rdm_name, all_analysis_ids)
+    analysis_names = [analysis_group_name, analysis_job_name_2023, analysis_job_name_2025]
+    rdm_export_response = irp_client.rdm.export_analyses_to_rdm(
+        server_name=SERVER_NAME,
+        rdm_name=rdm_name,
+        analysis_names=analysis_names
+    )
 
-    assert rdm_response is not None, "RDM export response should not be None"
-    assert rdm_response['status'] == 'FINISHED', f"RDM export should finish successfully, got {rdm_response['status']}"
+    assert rdm_export_response is not None, "RDM export response should not be None"
+    assert rdm_export_response['status'] == 'FINISHED', f"RDM export should finish successfully, got {rdm_export_response['status']}"
 
     print(f"✓ Export to RDM completed successfully")
     print(f"  RDM Name: {rdm_name}")
-    print(f"  Analyses exported: {len(all_analysis_ids)}")
+    print(f"  Analyses exported: {len(analysis_names)}")
 
     # ========================================================================
     # Test Complete
     # ========================================================================
     print(f"\n{'='*80}")
     print(f"E2E Workflow Test Completed Successfully!")
-    print(f"All 10 steps executed without errors")
+    print(f"All 9 steps executed without errors")
     print(f"{'='*80}\n")
 
     # Note: EDM cleanup will be handled by cleanup_edms fixture

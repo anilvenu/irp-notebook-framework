@@ -59,3 +59,13 @@ class IRPFileError(IRPIntegrationError):
     upload errors, etc.).
     """
     pass
+
+
+class IRPJobError(IRPIntegrationError):
+    """
+    Job management errors.
+
+    Raised when job submission, status retrieval,
+    or result fetching encounters issues.
+    """
+    pass
