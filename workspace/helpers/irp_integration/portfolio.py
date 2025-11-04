@@ -126,7 +126,7 @@ class PortfolioManager:
 
         data = {
             "portfolioName": portfolio_name,
-            "portfolioNumber": portfolio_number,
+            "portfolioNumber": portfolio_number[:20],
             "description": description,
         }
 
