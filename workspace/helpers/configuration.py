@@ -1182,95 +1182,98 @@ def load_configuration_file(
     # Get file last modified timestamp
     file_mtime = datetime.fromtimestamp(config_path.stat().st_mtime)
 
-    # Read Excel file
+    # Read Excel file and perform all validation within context manager
     try:
-        excel_file = pd.ExcelFile(excel_config_path)
-        available_tabs = excel_file.sheet_names
+        with pd.ExcelFile(excel_config_path) as excel_file:
+            available_tabs = excel_file.sheet_names
+
+            # Check for required sheets
+            missing_tabs = [tab for tab in CONFIGURATION_TAB_LIST if tab not in available_tabs]
+            if missing_tabs:
+                raise ConfigurationError(
+                    f"Missing required sheets: {missing_tabs}. "
+                    f"Required: {CONFIGURATION_TAB_LIST}, Found: {available_tabs}"
+                )
+
+            # Validate each sheet
+            config_data = {}
+            validation_results = {}
+            all_valid = True
+
+            for sheet_name in CONFIGURATION_TAB_LIST:
+                schema_def = EXCEL_VALIDATION_SCHEMAS.get(sheet_name)
+                if not schema_def:
+                    continue  # Skip sheets without schema (e.g., Validations)
+
+                # Parse sheet (with or without header based on schema)
+                try:
+                    if schema_def.get('has_header', True):
+                        df = excel_file.parse(sheet_name)
+                    else:
+                        df = excel_file.parse(sheet_name, header=None)
+                except Exception as e:
+                    validation_results[sheet_name] = {
+                        'status': 'ERROR',
+                        'errors': [f"Failed to parse sheet: {str(e)}"],
+                        'warnings': [],
+                        'row_count': 0,
+                        'column_count': 0,
+                        'validated_at': datetime.now().isoformat()
+                    }
+                    all_valid = False
+                    continue
+
+                # Validate sheet
+                is_valid, errors, warnings, parsed_data = _validate_sheet(df, schema_def, sheet_name)
+
+                # Store validation results
+                validation_results[sheet_name] = {
+                    'status': 'SUCCESS' if is_valid else 'ERROR',
+                    'errors': errors,
+                    'warnings': warnings,
+                    'row_count': len(df),
+                    'column_count': len(df.columns),
+                    'validated_at': datetime.now().isoformat()
+                }
+
+                if is_valid and parsed_data is not None:
+                    config_data[sheet_name] = parsed_data
+                else:
+                    all_valid = False
+
+            # If any sheet validation failed, stop here
+            if not all_valid:
+                config_data['_validation'] = validation_results
+                error_summary = []
+                for sheet, result in validation_results.items():
+                    if result['status'] == 'ERROR':
+                        error_summary.extend([f"{sheet}: {err}" for err in result['errors']])
+                raise ConfigurationError(f"Validation errors:\n" + "\n".join(error_summary[:10]))
+
+            # Cross-sheet validation
+            cross_errors = []
+            cross_errors.extend(_validate_foreign_keys(config_data, EXCEL_VALIDATION_SCHEMAS))
+            cross_errors.extend(_validate_special_references(config_data))
+            cross_errors.extend(_validate_groupings_references(config_data))
+            cross_errors.extend(_validate_business_rules(config_data))
+
+            if cross_errors:
+                validation_results['_cross_sheet'] = {
+                    'status': 'ERROR',
+                    'errors': cross_errors,
+                    'warnings': [],
+                    'validated_at': datetime.now().isoformat()
+                }
+                config_data['_validation'] = validation_results
+                raise ConfigurationError(f"Cross-sheet validation errors:\n" + "\n".join(cross_errors[:10]))
+
+            # Add validation results to config
+            config_data['_validation'] = validation_results
+    except ConfigurationError:
+        # Re-raise ConfigurationErrors as-is
+        raise
     except Exception as e:
         raise ConfigurationError(f"Failed to read Excel file: {str(e)}")
-
-    # Check for required sheets
-    missing_tabs = [tab for tab in CONFIGURATION_TAB_LIST if tab not in available_tabs]
-    if missing_tabs:
-        raise ConfigurationError(
-            f"Missing required sheets: {missing_tabs}. "
-            f"Required: {CONFIGURATION_TAB_LIST}, Found: {available_tabs}"
-        )
-
-    # Validate each sheet
-    config_data = {}
-    validation_results = {}
-    all_valid = True
-
-    for sheet_name in CONFIGURATION_TAB_LIST:
-        schema_def = EXCEL_VALIDATION_SCHEMAS.get(sheet_name)
-        if not schema_def:
-            continue  # Skip sheets without schema (e.g., Validations)
-
-        # Parse sheet (with or without header based on schema)
-        try:
-            if schema_def.get('has_header', True):
-                df = excel_file.parse(sheet_name)
-            else:
-                df = excel_file.parse(sheet_name, header=None)
-        except Exception as e:
-            validation_results[sheet_name] = {
-                'status': 'ERROR',
-                'errors': [f"Failed to parse sheet: {str(e)}"],
-                'warnings': [],
-                'row_count': 0,
-                'column_count': 0,
-                'validated_at': datetime.now().isoformat()
-            }
-            all_valid = False
-            continue
-
-        # Validate sheet
-        is_valid, errors, warnings, parsed_data = _validate_sheet(df, schema_def, sheet_name)
-
-        # Store validation results
-        validation_results[sheet_name] = {
-            'status': 'SUCCESS' if is_valid else 'ERROR',
-            'errors': errors,
-            'warnings': warnings,
-            'row_count': len(df),
-            'column_count': len(df.columns),
-            'validated_at': datetime.now().isoformat()
-        }
-
-        if is_valid and parsed_data is not None:
-            config_data[sheet_name] = parsed_data
-        else:
-            all_valid = False
-
-    # If any sheet validation failed, stop here
-    if not all_valid:
-        config_data['_validation'] = validation_results
-        error_summary = []
-        for sheet, result in validation_results.items():
-            if result['status'] == 'ERROR':
-                error_summary.extend([f"{sheet}: {err}" for err in result['errors']])
-        raise ConfigurationError(f"Validation errors:\n" + "\n".join(error_summary[:10]))
-
-    # Cross-sheet validation
-    cross_errors = []
-    cross_errors.extend(_validate_foreign_keys(config_data, EXCEL_VALIDATION_SCHEMAS))
-    cross_errors.extend(_validate_special_references(config_data))
-    cross_errors.extend(_validate_groupings_references(config_data))
-    cross_errors.extend(_validate_business_rules(config_data))
-
-    if cross_errors:
-        validation_results['_cross_sheet'] = {
-            'status': 'ERROR',
-            'errors': cross_errors,
-            'warnings': [],
-            'validated_at': datetime.now().isoformat()
-        }
-        config_data['_validation'] = validation_results
-        raise ConfigurationError(f"Cross-sheet validation errors:\n" + "\n".join(cross_errors[:10]))
-
-    # Add validation results to config
-    config_data['_validation'] = validation_results
 
     # If register=True, delete existing configs and insert
     if register:
