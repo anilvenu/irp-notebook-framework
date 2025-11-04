@@ -95,7 +95,7 @@ def test_end_to_end_batch_workflow(test_schema):
 
     # Step 1: Create and submit batch
     batch_id = create_batch(
-        batch_type='default',
+        batch_type='test_default',
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
@@ -158,7 +158,7 @@ def test_multi_job_batch_workflow(test_schema):
 
     # Create batch with multi_job transformer
     batch_id = create_batch(
-        batch_type='multi_job',
+        batch_type='test_multi_job',
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
@@ -177,7 +177,7 @@ def test_job_resubmission_workflow(test_schema):
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_resubmit_workflow')
 
     # Create and submit batch
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     original_jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -216,7 +216,7 @@ def test_configuration_override_workflow(test_schema):
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_override_workflow')
 
     # Create and submit batch
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     original_jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -268,7 +268,7 @@ def test_mixed_job_states_recon(test_schema):
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_mixed_states', config_data)
 
     # Create and submit batch
-    batch_id = create_batch('multi_job', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_multi_job', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -308,7 +308,7 @@ def test_parent_child_job_chain(test_schema):
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_job_chain')
 
     # Create and submit batch
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     jobs = get_batch_jobs(batch_id, schema=test_schema)

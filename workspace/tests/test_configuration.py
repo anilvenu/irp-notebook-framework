@@ -28,13 +28,15 @@ from helpers.configuration import (
     update_configuration_status,
     load_configuration_file,
     ConfigurationError,
-    ConfigurationTransformer
+    create_job_configurations,
+    BATCH_TYPE_TRANSFORMERS
 )
 from helpers.constants import ConfigurationStatus
 
 
 # Test Excel file path
-TEST_EXCEL_PATH = str(Path(__file__).parent / 'files/test_configuration.xlsx')
+VALID_EXCEL_PATH = str(Path(__file__).parent / 'files/valid_excel_configuration.xlsx')
+INVALID_EXCEL_PATH = str(Path(__file__).parent / 'files/invalid_excel_configuration.xlsx')
 
 
 # ============================================================================
@@ -318,7 +320,7 @@ def test_update_configuration_status_to_error(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-@pytest.mark.skipif(not Path(TEST_EXCEL_PATH).exists(), reason="Test Excel file not found")
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
 def test_load_configuration_file_success(test_schema):
     """Test loading valid configuration file"""
     cycle_id = create_test_cycle(test_schema, 'test-load-success')
@@ -326,7 +328,7 @@ def test_load_configuration_file_success(test_schema):
     # Test loading configuration
     config_id = load_configuration_file(
         cycle_id=cycle_id,
-        excel_config_path=TEST_EXCEL_PATH,
+        excel_config_path=VALID_EXCEL_PATH,
         register=True,
         schema=test_schema
     )
@@ -339,17 +341,28 @@ def test_load_configuration_file_success(test_schema):
     # Verify configuration data
     config_data = config['configuration_data']
 
-    # Check TAB-A
-    assert 'TAB-A' in config_data
-    tab_a_data = config_data['TAB-A']
-    assert len(tab_a_data) == 3
-    assert all(key in tab_a_data[0] for key in ['A-1', 'A-2', 'A-3'])
+    # Check Metadata
+    assert 'Metadata' in config_data
+    metadata = config_data['Metadata']
+    assert metadata == {'Hazard Version': '23.0.0', 
+                        'Export RDM Name': 'RMS_RDM_202503_QEM_USAP', 
+                        'Geocode Version': '23.0.0', 
+                        'EDM Data Version': '23.0.0', 
+                        'DLM Model Version': 23, 
+                        'Current Date Value': '202503', 
+                        'SCS HD Model Version': 1, 
+                        'Wildfire HD Model Version': 2, 
+                        'Validate HD Model Versions?': 'Y', 
+                        'Validate DLM Model Versions?': 'Y', 
+                        'Inland Flood HD Model Version': 1.2
+                        }
 
-    # Check TAB-B
-    assert 'TAB-B' in config_data
-    tab_b_data = config_data['TAB-B']
-    assert len(tab_b_data) == 3
-    assert all(key in tab_b_data[0] for key in ['B-1', 'B-2'])
+    # Check Databases
+    assert 'Databases' in config_data
+    databases = config_data['Databases']
+    assert len(databases) == 7
+    print(databases)
+    assert all(key in databases[0] for key in ['Database', 'Store in Data Bridge?'])
 
     # Check validation status
     assert '_validation' in config_data
@@ -391,7 +404,7 @@ def test_load_configuration_file_validation_errors(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-@pytest.mark.skipif(not Path(TEST_EXCEL_PATH).exists(), reason="Test Excel file not found")
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
 def test_load_configuration_active_cycle(test_schema):
     """Test loading configuration for active cycle"""
     active_cycle_id = create_test_cycle(test_schema, 'test-active')
@@ -399,7 +412,7 @@ def test_load_configuration_active_cycle(test_schema):
     # Loading config for active cycle should succeed
     config_id = load_configuration_file(
         cycle_id=active_cycle_id,
-        excel_config_path=TEST_EXCEL_PATH,
+        excel_config_path=VALID_EXCEL_PATH,
         register=True,
         schema=test_schema
     )
@@ -410,7 +423,7 @@ def test_load_configuration_active_cycle(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-@pytest.mark.skipif(not Path(TEST_EXCEL_PATH).exists(), reason="Test Excel file not found")
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
 def test_load_configuration_archived_cycle_fails(test_schema):
     """Test that loading configuration for archived cycle fails"""
     # Create archived cycle
@@ -424,7 +437,7 @@ def test_load_configuration_archived_cycle_fails(test_schema):
     with pytest.raises(ConfigurationError):
         load_configuration_file(
             cycle_id=archived_cycle_id,
-            excel_config_path=TEST_EXCEL_PATH,
+            excel_config_path=VALID_EXCEL_PATH,
             register=True,
             schema=test_schema
         )
@@ -432,7 +445,7 @@ def test_load_configuration_archived_cycle_fails(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-@pytest.mark.skipif(not Path(TEST_EXCEL_PATH).exists(), reason="Test Excel file not found")
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
 def test_load_configuration_duplicate_active_fails(test_schema):
     """Test that duplicate ACTIVE configurations are prevented"""
     cycle_id = create_test_cycle(test_schema, 'test-duplicate')
@@ -440,7 +453,7 @@ def test_load_configuration_duplicate_active_fails(test_schema):
     # Load first configuration
     config_id_1 = load_configuration_file(
         cycle_id=cycle_id,
-        excel_config_path=TEST_EXCEL_PATH,
+        excel_config_path=VALID_EXCEL_PATH,
         register=True,
         schema=test_schema
     )
@@ -452,7 +465,7 @@ def test_load_configuration_duplicate_active_fails(test_schema):
     with pytest.raises(ConfigurationError):
         load_configuration_file(
             cycle_id=cycle_id,
-            excel_config_path=TEST_EXCEL_PATH,
+            excel_config_path=VALID_EXCEL_PATH,
             register=True,
             schema=test_schema
         )
@@ -463,108 +476,226 @@ def test_load_configuration_duplicate_active_fails(test_schema):
 # ============================================================================
 
 @pytest.mark.unit
-def test_configuration_transformer_default():
-    """Test ConfigurationTransformer default type"""
-    config = {
-        'param1': 'value1',
-        'param2': 100,
-        'nested': {'key': 'value'}
-    }
+def test_batch_type_transformers_registry():
+    """Test that all expected batch types are registered"""
+    expected_business_types = [
+        'EDM Creation',
+        'Portfolio Creation',
+        'MRI Import',
+        'Create Reinsurance Treaties',
+        'EDM DB Upgrade',
+        'GeoHaz',
+        'Portfolio Mapping',
+        'Analysis',
+        'Grouping',
+        'Export to RDM',
+        'Staging ETL'
+    ]
 
-    result = ConfigurationTransformer.create_job_configurations('default', config)
+    expected_test_types = [
+        'test_default',
+        'test_multi_job'
+    ]
 
-    # Verify results
-    assert len(result) == 1, "Should return single job config"
-    assert result[0] == config, "Should copy config as-is"
-    assert result[0] is not config, "Should be a copy, not the same object"
+    # Verify all business batch types are registered
+    for batch_type in expected_business_types:
+        assert batch_type in BATCH_TYPE_TRANSFORMERS, f"Business batch type '{batch_type}' should be registered"
 
+    # Verify test batch types are registered
+    for batch_type in expected_test_types:
+        assert batch_type in BATCH_TYPE_TRANSFORMERS, f"Test batch type '{batch_type}' should be registered"
 
-@pytest.mark.unit
-def test_configuration_transformer_passthrough():
-    """Test ConfigurationTransformer passthrough type"""
-    config = {'data': 'test', 'count': 5}
-
-    result = ConfigurationTransformer.create_job_configurations('passthrough', config)
-
-    # Verify results
-    assert len(result) == 1, "Should return single job config"
-    assert result[0] == config, "Should return same config"
-    assert result[0] is config, "Should be the same object (not a copy)"
-
-
-@pytest.mark.unit
-def test_configuration_transformer_multi_job_with_jobs():
-    """Test ConfigurationTransformer multi_job type with jobs list"""
-    config_with_jobs = {
-        'batch_type': 'test_batch',
-        'jobs': [
-            {'job_id': 1, 'param': 'A'},
-            {'job_id': 2, 'param': 'B'},
-            {'job_id': 3, 'param': 'C'}
-        ]
-    }
-
-    result = ConfigurationTransformer.create_job_configurations('multi_job', config_with_jobs)
-
-    assert len(result) == 3, "Should return 3 job configs"
-    assert result[0] == {'job_id': 1, 'param': 'A'}
-    assert result[1] == {'job_id': 2, 'param': 'B'}
-    assert result[2] == {'job_id': 3, 'param': 'C'}
+    assert len(BATCH_TYPE_TRANSFORMERS) == 13, "Should have 11 business + 2 test batch types (total 13)"
 
 
 @pytest.mark.unit
-def test_configuration_transformer_multi_job_fallback():
-    """Test ConfigurationTransformer multi_job type without jobs list (fallback)"""
-    config_no_jobs = {'single_job': 'data'}
-
-    result = ConfigurationTransformer.create_job_configurations('multi_job', config_no_jobs)
-
-    assert len(result) == 1, "Should return single job config"
-    assert result[0] == config_no_jobs
-
-
-@pytest.mark.unit
-def test_configuration_transformer_unknown_type():
-    """Test ConfigurationTransformer unknown type error"""
+def test_create_job_configurations_unknown_type():
+    """Test create_job_configurations with unknown batch type"""
     config = {'data': 'test'}
 
     with pytest.raises(ConfigurationError) as exc_info:
-        ConfigurationTransformer.create_job_configurations('nonexistent_type', config)
+        create_job_configurations('Unknown Batch Type', config)
 
-    assert 'nonexistent_type' in str(exc_info.value)
+    assert 'Unknown batch type' in str(exc_info.value)
     assert 'Available types' in str(exc_info.value)
 
 
 @pytest.mark.unit
-def test_configuration_transformer_list_types():
-    """Test listing registered transformer types"""
-    types = ConfigurationTransformer.list_types()
+def test_transform_edm_creation():
+    """Test EDM Creation transformer"""
+    config = {
+        'Metadata': {'Current Date Value': '202503', 'EDM Data Version': '23.0.0'},
+        'Databases': [
+            {'Database': 'RMS_EDM_202503_DB1', 'Code': 'DB1'},
+            {'Database': 'RMS_EDM_202503_DB2', 'Code': 'DB2'}
+        ]
+    }
 
-    # Verify expected types are registered
-    assert 'default' in types, "Should have 'default' type"
-    assert 'passthrough' in types, "Should have 'passthrough' type"
-    assert 'multi_job' in types, "Should have 'multi_job' type"
+    result = create_job_configurations('EDM Creation', config)
+
+    assert len(result) == 2, "Should create one job per database"
+    assert result[0]['Metadata'] == config['Metadata'], "Should include metadata"
+    assert result[0]['Database'] == 'RMS_EDM_202503_DB1'
+    assert result[1]['Database'] == 'RMS_EDM_202503_DB2'
 
 
 @pytest.mark.unit
-def test_configuration_transformer_custom_registration():
-    """Test custom transformer registration"""
-    # Register a custom transformer for testing
-    @ConfigurationTransformer.register('test_custom')
-    def transform_custom(config):
-        """Custom transformer that doubles values"""
-        return [
-            {'value': config.get('value', 0) * 2},
-            {'value': config.get('value', 0) * 3}
+def test_transform_portfolio_creation():
+    """Test Portfolio Creation transformer"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Portfolios': [
+            {'Portfolio': 'P1', 'Database': 'DB1', 'Base Portfolio?': 'Y'},
+            {'Portfolio': 'P2', 'Database': 'DB1', 'Base Portfolio?': 'N'}
         ]
+    }
 
-    # Test the custom transformer
-    config = {'value': 10}
-    result = ConfigurationTransformer.create_job_configurations('test_custom', config)
+    result = create_job_configurations('Portfolio Creation', config)
 
-    assert len(result) == 2, "Should return 2 job configs"
-    assert result[0] == {'value': 20}, "First job should have doubled value"
-    assert result[1] == {'value': 30}, "Second job should have tripled value"
+    assert len(result) == 2, "Should create one job per portfolio"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Portfolio'] == 'P1'
+    assert result[1]['Portfolio'] == 'P2'
+
+
+@pytest.mark.unit
+def test_transform_mri_import():
+    """Test MRI Import transformer"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Portfolios': [
+            {'Portfolio': 'P1', 'Database': 'DB1'},
+            {'Portfolio': 'P2', 'Database': 'DB1'}
+        ]
+    }
+
+    result = create_job_configurations('MRI Import', config)
+
+    assert len(result) == 2, "Should create one job per portfolio"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Portfolio'] == 'P1'
+
+
+@pytest.mark.unit
+def test_transform_create_reinsurance_treaties():
+    """Test Create Reinsurance Treaties transformer"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Reinsurance Treaties': [
+            {'Treaty Name': 'T1', 'Treaty Type': 'QS'},
+            {'Treaty Name': 'T2', 'Treaty Type': 'XOL'}
+        ]
+    }
+
+    result = create_job_configurations('Create Reinsurance Treaties', config)
+
+    assert len(result) == 2, "Should create one job per treaty"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Treaty Name'] == 'T1'
+    assert result[1]['Treaty Name'] == 'T2'
+
+
+@pytest.mark.unit
+def test_transform_analysis():
+    """Test Analysis transformer"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Analysis Table': [
+            {'Analysis Name': 'A1', 'Portfolio': 'P1'},
+            {'Analysis Name': 'A2', 'Portfolio': 'P2'}
+        ]
+    }
+
+    result = create_job_configurations('Analysis', config)
+
+    assert len(result) == 2, "Should create one job per analysis"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Analysis Name'] == 'A1'
+    assert result[1]['Analysis Name'] == 'A2'
+
+
+@pytest.mark.unit
+def test_transform_grouping():
+    """Test Grouping transformer"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Groupings': [
+            {'Group_Name': 'G1', 'items': ['P1', 'P2']},
+            {'Group_Name': 'G2', 'items': ['A1', 'A2']}
+        ]
+    }
+
+    result = create_job_configurations('Grouping', config)
+
+    assert len(result) == 2, "Should create one job per group"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Group_Name'] == 'G1'
+    assert result[0]['items'] == ['P1', 'P2']
+
+
+@pytest.mark.unit
+def test_transform_export_to_rdm():
+    """Test Export to RDM transformer"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Groupings': [
+            {'Group_Name': 'G1', 'items': ['P1', 'P2']},
+            {'Group_Name': 'G2', 'items': ['A1']}
+        ]
+    }
+
+    result = create_job_configurations('Export to RDM', config)
+
+    assert len(result) == 2, "Should create one job per group"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Group_Name'] == 'G1'
+
+
+@pytest.mark.unit
+def test_transform_staging_etl():
+    """Test Staging ETL transformer"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Databases': [
+            {'Database': 'RMS_EDM_202503_DB1'},
+            {'Database': 'RMS_EDM_202503_DB2'}
+        ]
+    }
+
+    result = create_job_configurations('Staging ETL', config)
+
+    assert len(result) == 2, "Should create one job per database"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Database'] == 'RMS_EDM_202503_DB1'
+
+
+@pytest.mark.unit
+def test_transformer_empty_data():
+    """Test transformer with empty data"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Databases': []
+    }
+
+    result = create_job_configurations('EDM Creation', config)
+
+    assert len(result) == 0, "Should return empty list when no data rows"
+
+
+@pytest.mark.unit
+def test_transformer_missing_metadata():
+    """Test transformer with missing metadata"""
+    config = {
+        'Databases': [
+            {'Database': 'RMS_EDM_202503_DB1'}
+        ]
+    }
+
+    result = create_job_configurations('EDM Creation', config)
+
+    assert len(result) == 1, "Should still create job"
+    assert result[0]['Metadata'] == {}, "Should have empty metadata dict"
+    assert result[0]['Database'] == 'RMS_EDM_202503_DB1'
 
 
 # ============================================================================
@@ -651,14 +782,14 @@ def test_load_configuration_without_register(test_schema):
     cycle_id = create_test_cycle(test_schema, 'test-no-register')
 
     # Create a valid test Excel file path
-    if not Path(TEST_EXCEL_PATH).exists():
+    if not Path(VALID_EXCEL_PATH).exists():
         pytest.skip("Test Excel file not found")
 
     # Try to load without registering (dry-run mode)
-    with pytest.raises(ConfigurationError, match="validated successfully but not registered"):
+    with pytest.raises(ConfigurationError, match="not registered"):
         load_configuration_file(
             cycle_id=cycle_id,
-            excel_config_path=TEST_EXCEL_PATH,
+            excel_config_path=VALID_EXCEL_PATH,
             register=False,
             schema=test_schema
         )
