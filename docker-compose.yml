@@ -24,10 +24,29 @@ services:
       - RISK_MODELER_BASE_URL=${RISK_MODELER_BASE_URL:-https://api-euw1.rms-ppe.com}
       - RISK_MODELER_API_KEY=${RISK_MODELER_API_KEY:-your_api_key}
       - RISK_MODELER_RESOURCE_GROUP_ID=${RISK_MODELER_RESOURCE_GROUP_ID:-your_group_id}
+      # MSSQL configuration
+      - MSSQL_DRIVER=${MSSQL_DRIVER:-ODBC Driver 18 for SQL Server}
+      - MSSQL_TRUST_CERT=${MSSQL_TRUST_CERT:-yes}
+      # Test MSSQL connections
+      - MSSQL_TEST_SERVER=sqlserver
+      - MSSQL_TEST_PORT=${MSSQL_TEST_PORT:-1433}
+      - MSSQL_TEST_DATABASE=${MSSQL_TEST_DATABASE:-test_db}
+      - MSSQL_TEST_USER=${MSSQL_TEST_USER:-sa}
+      - MSSQL_TEST_PASSWORD=${MSSQL_SA_PASSWORD:-TestPass123!}
+      # Production MSSQL connections
+      - MSSQL_DATABRIDGE_SERVER=${MSSQL_DATABRIDGE_SERVER}
+      - MSSQL_DATABRIDGE_USER=${MSSQL_DATABRIDGE_USER}
+      - MSSQL_DATABRIDGE_PASSWORD=${MSSQL_DATABRIDGE_PASSWORD}
+      - MSSQL_ASSURANT_SERVER=${MSSQL_ASSURANT_SERVER}
+      - MSSQL_ASSURANT_DATABASE=${MSSQL_ASSURANT_DATABASE}
+      - MSSQL_ASSURANT_USER=${MSSQL_ASSURANT_USER}
+      - MSSQL_ASSURANT_PASSWORD=${MSSQL_ASSURANT_PASSWORD}
     volumes:
       - ./workspace:${NOTEBOOK_HOME_DIR:-/home/jovyan}/workspace
     depends_on:
       postgres:
+        condition: service_healthy
+      sqlserver:
         condition: service_healthy
     networks:
       - irp-network
@@ -66,9 +85,36 @@ services:
       - irp-network
     restart: unless-stopped
 
+  sqlserver:
+    # SQL Server Express Service
+    # This service runs SQL Server Express 2022 for MSSQL integration testing.
+    # Test database (test_db) is created by init_sqlserver.sql script.
+    # The database data is persisted using a Docker volume.
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: irp-sqlserver
+    ports:
+      - "1433:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD:-TestPass123!}
+      - MSSQL_PID=Express
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+      - ./workspace/helpers/db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" -C || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - irp-network
+    restart: unless-stopped
+
 networks:
   irp-network:
     driver: bridge
 
 volumes:
   postgres-data:
+  sqlserver-data:

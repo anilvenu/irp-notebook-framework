@@ -30,6 +30,15 @@ os.environ['DB_NAME'] = 'test_db'
 os.environ['DB_USER'] = 'test_user'
 os.environ['DB_PASSWORD'] = 'test_pass'
 
+# Set MSSQL test database environment variables
+os.environ['MSSQL_TEST_SERVER'] = 'localhost'
+os.environ['MSSQL_TEST_PORT'] = '1433'
+os.environ['MSSQL_TEST_DATABASE'] = 'test_db'
+os.environ['MSSQL_TEST_USER'] = 'sa'
+os.environ['MSSQL_TEST_PASSWORD'] = os.getenv('MSSQL_SA_PASSWORD', 'TestPass123!')
+os.environ['MSSQL_DRIVER'] = 'ODBC Driver 18 for SQL Server'
+os.environ['MSSQL_TRUST_CERT'] = 'yes'
+
 # Add workspace directory to Python path for imports
 workspace_path = Path(__file__).parent.parent.resolve()
 workspace_path_str = str(workspace_path)
@@ -377,3 +386,241 @@ def create_test_hierarchy(cycle_name, schema):
     )
 
     return cycle_id, stage_id, step_id, config_id
+
+
+# ==============================================================================
+# MSSQL FIXTURES
+# ==============================================================================
+
+@pytest.fixture(scope="session")
+def mssql_env():
+    """
+    Verify MSSQL environment variables are set.
+
+    This fixture ensures that MSSQL connection configuration is available
+    before running tests that require SQL Server connectivity.
+    """
+    required_vars = [
+        'MSSQL_TEST_SERVER',
+        'MSSQL_TEST_DATABASE',
+        'MSSQL_TEST_USER',
+        'MSSQL_TEST_PASSWORD'
+    ]
+
+    missing = [var for var in required_vars if not os.getenv(var)]
+
+    if missing:
+        pytest.skip(
+            f"MSSQL environment variables not set: {', '.join(missing)}\n"
+            f"Set these variables to run MSSQL integration tests."
+        )
+
+    return True
+
+
+@pytest.fixture(scope="session")
+def wait_for_sqlserver(mssql_env):
+    """
+    Wait for SQL Server to be ready before running tests.
+
+    This fixture attempts to connect to SQL Server and waits up to 60 seconds
+    for the server to become available. It's useful for CI/CD environments
+    where SQL Server may still be starting up.
+    """
+    import time
+    from helpers.sqlserver import test_connection
+
+    max_attempts = 30
+    wait_seconds = 2
+
+    print("\nWaiting for SQL Server to be ready...")
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if test_connection('TEST'):
+                print(f"✓ SQL Server is ready (attempt {attempt})")
+                return True
+        except Exception as e:
+            if attempt == max_attempts:
+                pytest.skip(
+                    f"SQL Server not available after {max_attempts} attempts: {e}\n"
+                    f"Ensure SQL Server Express container is running:\n"
+                    f"  docker-compose up -d sqlserver"
+                )
+
+        if attempt < max_attempts:
+            print(f"  Attempt {attempt}/{max_attempts} failed, retrying in {wait_seconds}s...")
+            time.sleep(wait_seconds)
+
+    return False
+
+
+@pytest.fixture(scope="session")
+def init_sqlserver_db(wait_for_sqlserver):
+    """
+    Initialize SQL Server test database with schema and sample data.
+
+    This fixture runs once per test session and ensures that the test_db
+    database exists with the correct schema (test_portfolios, test_risks)
+    and sample data for testing.
+    """
+    import subprocess
+    from pathlib import Path
+
+    print("\nInitializing SQL Server test database...")
+
+    # Path to init script
+    init_script = Path(__file__).parent.parent / 'helpers' / 'db' / 'init_sqlserver.sql'
+
+    if not init_script.exists():
+        pytest.skip(f"SQL Server init script not found: {init_script}")
+
+    # Run initialization script using sqlcmd
+    server = os.getenv('MSSQL_TEST_SERVER', 'localhost')
+    user = os.getenv('MSSQL_TEST_USER', 'sa')
+    password = os.getenv('MSSQL_TEST_PASSWORD', 'TestPass123!')
+
+    try:
+        # Try to run sqlcmd in Docker container
+        result = subprocess.run(
+            [
+                'docker', 'exec', 'irp-sqlserver',
+                '/opt/mssql-tools/bin/sqlcmd',
+                '-S', 'localhost',
+                '-U', user,
+                '-P', password,
+                '-i', f'/docker-entrypoint-initdb.d/init_sqlserver.sql'
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode == 0:
+            print("✓ SQL Server test database initialized successfully")
+            if result.stdout:
+                print(result.stdout)
+        else:
+            print(f"Warning: SQL Server initialization completed with warnings:")
+            if result.stderr:
+                print(result.stderr)
+
+    except subprocess.TimeoutExpired:
+        pytest.skip("SQL Server initialization timed out")
+    except FileNotFoundError:
+        pytest.skip(
+            "Docker command not found. Ensure Docker is installed and SQL Server container is running."
+        )
+    except Exception as e:
+        pytest.skip(f"Failed to initialize SQL Server test database: {e}")
+
+    return True
+
+
+@pytest.fixture
+def clean_sqlserver_db(init_sqlserver_db):
+    """
+    Reset SQL Server test database to clean state before each test.
+
+    This fixture truncates test tables and re-inserts the initial 5 portfolios
+    and 10 risks to ensure test isolation.
+    """
+    from helpers import sqlserver
+
+    # Truncate tables (this will cascade to risks due to FK)
+    try:
+        sqlserver.execute_command("DELETE FROM test_risks", connection='TEST')
+        sqlserver.execute_command("DELETE FROM test_portfolios", connection='TEST')
+        sqlserver.execute_command("DBCC CHECKIDENT ('test_portfolios', RESEED, 0)", connection='TEST')
+        sqlserver.execute_command("DBCC CHECKIDENT ('test_risks', RESEED, 0)", connection='TEST')
+
+
+        # Re-insert initial data
+        portfolios = [
+            ("Test Portfolio A", 750000.00, "ACTIVE"),
+            ("Test Portfolio B", 1250000.00, "ACTIVE"),
+            ("Test Portfolio C", 500000.00, "ACTIVE"),
+            ("Test Portfolio D", 2000000.00, "ACTIVE"),
+            ("Test Portfolio E", 300000.00, "INACTIVE"),
+        ]
+
+        for name, value, status in portfolios:
+            sqlserver.execute_command(
+                "INSERT INTO test_portfolios (portfolio_name, portfolio_value, status) VALUES (?, ?, ?)",
+                params=(name, value, status),
+                connection='TEST'
+            )
+
+        # Re-insert risk data
+        risks = [
+            (1, 'VaR_95', 45000.00),
+            (1, 'VaR_99', 65000.00),
+            (2, 'VaR_95', 75000.00),
+            (2, 'VaR_99', 110000.00),
+            (3, 'VaR_95', 30000.00),
+            (3, 'VaR_99', 45000.00),
+            (4, 'VaR_95', 120000.00),
+            (4, 'VaR_99', 180000.00),
+            (5, 'VaR_95', 18000.00),
+            (5, 'VaR_99', 27000.00),
+        ]
+
+        for portfolio_id, risk_type, risk_value in risks:
+            sqlserver.execute_command(
+                "INSERT INTO test_risks (portfolio_id, risk_type, risk_value) VALUES (?, ?, ?)",
+                params=(portfolio_id, risk_type, risk_value),
+                connection='TEST'
+            )
+
+    except Exception as e:
+        pytest.skip(f"Failed to reset SQL Server test database: {e}")
+
+    return True
+
+
+@pytest.fixture
+def sample_sql_file(tmp_path):
+    """
+    Create a temporary SQL file for testing file-based query operations.
+
+    Returns:
+        Path: Path to temporary SQL file
+    """
+    sql_content = """
+-- Sample query with parameters
+SELECT
+    p.portfolio_name,
+    p.portfolio_value,
+    p.created_ts,
+    r.risk_type,
+    r.risk_value,
+    r.calculated_ts
+FROM test_portfolios p
+INNER JOIN test_risks r ON p.id = r.portfolio_id
+WHERE p.id = {portfolio_id}
+  AND r.risk_type = {risk_type}
+ORDER BY r.calculated_ts DESC;
+"""
+
+    sql_file = tmp_path / "test_query.sql"
+    sql_file.write_text(sql_content)
+
+    return sql_file
+
+
+@pytest.fixture
+def temp_sql_file(tmp_path):
+    """
+    Factory fixture to create temporary SQL files with custom content.
+
+    Usage:
+        def test_something(temp_sql_file):
+            script_path = temp_sql_file("SELECT 1")
+            # Use script_path in test
+    """
+    def _create_sql_file(content):
+        sql_file = tmp_path / f"script_{id(content)}.sql"
+        sql_file.write_text(content)
+        return sql_file
+
+    return _create_sql_file

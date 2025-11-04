@@ -9,12 +9,21 @@ from pathlib import Path
 # PATH CONFIGURATION
 # ============================================================================
 
-WORKSPACE_PATH = Path(f'{os.getenv("NOTEBOOK_HOME_DIR", "/home/jovyan")}/workspace')
+# Determine workspace path - works in both Docker and local environments
+if os.getenv("NOTEBOOK_HOME_DIR"):
+    # Running in Docker/Jupyter container
+    WORKSPACE_PATH = Path(f'{os.getenv("NOTEBOOK_HOME_DIR")}/workspace')
+else:
+    # Running locally (tests, direct Python execution)
+    # Workspace is relative to this constants.py file location
+    WORKSPACE_PATH = Path(__file__).parent.parent.resolve()
+
 HELPERS_PATH = WORKSPACE_PATH / 'helpers'
 WORKFLOWS_PATH = WORKSPACE_PATH / 'workflows'
 TEMPLATE_PATH = WORKFLOWS_PATH / '_Template'
 TOOLS_PATH = WORKFLOWS_PATH / '_Tools'
 ARCHIVE_PATH = WORKFLOWS_PATH / '_Archive'
+SQL_SCRIPTS_PATH = WORKSPACE_PATH / 'sql'
 
 # ============================================================================
 # DATABASE CONFIGURATION
