@@ -74,8 +74,8 @@ GET_OUTPUT_PROFILES = '/analysis-settings/outputprofiles'
 GET_EVENT_RATE_SCHEME = '/data-store/referencetables/eventratescheme'
 
 # Tag endpoints
-GET_TAGS = '/data-store/referencedata/v1/tags'
-CREATE_TAG = '/data-store/referencedata/v1/tags'
+GET_TAGS = '/platform/referencedata/v1/tags'
+CREATE_TAG = '/platform/referencedata/v1/tags'
 
 # RDM endpoints
 CREATE_RDM_EXPORT_JOB = '/platform/export/v1/jobs'
