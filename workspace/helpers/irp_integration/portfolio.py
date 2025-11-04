@@ -64,6 +64,23 @@ class PortfolioManager:
 
 
     def create_portfolios(self, portfolio_data_list: List[Dict[str, Any]]) -> List[int]:
+        """
+        Create multiple portfolios.
+
+        Args:
+            portfolio_data_list: List of portfolio data dicts, each containing:
+                - edm_name: str
+                - portfolio_name: str
+                - portfolio_number: str
+                - description: str
+
+        Returns:
+            List of portfolio IDs
+
+        Raises:
+            IRPValidationError: If portfolio_data_list is empty or invalid
+            IRPAPIError: If portfolio creation fails or duplicate names exist
+        """
         validate_list_not_empty(portfolio_data_list, "portfolio_data_list")
 
         portfolio_ids = []
@@ -118,7 +135,12 @@ class PortfolioManager:
         edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
         if (len(edms) != 1):
             raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-        exposure_id = edms[0]['exposureId']
+        try:
+            exposure_id = edms[0]['exposureId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
+            ) from e
 
         portfolios = self.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
         if (len(portfolios) > 0):
@@ -139,6 +161,24 @@ class PortfolioManager:
 
 
     def submit_geohaz_jobs(self, geohaz_data_list: List[Dict[str, Any]]) -> List[int]:
+        """
+        Submit multiple geohaz jobs (geocoding and hazard operations).
+
+        Args:
+            geohaz_data_list: List of geohaz data dicts, each containing:
+                - edm_name: str
+                - portfolio_name: str
+                - version: str
+                - hazard_eq: bool
+                - hazard_ws: bool
+
+        Returns:
+            List of job IDs
+
+        Raises:
+            IRPValidationError: If geohaz_data_list is empty or invalid
+            IRPAPIError: If job submission fails or resources not found
+        """
         validate_list_not_empty(geohaz_data_list, "geohaz_data_list")
 
         job_ids = []
@@ -156,7 +196,7 @@ class PortfolioManager:
             
             edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
             if (len(edms) != 1):
-                raise Exception(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
+                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
             try:
                 exposure_id = edms[0]['exposureId']
             except (KeyError, TypeError, IndexError) as e:
@@ -166,7 +206,7 @@ class PortfolioManager:
 
             portfolios = self.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
             if (len(portfolios) != 1):
-                raise Exception(f"Expected 1 portfolio with name {portfolio_name}, found {len(portfolios)}")
+                raise IRPAPIError(f"Expected 1 portfolio with name {portfolio_name}, found {len(portfolios)}")
             try:
                 portfolio_uri = portfolios[0]['uri']
             except (KeyError, TypeError, IndexError) as e:
@@ -300,6 +340,22 @@ class PortfolioManager:
         interval: int = 10,
         timeout: int = 600000
     ) -> Dict[str, Any]:
+        """
+        Poll geohaz job until completion or timeout.
+
+        Args:
+            job_id: Job ID
+            interval: Polling interval in seconds (default: 10)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            Final job status details
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If job times out
+            IRPAPIError: If polling fails
+        """
         validate_positive_int(job_id, "job_id")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")
@@ -332,6 +388,22 @@ class PortfolioManager:
             interval: int = 20,
             timeout: int = 600000
     ) -> List[Dict[str, Any]]:
+        """
+        Poll multiple geohaz jobs until all complete or timeout.
+
+        Args:
+            job_ids: List of job IDs
+            interval: Polling interval in seconds (default: 20)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            List of final job status details for all jobs
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If jobs time out
+            IRPAPIError: If polling fails
+        """
         validate_list_not_empty(job_ids, "job_ids")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")
@@ -345,7 +417,12 @@ class PortfolioManager:
             for job_id in job_ids:
                 workflow_response = self.get_geohaz_job(job_id)
                 all_jobs.append(workflow_response)
-                status = workflow_response['status']
+                try:
+                    status = workflow_response['status']
+                except (KeyError, TypeError) as e:
+                    raise IRPAPIError(
+                        f"Missing 'status' in workflow response for job ID {job_id}: {e}"
+                    ) from e
                 if status in WORKFLOW_IN_PROGRESS_STATUSES:
                     all_jobs = []
                     break

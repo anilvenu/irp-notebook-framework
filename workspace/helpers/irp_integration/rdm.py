@@ -52,25 +52,50 @@ class RDMManager:
             rdm_name: str,
             analysis_names: List[str]
     ) -> Dict[str, Any]:
+        """
+        Export multiple analyses to RDM (Risk Data Model).
+
+        Args:
+            server_name: Database server name
+            rdm_name: Name for the RDM
+            analysis_names: List of analysis names to export
+
+        Returns:
+            Dict containing final export job status
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If export fails or analyses not found
+        """
         validate_non_empty_string(server_name, "server_name")
         validate_non_empty_string(rdm_name, "rdm_name")
         validate_list_not_empty(analysis_names, "analysis_names")
 
         database_servers = self.edm_manager.search_database_servers(filter=f"serverName=\"{server_name}\"")
-        database_server_id = database_servers[0]['serverId']
+        try:
+            database_server_id = database_servers[0]['serverId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract server ID for server '{server_name}': {e}"
+            ) from e
 
         rdms = self.edm_manager.search_edms(filter=f"exposureName=\"{rdm_name}\"")
         if (len(rdms) > 0):
-            raise Exception(f"RDM with name {rdm_name} already exists")
-        
+            raise IRPAPIError(f"RDM with name {rdm_name} already exists")
+
         analysis_uris = []
         for name in analysis_names:
             analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
             if (len(analysis_response) == 0):
-                raise Exception(f"Analysis with this name does not exist: {name}")
+                raise IRPAPIError(f"Analysis with this name does not exist: {name}")
             if (len(analysis_response) > 1):
-                raise Exception(f"Duplicate analyses exist with name: {name}")
-            analysis_uris.append(analysis_response[0]['uri'])
+                raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
+            try:
+                analysis_uris.append(analysis_response[0]['uri'])
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract analysis URI for analysis '{name}': {e}"
+                ) from e
 
         rdm_export_job_id = self.submit_rdm_export_job(
             rdm_name=rdm_name,
@@ -86,6 +111,21 @@ class RDMManager:
             server_id: int,
             resource_uris: List[str]
     ) -> int:
+        """
+        Submit RDM export job.
+
+        Args:
+            rdm_name: Name for the RDM
+            server_id: Database server ID
+            resource_uris: List of analysis resource URIs to export
+
+        Returns:
+            Job ID
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If job submission fails
+        """
         validate_non_empty_string(rdm_name, "rdm_name")
         validate_positive_int(server_id, "server_id")
 
@@ -108,6 +148,19 @@ class RDMManager:
 
 
     def get_rdm_export_job(self, job_id: int) -> Dict[str, Any]:
+        """
+        Retrieve RDM export job status by job ID.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            Dict containing job status details
+
+        Raises:
+            IRPValidationError: If job_id is invalid
+            IRPAPIError: If request fails
+        """
         validate_positive_int(job_id, "job_id")
 
         try:
@@ -123,6 +176,22 @@ class RDMManager:
             interval: int = 10,
             timeout: int = 600000
     ) -> Dict[str, Any]:
+        """
+        Poll RDM export job until completion or timeout.
+
+        Args:
+            job_id: Job ID
+            interval: Polling interval in seconds (default: 10)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            Final job status details
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If job times out
+            IRPAPIError: If polling fails
+        """
         validate_positive_int(job_id, "job_id")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")

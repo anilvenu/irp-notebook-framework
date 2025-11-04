@@ -37,6 +37,20 @@ class JobManager:
 
 
     def search_risk_data_jobs(self, filter: str = "", limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        Search risk data jobs with optional filtering.
+
+        Args:
+            filter: Optional filter string (default: "")
+            limit: Maximum results per page (default: 100)
+            offset: Offset for pagination (default: 0)
+
+        Returns:
+            List of risk data job dicts
+
+        Raises:
+            IRPAPIError: If search fails
+        """
         params: Dict[str, Any] = {
             'limit': limit,
             'offset': offset
@@ -97,6 +111,22 @@ class JobManager:
             interval: int = 20,
             timeout: int = 600000
     ) -> List[Dict[str, Any]]:
+        """
+        Poll multiple risk data jobs until all complete or timeout.
+
+        Args:
+            job_ids: List of job IDs
+            interval: Polling interval in seconds (default: 20)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            List of final job status details for all jobs
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If jobs time out
+            IRPAPIError: If polling fails
+        """
         validate_list_not_empty(job_ids, "job_ids")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")

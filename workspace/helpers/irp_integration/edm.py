@@ -63,13 +63,43 @@ class EDMManager:
 
 
     def validate_unique_edms(self, edm_names: List[str]) -> None:
+        """
+        Validate that EDM names are unique (don't already exist).
+
+        Args:
+            edm_names: List of EDM names to validate
+
+        Raises:
+            IRPAPIError: If any EDM names already exist
+        """
         quoted = ", ".join(json.dumps(e) for e in edm_names)
         edms = self.search_edms(filter=f"exposureName IN ({quoted})")
         if (len(edms) > 0):
-            raise IRPAPIError(f"The following EDMs already exist: {', '.join(json.dumps(s['exposureName']) for s in edms)}; please use unique names")
+            try:
+                existing_names = ', '.join(json.dumps(s['exposureName']) for s in edms)
+            except (KeyError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract EDM names from search response: {e}"
+                ) from e
+            raise IRPAPIError(f"The following EDMs already exist: {existing_names}; please use unique names")
 
 
     def submit_create_edm_jobs(self, edm_data_list: List[Dict[str, Any]]) -> List[int]:
+        """
+        Submit multiple EDM creation jobs.
+
+        Args:
+            edm_data_list: List of EDM data dicts, each containing:
+                - server_name: str
+                - edm_name: str
+
+        Returns:
+            List of job IDs
+
+        Raises:
+            IRPValidationError: If edm_data_list is empty or invalid
+            IRPAPIError: If EDM creation fails or duplicate names exist
+        """
         validate_list_not_empty(edm_data_list, "edm_data")
 
         self.validate_unique_edms(list(e['edm_name'] for e in edm_data_list))
@@ -230,6 +260,21 @@ class EDMManager:
 
 
     def submit_upgrade_edm_data_version_jobs(self, edm_data_list: List[Dict[str, Any]]) -> List[int]:
+        """
+        Submit multiple EDM data version upgrade jobs.
+
+        Args:
+            edm_data_list: List of EDM upgrade data dicts, each containing:
+                - edm_name: str
+                - edm_version: str
+
+        Returns:
+            List of job IDs
+
+        Raises:
+            IRPValidationError: If edm_data_list is empty or invalid
+            IRPAPIError: If upgrade submission fails or EDM not found
+        """
         validate_list_not_empty(edm_data_list, "edm_data")
 
         job_ids = []
@@ -244,7 +289,7 @@ class EDMManager:
             
             edms = self.search_edms(filter=f"exposureName=\"{edm_name}\"")
             if (len(edms) != 1):
-                raise Exception(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
+                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
             try:
                 exposure_id = edms[0]['exposureId']
             except (KeyError, TypeError, IndexError) as e:
@@ -286,11 +331,27 @@ class EDMManager:
 
 
     def poll_data_version_upgrade_job_batch_to_completion(
-            self, 
+            self,
             job_ids: List[int],
             interval: int = 20,
             timeout: int = 600000
     ) -> List[Dict[str, Any]]:
+        """
+        Poll multiple EDM data version upgrade jobs until all complete or timeout.
+
+        Args:
+            job_ids: List of job IDs
+            interval: Polling interval in seconds (default: 20)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            List of final job status details for all jobs
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If jobs time out
+            IRPAPIError: If polling fails
+        """
         validate_list_not_empty(job_ids, "job_ids")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")
@@ -304,7 +365,12 @@ class EDMManager:
             for job_id in job_ids:
                 workflow_response = self.client.get_workflow(job_id)
                 all_jobs.append(workflow_response)
-                status = workflow_response['status']
+                try:
+                    status = workflow_response['status']
+                except (KeyError, TypeError) as e:
+                    raise IRPAPIError(
+                        f"Missing 'status' in workflow response for job ID {job_id}: {e}"
+                    ) from e
                 if status in WORKFLOW_IN_PROGRESS_STATUSES:
                     all_jobs = []
                     break
@@ -321,16 +387,39 @@ class EDMManager:
 
 
     def delete_edm(self, edm_name: str) -> Dict[str, Any]:
+        """
+        Delete an EDM and all its associated analyses.
+
+        Args:
+            edm_name: Name of EDM to delete
+
+        Returns:
+            Dict containing final delete job status
+
+        Raises:
+            IRPValidationError: If edm_name is invalid
+            IRPAPIError: If EDM not found or deletion fails
+        """
         validate_non_empty_string(edm_name, "edm_name")
-        
+
         edms = self.search_edms(filter=f"exposureName=\"{edm_name}\"")
         if (len(edms) != 1):
-            raise Exception(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-        exposure_id = edms[0]['exposureId']
+            raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
+        try:
+            exposure_id = edms[0]['exposureId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
+            ) from e
 
         analyses = self.analysis_manager.search_analyses(filter=f"exposureName=\"{edm_name}\"")
         for analysis in analyses:
-            self.analysis_manager.delete_analysis(analysis['analysisId'])
+            try:
+                self.analysis_manager.delete_analysis(analysis['analysisId'])
+            except (KeyError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract analysis ID from analysis data: {e}"
+                ) from e
 
         delete_edm_job_id = self.submit_delete_edm_job(exposure_id)
         return self.job_manager.poll_risk_data_job_to_completion(delete_edm_job_id)

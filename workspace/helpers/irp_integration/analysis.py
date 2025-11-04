@@ -93,6 +93,27 @@ class AnalysisManager:
 
 
     def submit_portfolio_analysis_jobs(self, analysis_data_list: List[Dict[str, Any]]) -> List[int]:
+        """
+        Submit multiple portfolio analysis jobs.
+
+        Args:
+            analysis_data_list: List of analysis job data dicts, each containing:
+                - edm_name: str
+                - portfolio_name: str
+                - job_name: str
+                - analysis_profile_name: str
+                - output_profile_name: str
+                - event_rate_scheme_name: str
+                - treaty_names: List[str]
+                - tag_names: List[str]
+
+        Returns:
+            List of job IDs
+
+        Raises:
+            IRPValidationError: If analysis_data_list is empty or invalid
+            IRPAPIError: If analysis submission fails or duplicate analysis names exist
+        """
         validate_list_not_empty(analysis_data_list, "analysis_data_list")
 
         analysis_names = list(a['job_name'] for a in analysis_data_list)
@@ -120,13 +141,23 @@ class AnalysisManager:
             
             edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
             if (len(edms) != 1):
-                raise Exception(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-            exposure_id = edms[0]['exposureId']
+                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
+            try:
+                exposure_id = edms[0]['exposureId']
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
+                ) from e
 
             portfolios = self.portfolio_manager.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
             if (len(portfolios) != 1):
-                raise Exception(f"Expected 1 portfolio with name {portfolio_name}, found {len(portfolios)}")
-            portfolio_uri = portfolios[0]['uri']
+                raise IRPAPIError(f"Expected 1 portfolio with name {portfolio_name}, found {len(portfolios)}")
+            try:
+                portfolio_uri = portfolios[0]['uri']
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract portfolio URI for portfolio '{portfolio_name}': {e}"
+                ) from e
 
             job_ids.append(self.submit_portfolio_analysis_job(
                 exposure_id=exposure_id,
@@ -191,7 +222,12 @@ class AnalysisManager:
         
         if (len(treaties_response) != len(treaty_names)):
             raise IRPAPIError(f"Expected {len(treaty_names)} treaties, found {len(treaties_response)}")
-        treaty_ids = [treaty['treatyId'] for treaty in treaties_response]
+        try:
+            treaty_ids = [treaty['treatyId'] for treaty in treaties_response]
+        except (KeyError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract treaty IDs from treaty search response: {e}"
+            ) from e
 
         model_profile_response = self.reference_data_manager.get_model_profile_by_name(analysis_profile_name)
         output_profile_response = self.reference_data_manager.get_output_profile_by_name(output_profile_name)
@@ -260,6 +296,21 @@ class AnalysisManager:
 
 
     def submit_analysis_grouping_jobs(self, grouping_data_list: List[Dict[str, Any]]) -> List[int]:
+        """
+        Submit multiple analysis grouping jobs.
+
+        Args:
+            grouping_data_list: List of grouping data dicts, each containing:
+                - group_name: str
+                - analysis_names: List[str]
+
+        Returns:
+            List of job IDs
+
+        Raises:
+            IRPValidationError: If grouping_data_list is empty or invalid
+            IRPAPIError: If grouping submission fails or analysis names not found
+        """
         validate_list_not_empty(grouping_data_list, "grouping_data_list")
 
         job_ids = []
@@ -279,11 +330,16 @@ class AnalysisManager:
                     raise IRPAPIError(f"Analysis with this name does not exist: {name}")
                 if (len(analysis_response) > 1):
                     raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
-                analysis_uris.append(analysis_response[0]['uri'])
+                try:
+                    analysis_uris.append(analysis_response[0]['uri'])
+                except (KeyError, IndexError, TypeError) as e:
+                    raise IRPAPIError(
+                        f"Failed to extract analysis URI for analysis '{name}': {e}"
+                    ) from e
             
             analysis_response = self.search_analyses(filter=f"analysisName = \"{group_name}\"")
             if (len(analysis_response) > 0):
-                raise Exception(f"Analysis Group with this name already exists: {name}")
+                raise IRPAPIError(f"Analysis Group with this name already exists: {group_name}")
 
             job_ids.append(self.submit_analysis_grouping_job(
                 group_name=group_name,
@@ -355,13 +411,26 @@ class AnalysisManager:
         
     
     def get_analysis_grouping_job(self, job_id: int) -> Dict[str, Any]:
+        """
+        Retrieve analysis grouping job status by job ID.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            Dict containing job status details
+
+        Raises:
+            IRPValidationError: If job_id is invalid
+            IRPAPIError: If request fails
+        """
         validate_positive_int(job_id, "job_id")
 
         try:
             response = self.client.request('GET', GET_ANALYSIS_GROUPING_JOB.format(jobId=job_id))
             return response.json()
         except Exception as e:
-            raise IRPAPIError(f"Failed to get analysis job status for job ID {job_id}: {e}")
+            raise IRPAPIError(f"Failed to get analysis grouping job status for job ID {job_id}: {e}")
 
 
     def poll_analysis_grouping_job_to_completion(
@@ -370,6 +439,22 @@ class AnalysisManager:
             interval: int = 10,
             timeout: int = 600000
     ) -> Dict[str, Any]:
+        """
+        Poll analysis grouping job until completion or timeout.
+
+        Args:
+            job_id: Job ID
+            interval: Polling interval in seconds (default: 10)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            Final job status details
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If job times out
+            IRPAPIError: If polling fails
+        """
         validate_positive_int(job_id, "job_id")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")
@@ -402,6 +487,22 @@ class AnalysisManager:
                 interval: int = 20,
                 timeout: int = 600000
         ) -> List[Dict[str, Any]]:
+            """
+            Poll multiple analysis grouping jobs until all complete or timeout.
+
+            Args:
+                job_ids: List of job IDs
+                interval: Polling interval in seconds (default: 20)
+                timeout: Maximum timeout in seconds (default: 600000)
+
+            Returns:
+                List of final job status details for all jobs
+
+            Raises:
+                IRPValidationError: If parameters are invalid
+                IRPJobError: If jobs time out
+                IRPAPIError: If polling fails
+            """
             validate_list_not_empty(job_ids, "job_ids")
             validate_positive_int(interval, "interval")
             validate_positive_int(timeout, "timeout")
@@ -415,7 +516,12 @@ class AnalysisManager:
                 for job_id in job_ids:
                     workflow_response = self.get_analysis_grouping_job(job_id)
                     all_jobs.append(workflow_response)
-                    status = workflow_response['status']
+                    try:
+                        status = workflow_response['status']
+                    except (KeyError, TypeError) as e:
+                        raise IRPAPIError(
+                            f"Missing 'status' in workflow response for job ID {job_id}: {e}"
+                        ) from e
                     if status in WORKFLOW_IN_PROGRESS_STATUSES:
                         all_jobs = []
                         break
@@ -460,6 +566,22 @@ class AnalysisManager:
             interval: int = 10,
             timeout: int = 600000
     ) -> Dict[str, Any]:
+        """
+        Poll analysis job until completion or timeout.
+
+        Args:
+            job_id: Job ID
+            interval: Polling interval in seconds (default: 10)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            Final job status details
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If job times out
+            IRPAPIError: If polling fails
+        """
         validate_positive_int(job_id, "job_id")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")
@@ -487,6 +609,20 @@ class AnalysisManager:
 
 
     def search_analysis_jobs(self, filter: str = "", limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        Search analysis jobs with optional filtering.
+
+        Args:
+            filter: Optional filter string (default: "")
+            limit: Maximum results per page (default: 100)
+            offset: Offset for pagination (default: 0)
+
+        Returns:
+            List of analysis job dicts
+
+        Raises:
+            IRPAPIError: If search fails
+        """
         params: Dict[str, Any] = {
             'limit': limit,
             'offset': offset
@@ -507,6 +643,22 @@ class AnalysisManager:
             interval: int = 20,
             timeout: int = 600000
     ) -> List[Dict[str, Any]]:
+        """
+        Poll multiple analysis jobs until all complete or timeout.
+
+        Args:
+            job_ids: List of job IDs
+            interval: Polling interval in seconds (default: 20)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            List of final job status details for all jobs
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If jobs time out
+            IRPAPIError: If polling fails
+        """
         validate_list_not_empty(job_ids, "job_ids")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")
@@ -555,6 +707,18 @@ class AnalysisManager:
 
 
     def search_analyses(self, filter: str = "") -> List[Dict[str, Any]]:
+        """
+        Search analysis results with optional filtering.
+
+        Args:
+            filter: Optional filter string (default: "")
+
+        Returns:
+            List of analysis result dicts
+
+        Raises:
+            IRPAPIError: If search fails
+        """
         params = {}
         if filter:
             params['filter'] = filter
@@ -567,6 +731,16 @@ class AnalysisManager:
         
 
     def delete_analysis(self, analysis_id: int) -> None:
+        """
+        Delete an analysis by ID.
+
+        Args:
+            analysis_id: Analysis ID to delete
+
+        Raises:
+            IRPValidationError: If analysis_id is invalid
+            IRPAPIError: If deletion fails
+        """
         validate_positive_int(analysis_id, "analysis_id")
 
         try:

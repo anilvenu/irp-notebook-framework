@@ -490,15 +490,25 @@ class MRIImportManager:
 
         edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
         if (len(edms) != 1):
-            raise Exception(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-        exposure_id = edms[0]['exposureId']
+            raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
+        try:
+            exposure_id = edms[0]['exposureId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
+            ) from e
 
         portfolios = self.portfolio_manager.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
         if (len(portfolios) == 0):
-            raise Exception(f"Portfolio with name {portfolio_name} not found")
+            raise IRPAPIError(f"Portfolio with name {portfolio_name} not found")
         if (len(portfolios) > 1):
-            raise Exception(f"{len(portfolios)} portfolios found with name {portfolio_name}, please use a unique name")
-        portfolio_id = portfolios[0]['portfolioId']
+            raise IRPAPIError(f"{len(portfolios)} portfolios found with name {portfolio_name}, please use a unique name")
+        try:
+            portfolio_id = portfolios[0]['portfolioId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract portfolio ID for portfolio '{portfolio_name}': {e}"
+            ) from e
 
         # Use get_workspace_root() to get correct path in both VS Code and JupyterLab
         workspace_root = get_workspace_root()

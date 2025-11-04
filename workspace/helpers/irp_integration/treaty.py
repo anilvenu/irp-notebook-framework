@@ -80,6 +80,19 @@ class TreatyManager:
 
 
     def create_treaties(self, treaty_data_list: List[Dict[str, Any]]) -> List[int]:
+        """
+        Create multiple treaties.
+
+        Args:
+            treaty_data_list: List of treaty data dicts, each containing all required treaty fields
+
+        Returns:
+            List of treaty IDs
+
+        Raises:
+            IRPValidationError: If treaty_data_list is empty or invalid
+            IRPAPIError: If treaty creation fails or EDM not found
+        """
         validate_list_not_empty(treaty_data_list, "treaty_data_list")
 
         treaty_ids = []
@@ -114,8 +127,13 @@ class TreatyManager:
             
             edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
             if (len(edms) != 1):
-                raise Exception(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-            exposure_id = edms[0]['exposureId']
+                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
+            try:
+                exposure_id = edms[0]['exposureId']
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
+                ) from e
 
             treaty_ids.append(self.create_treaty(
                 exposure_id=exposure_id,
