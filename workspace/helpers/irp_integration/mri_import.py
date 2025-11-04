@@ -5,26 +5,27 @@ Handles Multi-Risk Insurance (MRI) data imports including file uploads
 to AWS S3 and import execution via Moody's Risk Modeler API.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 import boto3
 import requests
 import json
 import os
 from .client import Client
-from .constants import CREATE_AWS_BUCKET, CREATE_MAPPING, EXECUTE_IMPORT
+from .constants import CREATE_AWS_BUCKET, CREATE_IMPORT_FOLDER, CREATE_IMPORT_JOB, CREATE_MAPPING, EXECUTE_IMPORT
 from .exceptions import IRPFileError, IRPAPIError, IRPValidationError
 from .validators import (
     validate_non_empty_string,
     validate_file_exists,
-    validate_positive_int
+    validate_positive_int,
+    validate_list_not_empty
 )
-from .utils import decode_mri_credentials, extract_id_from_location_header, get_location_header
+from .utils import decode_base64_field, decode_mri_credentials, decode_presign_params, extract_id_from_location_header, get_location_header, get_workspace_root
 
 
 class MRIImportManager:
     """Manager for MRI import operations."""
 
-    def __init__(self, client: Client):
+    def __init__(self, client: Client, edm_manager: Optional[Any] = None, portfolio_manager: Optional[Any] = None):
         """
         Initialize MRI Import Manager.
 
@@ -32,6 +33,183 @@ class MRIImportManager:
             client: Client instance for API requests
         """
         self.client = client
+        self._edm_manager = edm_manager
+        self._portfolio_manager = portfolio_manager
+
+    @property
+    def edm_manager(self):
+        """Lazy-loaded edm manager to avoid circular imports."""
+        if self._edm_manager is None:
+            from .edm import EDMManager
+            self._edm_manager = EDMManager(self.client)
+        return self._edm_manager
+    
+    @property
+    def portfolio_manager(self):
+        """Lazy-loaded portfolio manager to avoid circular imports."""
+        if self._portfolio_manager is None:
+            from .portfolio import PortfolioManager
+            self._portfolio_manager = PortfolioManager(self.client)
+        return self._portfolio_manager
+
+
+    def create_import_folder(
+            self, 
+            folder_type: str, 
+            file_extension: str, 
+            file_types: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Create an import folder for MRI files.
+
+        Args:
+            folder_type: Type of folder (e.g., 'MRI')
+            file_extension: File extension (e.g., '.csv')
+            file_types: List of file types (e.g., ['account', 'location'])
+
+        Returns:
+            Dict containing created folder details
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If folder creation fails
+        """
+        validate_non_empty_string(folder_type, "folder_type")
+        validate_non_empty_string(file_extension, "file_extension")
+        validate_list_not_empty(file_types, "file_types")
+        data = {
+            "folderType": folder_type,
+            "properties": {
+                "fileExtension": file_extension,
+                "fileTypes": file_types
+            }
+        }
+        try:
+            response = self.client.request('POST', CREATE_IMPORT_FOLDER, json=data)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create import folder: {e}")
+
+
+    def initialize_s3_session(self, presign_params: Dict[str, Any]) -> boto3.Session:
+        """
+        Initialize AWS S3 session using temporary credentials.
+
+        Args:
+            presign_params: Presigned parameters with AWS credentials
+
+        Returns:
+            Boto3 Session object
+
+        Raises:
+            IRPValidationError: If presign_params are invalid
+            IRPFileError: If session creation fails
+        """
+        required_fields = ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 's3_region']
+        missing = [f for f in required_fields if f not in presign_params]
+        if missing:
+            raise IRPValidationError(
+                f"presign_params missing required fields: {', '.join(missing)}"
+            )
+
+        try:
+            session = boto3.Session(
+                aws_access_key_id=presign_params['aws_access_key_id'],
+                aws_secret_access_key=presign_params['aws_secret_access_key'],
+                aws_session_token=presign_params['aws_session_token'],
+                region_name=presign_params['s3_region']
+            )
+            return session
+        except Exception as e:
+            raise IRPFileError(f"Failed to create AWS session: {e}")
+
+
+    # def upload_file_to_s3(self, 
+    #                        file_data: Dict[str, Any],
+    #                        file_name: str,
+    #                        file_id: str
+    # ) -> None:
+    #     """
+    #     Upload MRI files to S3 bucket.
+
+    #     Args:
+    #         file_data: Dict containing presign parameters and upload URL
+    #         file_name: Name of the local file to upload
+
+    #     Raises:
+    #         IRPValidationError: If parameters are invalid
+    #         IRPFileError: If file upload fails
+    #     """
+    #     validate_non_empty_string(file_name, "file_name")
+
+    #     try:
+    #         decoded_presign_params = decode_presign_params(file_data['presignParams'])
+    #         s3_client = self.initialize_s3_session(decoded_presign_params).client("s3")
+    #     except Exception as e:
+    #         raise IRPFileError(f"Failed to create S3 client: {e}")
+        
+    #     # Parse S3 path
+    #     s3_path_parts = decoded_presign_params['s3_path'].split('/', 1)
+    #     bucket = s3_path_parts[0]
+    #     prefix = s3_path_parts[1] if len(s3_path_parts) > 1 else ""
+    #     key = f"{prefix}/{file_id}-{file_name}"
+    #     print(key)
+    #     try:
+    #         workspace_root = get_workspace_root()
+    #         working_files_dir = workspace_root / "workflows" / "_Tools" / "files" / "working_files"
+    #         file_path = os.path.join(working_files_dir, file_name)
+    #         with open(file_path, 'rb') as file:
+    #             s3_client.put_object(
+    #                 Bucket=bucket,
+    #                 Key=key,
+    #                 Body=file,
+    #                 ContentType='text/csv'
+    #             )
+    #     except FileNotFoundError:
+    #         raise IRPFileError(f"File not found: {file_name}")
+    #     except Exception as e:
+    #         raise IRPFileError(f"Failed to upload file to S3: {e}")
+        
+
+    def create_import_job(self, file_data: Dict[str, Any], portfolio_uri: str) -> int:
+        """
+        Create MRI import job after files are uploaded.
+
+        Args:
+            file_data: Dict containing import job parameters
+            
+        Returns:
+            Int of the job ID
+            
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If import job creation fails
+        """
+
+        data = {
+            "importType": "MRI",
+            "resourceUri": portfolio_uri,
+            "settings": {
+                "import files": {
+                    "accountsFileId": file_data['uploadDetails']['accountsFile']['fileUri'].split('/')[-1],
+                    "locationsFileId": file_data['uploadDetails']['locationsFile']['fileUri'].split('/')[-1],
+                    # "mappingFileId": file_data['uploadDetails']['mappingFile']['fileUri'].split('-')[-1]
+                },
+                "folderId": file_data['folderId'],
+                "currency": "USD",
+                "delimeter": "COMMA",
+                "skipLines": 1,
+                "appendLocations": False,
+                "geoHaz": False
+            }
+        }
+
+        try:
+            response = self.client.request('POST', CREATE_IMPORT_JOB, json=data)
+            job_id = extract_id_from_location_header(response, "MRI import job creation")
+            return int(job_id)
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create MRI import job: {e}")
 
     def create_aws_bucket(self) -> requests.Response:
         """
@@ -265,11 +443,10 @@ class MRIImportManager:
     def import_from_files(
         self,
         edm_name: str,
-        portfolio_id: int,
+        portfolio_name: str,
         accounts_file: str,
         locations_file: str,
         mapping_file: str,
-        working_dir: Optional[str] = None,
         delimiter: str = "COMMA",
         skip_lines: int = 1,
         currency: str = "USD",
@@ -291,7 +468,6 @@ class MRIImportManager:
             accounts_file: Accounts file name (or full path)
             locations_file: Locations file name (or full path)
             mapping_file: Mapping file name (or full path)
-            working_dir: Directory containing files (optional)
             delimiter: File delimiter (default: "COMMA")
             skip_lines: Number of header lines to skip (default: 1)
             currency: Currency code (default: "USD")
@@ -307,20 +483,30 @@ class MRIImportManager:
         """
         # Validate inputs
         validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(portfolio_id, "portfolio_id")
+        validate_non_empty_string(portfolio_name, "portfolio_name")
         validate_non_empty_string(accounts_file, "accounts_file")
         validate_non_empty_string(locations_file, "locations_file")
         validate_non_empty_string(mapping_file, "mapping_file")
 
-        # Resolve file paths
-        if working_dir:
-            accounts_file_path = os.path.join(working_dir, accounts_file)
-            locations_file_path = os.path.join(working_dir, locations_file)
-            mapping_file_path = os.path.join(working_dir, mapping_file)
-        else:
-            accounts_file_path = accounts_file
-            locations_file_path = locations_file
-            mapping_file_path = mapping_file
+        edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
+        if (len(edms) != 1):
+            raise Exception(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
+        exposure_id = edms[0]['exposureId']
+
+        portfolios = self.portfolio_manager.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
+        if (len(portfolios) == 0):
+            raise Exception(f"Portfolio with name {portfolio_name} not found")
+        if (len(portfolios) > 1):
+            raise Exception(f"{len(portfolios)} portfolios found with name {portfolio_name}, please use a unique name")
+        portfolio_id = portfolios[0]['portfolioId']
+
+        # Use get_workspace_root() to get correct path in both VS Code and JupyterLab
+        workspace_root = get_workspace_root()
+        working_files_dir = str(workspace_root / "workflows" / "_Tools" / "files" / "working_files")
+
+        accounts_file_path = os.path.join(working_files_dir, accounts_file)
+        locations_file_path = os.path.join(working_files_dir, locations_file)
+        mapping_file_path = os.path.join(working_files_dir, mapping_file)
 
         # Validate files exist
         validate_file_exists(accounts_file_path, "accounts_file")

@@ -1,3 +1,4 @@
+from .job import JobManager
 from .client import Client
 from .edm import EDMManager
 from .portfolio import PortfolioManager
@@ -19,6 +20,7 @@ class IRPClient:
         self.treaty = TreatyManager(self._client)
         self.reference_data = ReferenceDataManager(self._client)
         self.rdm = RDMManager(self.client)
+        self.job = JobManager(self.client)
 
     @property
     def client(self):

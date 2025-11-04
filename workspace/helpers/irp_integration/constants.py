@@ -1,10 +1,10 @@
 # API Endpoint Constants
 
-# Workflow endpoints
+# Workflow / Job endpoints
 GET_WORKFLOWS = '/riskmodeler/v1/workflows'
 GET_WORKFLOW_BY_ID = '/riskmodeler/v1/workflows/{workflow_id}'
-GET_JOBS = '/platform/riskdata/v1/jobs'
-GET_JOB_BY_ID = '/platform/riskdata/v1/jobs/{job_id}'
+GET_RISK_DATA_JOB_BY_ID = '/platform/riskdata/v1/jobs/{job_id}'
+SEARCH_RISK_DATA_JOBS = '/platform/riskdata/v1/jobs'
 
 # Workflow statuses
 WORKFLOW_COMPLETED_STATUSES = ['FINISHED', 'FAILED', 'CANCELLED'] # https://developer.rms.com/risk-modeler/docs/workflow-engine#polling-workflow-job-and-operation-statuses
@@ -21,30 +21,19 @@ DELETE_EDM = '/platform/riskdata/v1/exposures/{exposureId}'
 GET_CEDANTS = '/platform/riskdata/v1/exposures/{exposureId}/cedants'
 GET_LOBS = '/platform/riskdata/v1/exposures/{exposureId}/lobs'
 
-GET_DATASOURCES = '/riskmodeler/v2/datasources'
-# CREATE_DATASOURCE = '/riskmodeler/v2/datasources'
-DELETE_DATASOURCE = '/riskmodeler/v2/datasources/{edm_name}'
-# EXPORT_EDM = '/riskmodeler/v2/exports'
-EXPORT_EDM = '/platform/riskdata/v1/exports'
-
-
 # MRI Import Endpoints
+CREATE_IMPORT_FOLDER = '/platform/import/v1/folders'
+CREATE_IMPORT_JOB = '/platform/import/v1/jobs'
 CREATE_AWS_BUCKET = '/riskmodeler/v1/storage'
 CREATE_MAPPING = '/riskmodeler/v1/imports/createmapping/{bucket_id}'
-# EXECUTE_IMPORT = '/riskmodeler/v1/imports'
-EXECUTE_IMPORT = '/platform/riskdata/v1/imports'
+EXECUTE_IMPORT = '/riskmodeler/v1/imports'
 
 # Portfolio endpoints
 SEARCH_PORTFOLIOS = '/platform/riskdata/v1/exposures/{exposureId}/portfolios'
 CREATE_PORTFOLIO = '/platform/riskdata/v1/exposures/{exposureId}/portfolios'
 GET_PORTFOLIO_BY_ID = '/platform/riskdata/v1/exposures/{exposureId}/portfolios/{id}'
-
-
-# CREATE_PORTFOLIO = '/riskmodeler/v2/portfolios'
-GET_PORTFOLIOS = '/riskmodeler/v2/portfolios'
-# GET_PORTFOLIO_BY_ID = '/riskmodeler/v2/portfolios/{portfolio_id}'
-PORTFOLIO_GEOHAZ = '/riskmodeler/v2/portfolios/{portfolio_id}/geohaz'
-ANALYZE_PORTFOLIO = '/riskmodeler/v2/portfolios/{portfolio_id}/process'
+GEOHAZ_PORTFOLIO = '/platform/geohaz/v1/jobs'
+GET_GEOHAZ_JOB = '/platform/geohaz/v1/jobs/{jobId}'
 
 # Treaty endpoints
 SEARCH_TREATIES = 'platform/riskdata/v1/exposures/{exposureId}/treaties'
@@ -59,7 +48,7 @@ TREATY_TYPES = {
     'Working Excess': 'WORK'
 }
 TREATY_ATTACHMENT_BASES = {
-    'Losses Ocurring': 'L',
+    'Losses Occurring': 'L',
     'Risks Attaching': 'R'
 }
 TREATY_ATTACHMENT_LEVELS = {
@@ -70,28 +59,27 @@ TREATY_ATTACHMENT_LEVELS = {
 }
 CREATE_TREATY_LOB = 'platform/riskdata/v1/exposures/{exposureId}/treaties/{id}/lob'
 
-# GET_TREATIES = '/riskmodeler/v1/treaties'
-GET_TREATIES = '/platform/riskdata/v1/treaties'
-# CREATE_TREATY = '/riskmodeler/v1/treaties'
-ASSIGN_TREATY_LOBS = '/riskmodeler/v1/treaties/lob/batch'
-GET_TREATY_TYPES = '/riskmodeler/v1/domains/RMS/tablespace/System/entities/TreatyType/values'
-GET_TREATY_ATTACHMENT_BASES = '/riskmodeler/v1/domains/RMS/tablespace/System/entities/AttachBasis/values'
-GET_TREATY_ATTACHMENT_LEVELS = '/riskmodeler/v1/domains/RMS/tablespace/System/entities/AttachLevel/values'
-
 # Analysis endpoints
+SEARCH_ANALYSIS_JOBS = '/platform/model/v1/jobs'
+CREATE_ANALYSIS_JOB = '/platform/model/v1/jobs'
+GET_ANALYSIS_JOB = '/platform/model/v1/jobs/{jobId}'
+SEARCH_ANALYSIS_RESULTS = '/platform/riskdata/v1/analyses'
+GET_ANALYSIS_RESULT = '/platform/riskdata/v1/analyses/{analysisId}'
+CREATE_ANALYSIS_GROUP = '/platform/grouping/v1/jobs'
+GET_ANALYSIS_GROUPING_JOB = '/platform/grouping/v1/jobs/{jobId}'
+DELETE_ANALYSIS = '/platform/riskdata/v1/analyses/{analysisId}'
+
 GET_MODEL_PROFILES = '/analysis-settings/modelprofiles'
 GET_OUTPUT_PROFILES = '/analysis-settings/outputprofiles'
 GET_EVENT_RATE_SCHEME = '/data-store/referencetables/eventratescheme'
-GET_PLATFORM_ANALYSES = '/platform/riskdata/v1/analyses'
-GET_ANALYSES = '/riskmodeler/v2/analyses'
-CREATE_ANALYSIS_GROUP = '/riskmodeler/v2/analysis-groups'
 
 # Tag endpoints
 GET_TAGS = '/data-store/referencedata/v1/tags'
 CREATE_TAG = '/data-store/referencedata/v1/tags'
 
 # RDM endpoints
-EXPORT_TO_RDM = '/platform/export/v1/jobs'
+CREATE_RDM_EXPORT_JOB = '/platform/export/v1/jobs'
+GET_EXPORT_JOB = '/platform/export/v1/jobs/{jobId}'
 
 # Currency endpoints
-GET_CURRENCIES = '/riskmodeler/v1/domains/Client/tablespace/UserConfig/entities/currency/values'
+SEARCH_CURRENCIES = 'data-store/referencetables/currency'

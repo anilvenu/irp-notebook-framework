@@ -5,15 +5,16 @@ Handles HTTP requests with retry logic, workflow polling,
 and batch workflow execution.
 """
 
+import json
 import requests
 import time
 import os
 from typing import Dict, List, Any, Optional, Union
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-from .constants import GET_WORKFLOWS, WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES, GET_JOB_BY_ID, GET_WORKFLOW_BY_ID
+from .constants import  GET_WORKFLOWS, WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES, GET_WORKFLOW_BY_ID
 from .exceptions import IRPAPIError, IRPJobError, IRPWorkflowError
-from .validators import validate_non_empty_string, validate_positive_int
+from .validators import validate_list_not_empty, validate_non_empty_string, validate_positive_int
 from .utils import get_location_header
 
 class Client:
@@ -119,69 +120,6 @@ class Client:
             raise IRPAPIError(f"Request error: {e}") from e
 
         return response
-
-
-    def get_risk_data_job(self, job_id: int) -> Dict[str, Any]:
-        """
-        Retrieve job status by job ID.
-
-        Args:
-            job_id: Job ID
-
-        Returns:
-            Dict containing job status details
-
-        Raises:
-            IRPValidationError: If job_id is invalid
-            IRPAPIError: If request fails
-        """
-        validate_positive_int(job_id, "job_id")
-
-        try:
-            response = self.request('GET', GET_JOB_BY_ID.format(job_id=job_id))
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get job status for job ID {job_id}: {e}")
-
-
-    def poll_risk_data_job_to_completion(
-        self,
-        job_id: int,
-        interval: int = 10,
-        timeout: int = 600000
-    ) -> Dict[str, Any]:
-        """
-        Poll risk data job until completion or timeout.
-
-        Args:
-            job_id: Job ID
-            interval: Polling interval in seconds
-            timeout: Maximum timeout in seconds
-        """
-        validate_positive_int(job_id, "job_id")
-        validate_positive_int(interval, "interval")
-        validate_positive_int(timeout, "timeout")
-
-        start = time.time()
-        while True:
-            print(f"Polling risk data job ID {job_id}")
-            job_data = self.get_risk_data_job(job_id)
-            try:
-                status = job_data['status']
-                progress = job_data['progress']
-            except (KeyError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Missing 'status' or 'progress' in job response for job ID {job_id}: {e}"
-                ) from e
-            print(f"Job status: {status}; Percent complete: {progress}")
-            if status in WORKFLOW_COMPLETED_STATUSES:
-                return job_data
-            
-            if time.time() - start > timeout:
-                raise IRPJobError(
-                    f"Risk data job ID {job_id} did not complete within {timeout} seconds. Last status: {status}"
-                )
-            time.sleep(interval)
 
 
     def get_workflow(self, workflow_id: int) -> Dict[str, Any]:
@@ -291,7 +229,7 @@ class Client:
                 )
             time.sleep(interval)
 
-    def poll_workflow_batch(
+    def poll_workflow_batch_to_completion(
         self,
         workflow_ids: List[int],
         interval: int = 20,
@@ -312,7 +250,6 @@ class Client:
             IRPValidationError: If inputs are invalid
             IRPWorkflowError: If workflows time out
         """
-        from .validators import validate_list_not_empty
         validate_list_not_empty(workflow_ids, "workflow_ids")
         validate_positive_int(interval, "interval")
         validate_positive_int(timeout, "timeout")
