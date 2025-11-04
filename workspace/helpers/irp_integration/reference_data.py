@@ -7,7 +7,7 @@ model profiles, output profiles, event rate schemes, currencies, and tags.
 
 from typing import Dict, List, Any
 from .client import Client
-from .constants import GET_CURRENCIES, GET_TAGS, CREATE_TAG, GET_MODEL_PROFILES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME
+from .constants import SEARCH_CURRENCIES, GET_TAGS, CREATE_TAG, GET_MODEL_PROFILES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME
 from .exceptions import IRPAPIError
 from .validators import validate_non_empty_string, validate_list_not_empty
 from .utils import extract_id_from_location_header
@@ -24,6 +24,7 @@ class ReferenceDataManager:
         """
         self.client = client
 
+
     def get_model_profiles(self) -> Dict[str, Any]:
         """
         Retrieve all model profiles.
@@ -39,6 +40,7 @@ class ReferenceDataManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to get model profiles: {e}")
+
 
     def get_model_profile_by_name(self, profile_name: str) -> Dict[str, Any]:
         """
@@ -64,6 +66,7 @@ class ReferenceDataManager:
         except Exception as e:
             raise IRPAPIError(f"Failed to get model profile '{profile_name}': {e}")
 
+
     def get_output_profiles(self) -> List[Dict[str, Any]]:
         """
         Retrieve all output profiles.
@@ -79,6 +82,7 @@ class ReferenceDataManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to get output profiles: {e}")
+
 
     def get_output_profile_by_name(self, profile_name: str) -> List[Dict[str, Any]]:
         """
@@ -104,6 +108,7 @@ class ReferenceDataManager:
         except Exception as e:
             raise IRPAPIError(f"Failed to get output profile '{profile_name}': {e}")
 
+
     def get_event_rate_schemes(self) -> Dict[str, Any]:
         """
         Retrieve all active event rate schemes.
@@ -121,6 +126,7 @@ class ReferenceDataManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to get event rate schemes: {e}")
+
 
     def get_event_rate_scheme_by_name(self, scheme_name: str) -> Dict[str, Any]:
         """
@@ -146,23 +152,56 @@ class ReferenceDataManager:
         except Exception as e:
             raise IRPAPIError(f"Failed to get event rate scheme '{scheme_name}': {e}")
 
-    def get_currencies(self) -> Dict[str, Any]:
+
+    def search_currencies(self, where_clause: str = "") -> Dict[str, Any]:
         """
-        Retrieve all available currencies.
+        Search currencies with optional filtering.
+
+        Args:
+            where_clause: Optional filter clause
 
         Returns:
-            Dict containing currency list
+            List containing currencies
 
         Raises:
             IRPAPIError: If request fails
         """
-        params = {"fields": "code,name"}
+        params = {}
+        if where_clause:
+            params['where'] = where_clause
 
         try:
-            response = self.client.request('GET', GET_CURRENCIES, params=params)
+            response = self.client.request('GET', SEARCH_CURRENCIES, params=params)
             return response.json()
         except Exception as e:
-            raise IRPAPIError(f"Failed to get currencies: {e}")
+            raise IRPAPIError(f"Failed to search currencies: {e}")
+
+
+    def get_currency_by_name(self, currency_name: str) -> Dict[str, Any]:
+        """
+        Retrieve currency by name.
+
+        Args:
+            currency_name: Currency name
+
+        Returns:
+            Dict containing currency details
+
+        Raises:
+            IRPValidationError: If currency_name is invalid
+            IRPAPIError: If request fails
+        """
+        validate_non_empty_string(currency_name, "currency_name")
+        where_clause = f"currencyName=\"{currency_name}\""
+        currencies_response = self.search_currencies(where_clause)
+        try:
+            currency = currencies_response['items'][0]
+            return currency
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract currency '{currency_name}' from search response: {e}"
+            ) from e
+
 
     def get_tag_by_name(self, tag_name: str) -> List[Dict[str, Any]]:
         """
@@ -191,6 +230,7 @@ class ReferenceDataManager:
         except Exception as e:
             raise IRPAPIError(f"Failed to get tag '{tag_name}': {e}")
 
+
     def create_tag(self, tag_name: str) -> Dict[str, str]:
         """
         Create new tag.
@@ -215,6 +255,7 @@ class ReferenceDataManager:
             return {"id": tag_id}
         except Exception as e:
             raise IRPAPIError(f"Failed to create tag '{tag_name}': {e}")
+
 
     def get_tag_ids_from_tag_names(self, tag_names: List[str]) -> List[int]:
         """

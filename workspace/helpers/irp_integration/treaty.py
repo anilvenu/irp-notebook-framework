@@ -8,16 +8,16 @@ and Line of Business (LOB) assignments.
 from typing import Dict, List, Any
 from .client import Client
 from .constants import (
-    GET_TREATIES,
     CREATE_TREATY,
-    ASSIGN_TREATY_LOBS,
-    GET_TREATY_TYPES,
-    GET_TREATY_ATTACHMENT_BASES,
-    GET_TREATY_ATTACHMENT_LEVELS
+    SEARCH_TREATIES,
+    TREATY_TYPES,
+    TREATY_ATTACHMENT_BASES,
+    TREATY_ATTACHMENT_LEVELS,
+    CREATE_TREATY_LOB
 )
 from .exceptions import IRPAPIError, IRPValidationError, IRPReferenceDataError
-from .validators import validate_non_empty_string, validate_positive_int
-from .utils import find_reference_data_by_name, extract_id_from_location_header
+from .validators import validate_list_not_empty, validate_non_empty_string, validate_positive_int, validate_non_negative_float, validate_non_negative_int
+from .utils import extract_id_from_location_header
 
 
 class TreatyManager:
@@ -52,13 +52,14 @@ class TreatyManager:
             self._reference_data_manager = ReferenceDataManager(self.client)
         return self._reference_data_manager
 
-    def get_treaties_by_edm(self, edm_name: str, limit: int = 100) -> Dict[str, Any]:
+
+    def search_treaties(self, exposure_id: int, filter: str = '') -> List[Dict[str, Any]]:
         """
-        Get all treaties for an EDM.
+        Search treaties for a given exposure ID.
 
         Args:
-            edm_name: EDM name
-            limit: Maximum number of treaties to return (default: 100)
+            exposure_id: Exposure ID
+            filter: Optional filter string
 
         Returns:
             Dict with treaty search results
@@ -67,444 +68,300 @@ class TreatyManager:
             IRPValidationError: If parameters are invalid
             IRPAPIError: If API request fails
         """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(limit, "limit")
-
-        params = {
-            "datasource": edm_name,
-            "limit": limit
-        }
-
+        validate_positive_int(exposure_id, "exposure_id")
+        params = {}
+        if filter:
+            params['filter'] = filter
         try:
-            response = self.client.request('GET', GET_TREATIES, params=params)
+            response = self.client.request('GET', SEARCH_TREATIES.format(exposureId=exposure_id), params=params)
             return response.json()
         except Exception as e:
-            raise IRPAPIError(f"Failed to get treaties: {e}")
+            raise IRPAPIError(f"Failed to search treaties: {e}")
 
-    def get_treaty_types_by_edm(
-        self,
-        edm_name: str,
-        limit: int = 100
-    ) -> Dict[str, Any]:
+
+    def create_treaties(self, treaty_data_list: List[Dict[str, Any]]) -> List[int]:
         """
-        Get available treaty types for an EDM.
+        Create multiple treaties.
 
         Args:
-            edm_name: EDM name
-            limit: Maximum number of types to return (default: 100)
+            treaty_data_list: List of treaty data dicts, each containing all required treaty fields
 
         Returns:
-            Dict with treaty types data
+            List of treaty IDs
 
         Raises:
-            IRPValidationError: If parameters are invalid
-            IRPAPIError: If API request fails
+            IRPValidationError: If treaty_data_list is empty or invalid
+            IRPAPIError: If treaty creation fails or EDM not found
         """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(limit, "limit")
+        validate_list_not_empty(treaty_data_list, "treaty_data_list")
 
-        params = {
-            "fields": "code,name",
-            "datasource": edm_name,
-            "limit": limit
-        }
+        treaty_ids = []
+        for treaty_data in treaty_data_list:
+            try:
+                edm_name = treaty_data['edm_name']
+                treaty_name = treaty_data['treaty_name']
+                treaty_number = treaty_data['treaty_number']
+                treaty_type = treaty_data['treaty_type']
+                per_risk_limit = treaty_data['per_risk_limit']
+                occurrence_limit = treaty_data['occurrence_limit']
+                attachment_point = treaty_data['attachment_point']
+                inception_date = treaty_data['inception_date']
+                expiration_date = treaty_data['expiration_date']
+                currency_name = treaty_data['currency_name']
+                attachment_basis = treaty_data['attachment_basis']
+                attachment_level = treaty_data['attachment_level']
+                pct_covered = treaty_data['pct_covered']
+                pct_placed = treaty_data['pct_placed']
+                pct_share = treaty_data['pct_share']
+                pct_retention = treaty_data['pct_retention']
+                premium = treaty_data['premium']
+                num_reinstatements = treaty_data['num_reinstatements']
+                pct_reinstatement_charge = treaty_data['pct_reinstatement_charge']
+                aggregate_limit = treaty_data['aggregate_limit']
+                aggregate_deductible = treaty_data['aggregate_deductible']
+                priority = treaty_data['priority']
+            except (KeyError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Missing data in create treaty data: {e}"
+                ) from e
+            
+            edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
+            if (len(edms) != 1):
+                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
+            try:
+                exposure_id = edms[0]['exposureId']
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
+                ) from e
 
-        try:
-            response = self.client.request('GET', GET_TREATY_TYPES, params=params)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get treaty types: {e}")
+            treaty_ids.append(self.create_treaty(
+                exposure_id=exposure_id,
+                treaty_name=treaty_name,
+                treaty_number=treaty_number,
+                treaty_type=treaty_type,
+                per_risk_limit=per_risk_limit,
+                occurrence_limit=occurrence_limit,
+                attachment_point=attachment_point,
+                inception_date=inception_date,
+                expiration_date=expiration_date,
+                currency_name=currency_name,
+                attachment_basis=attachment_basis,
+                attachment_level=attachment_level,
+                pct_covered=pct_covered,
+                pct_placed=pct_placed,
+                pct_share=pct_share,
+                pct_retention=pct_retention,
+                premium=premium,
+                num_reinstatements=num_reinstatements,
+                pct_reinstatement_charge=pct_reinstatement_charge,
+                aggregate_limit=aggregate_limit,
+                aggregate_deductible=aggregate_deductible,
+                priority=priority
+            ))
 
-    def get_treaty_attachment_bases_by_edm(
-        self,
-        edm_name: str,
-        limit: int = 100
-    ) -> Dict[str, Any]:
-        """
-        Get available treaty attachment bases for an EDM.
+        return treaty_ids
 
-        Args:
-            edm_name: EDM name
-            limit: Maximum number to return (default: 100)
-
-        Returns:
-            Dict with attachment bases data
-
-        Raises:
-            IRPValidationError: If parameters are invalid
-            IRPAPIError: If API request fails
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(limit, "limit")
-
-        params = {
-            "fields": "code,name",
-            "datasource": edm_name,
-            "limit": limit
-        }
-
-        try:
-            response = self.client.request('GET', GET_TREATY_ATTACHMENT_BASES, params=params)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get treaty attachment bases: {e}")
-
-    def get_treaty_attachment_levels_by_edm(
-        self,
-        edm_name: str,
-        limit: int = 100
-    ) -> Dict[str, Any]:
-        """
-        Get available treaty attachment levels for an EDM.
-
-        Args:
-            edm_name: EDM name
-            limit: Maximum number to return (default: 100)
-
-        Returns:
-            Dict with attachment levels data
-
-        Raises:
-            IRPValidationError: If parameters are invalid
-            IRPAPIError: If API request fails
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(limit, "limit")
-
-        params = {
-            "fields": "code,name",
-            "datasource": edm_name,
-            "limit": limit
-        }
-
-        try:
-            response = self.client.request('GET', GET_TREATY_ATTACHMENT_LEVELS, params=params)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to get treaty attachment levels: {e}")
 
     def create_treaty(
-        self,
-        edm_name: str,
-        treaty_data: Dict[str, Any]
-    ) -> Dict[str, str]:
+            self,
+            exposure_id: int,
+            treaty_name: str,
+            treaty_number: str,
+            treaty_type: str,
+            per_risk_limit: float,
+            occurrence_limit: float,
+            attachment_point: float,
+            inception_date: str,
+            expiration_date: str,
+            currency_name: str,
+            attachment_basis: str,
+            attachment_level: str,
+            pct_covered: float,
+            pct_placed: float,
+            pct_share: float,
+            pct_retention: float,
+            premium: float,
+            num_reinstatements: int,
+            pct_reinstatement_charge: float,
+            aggregate_limit: float,
+            aggregate_deductible: float,
+            priority: int,
+    ) -> int:
         """
-        Create treaty with provided data dict (low-level method).
-
-        This method creates a treaty with provided data dict.
-        For a simplified approach with automatic reference data lookup,
-        use create_treaty_from_names() instead.
+        Create a treaty with provided parameters.
 
         Args:
-            edm_name: Target EDM name
-            treaty_data: Treaty data dict with all required fields
+            treaty_name: Treaty name
+            treaty_number: Treaty number (max 20 chars)
+            type: Treaty type (must be in TREATY_TYPES)
+            per_risk_limit: Per risk limit amount
+            occurrence_limit: Occurrence limit amount
+            attachment_point: Attachment point amount
+            inception_date: Inception date (ISO format)
+            expiration_date: Expiration date (ISO format)
+            currency_name: Currency name (e.g., "US Dollar")
+            attachment_basis: Attachment basis (must be in TREATY_ATTACHMENT_BASES)
+            attachment_level: Attachment level (must be in TREATY_ATTACHMENT_LEVELS)
+            pct_covered: Percent covered
+            pct_placed: Percent placed
+            pct_share: Percent share
+            pct_retention: Percent retention
+            premium: Premium amount
+            num_reinstatements: Number of reinstatements
+            pct_reinstatement_charge: Percent reinstatement charge
+            aggregate_limit: Aggregate limit amount
+            aggregate_deductible: Aggregate deductible amount
+            priority: Priority
 
         Returns:
-            Dict with 'id' (treaty ID)
+            Treaty ID of the created treaty
 
         Raises:
             IRPValidationError: If parameters are invalid
             IRPAPIError: If treaty creation fails
         """
-        validate_non_empty_string(edm_name, "edm_name")
-
-        if not isinstance(treaty_data, dict):
-            raise IRPValidationError(
-                f"treaty_data must be a dict, got {type(treaty_data).__name__}"
-            )
-
-        # Make a copy to avoid modifying the original
-        data = treaty_data.copy()
-
-        # Truncate treaty number if it exists
-        if "treatyNumber" in data:
-            data["treatyNumber"] = str(data["treatyNumber"])[:20]
-
-        params = {"datasource": edm_name}
-
-        try:
-            response = self.client.request('POST', CREATE_TREATY, params=params, json=data)
-            treaty_id = extract_id_from_location_header(response, "treaty creation response")
-            return {'id': treaty_id}
-        except IRPAPIError:
-            raise
-        except Exception as e:
-            raise IRPAPIError(f"Failed to create treaty: {e}")
-
-    def assign_lobs(
-        self,
-        edm_name: str,
-        treaty_id: str,
-        lob_ids: List[str]
-    ) -> Dict[str, Any]:
-        """
-        Assign Lines of Business (LOBs) to a treaty.
-
-        Args:
-            edm_name: EDM name
-            treaty_id: Treaty ID
-            lob_ids: List of LOB IDs to assign
-
-        Returns:
-            Response from LOB assignment
-
-        Raises:
-            IRPValidationError: If parameters are invalid
-            IRPAPIError: If assignment fails
-        """
-        validate_non_empty_string(edm_name, "edm_name")
-        validate_non_empty_string(treaty_id, "treaty_id")
-
-        if not isinstance(lob_ids, list):
-            raise IRPValidationError(
-                f"lob_ids must be a list, got {type(lob_ids).__name__}"
-            )
-
-        if not lob_ids:
-            raise IRPValidationError("lob_ids cannot be empty")
-
-        params = {"datasource": edm_name}
-
-        # Build batch request data
-        data = []
-        for lob_id in lob_ids:
-            body_value = {"id": lob_id}
-            item = {
-                "body": f"{body_value}",
-                "method": "POST",
-                "path": f"/{treaty_id}/lob"
-            }
-            data.append(item)
-
-        try:
-            response = self.client.request('POST', ASSIGN_TREATY_LOBS, params=params, json=data)
-            return response.json()
-        except Exception as e:
-            raise IRPAPIError(f"Failed to assign LOBs to treaty: {e}")
-
-    def create_treaty_from_names(
-        self,
-        edm_name: str,
-        treaty_name: str,
-        treaty_type_name: str,
-        currency_name: str,
-        attachment_basis_name: str,
-        attachment_level_name: str,
-        risk_limit: float,
-        occur_limit: float,
-        attach_pt: float,
-        pcnt_covered: float,
-        pcnt_placed: float,
-        pcnt_ri_share: float,
-        pcnt_retent: float,
-        premium: float,
-        num_of_reinst: int,
-        reinst_charge: float,
-        aggregate_limit: float,
-        aggregate_deductible: float,
-        priority: int,
-        effect_date: str,
-        expire_date: str,
-        auto_assign_lobs: bool = True,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        Create treaty with automatic reference data lookup (convenience method).
-
-        This method handles:
-        1. Fetching cedants from EDM
-        2. Fetching LOBs from EDM
-        3. Looking up treaty type by name
-        4. Looking up attachment basis by name
-        5. Looking up attachment level by name
-        6. Looking up currency by name
-        7. Creating treaty with all assembled data
-        8. Optionally assigning LOBs to treaty
-
-        Args:
-            edm_name: Target EDM name
-            treaty_name: Treaty name (truncated to 20 chars if needed)
-            treaty_type_name: Treaty type name (e.g., "Working Excess")
-            currency_name: Currency name (e.g., "US Dollar")
-            attachment_basis_name: Attachment basis name (e.g., "Losses Occurring")
-            attachment_level_name: Attachment level name (e.g., "Location")
-            risk_limit: Risk limit amount
-            occur_limit: Occurrence limit amount
-            attach_pt: Attachment point amount
-            pcnt_covered: Percent covered
-            pcnt_placed: Percent placed
-            pcnt_ri_share: Percent RI share
-            pcnt_retent: Percent retention
-            premium: Premium amount
-            num_of_reinst: Number of reinstatements
-            reinst_charge: Reinstatement charge
-            aggregate_limit: Aggregate limit
-            aggregate_deductible: Aggregate deductible
-            priority: Priority
-            effect_date: Effective date (ISO format)
-            expire_date: Expiration date (ISO format)
-            auto_assign_lobs: Automatically assign all LOBs to treaty (default: True)
-            **kwargs: Additional treaty fields
-
-        Returns:
-            Dict with 'id' (treaty ID) and optionally 'lob_assignment' if auto_assign_lobs=True
-
-        Raises:
-            IRPValidationError: If parameters are invalid
-            IRPReferenceDataError: If required reference data not found
-            IRPAPIError: If API calls fail
-        """
-        # Validate required inputs
-        validate_non_empty_string(edm_name, "edm_name")
+        validate_positive_int(exposure_id, "exposure_id")
         validate_non_empty_string(treaty_name, "treaty_name")
-        validate_non_empty_string(treaty_type_name, "treaty_type_name")
-        validate_non_empty_string(currency_name, "currency_name")
-        validate_non_empty_string(attachment_basis_name, "attachment_basis_name")
-        validate_non_empty_string(attachment_level_name, "attachment_level_name")
-        validate_non_empty_string(effect_date, "effect_date")
-        validate_non_empty_string(expire_date, "expire_date")
+        validate_non_empty_string(treaty_number, "treaty_number")
+        validate_non_empty_string(treaty_type, "treaty_type")
+        validate_non_empty_string(inception_date, "inception_date")
+        validate_non_empty_string(expiration_date, "expiration_date")
+        validate_non_empty_string(currency_name, "currency")
+        validate_non_empty_string(attachment_basis, "attachment_basis")
+        validate_non_empty_string(attachment_level, "attachment_level")
+        validate_non_negative_float(per_risk_limit, "per_risk_limit")
+        validate_non_negative_float(occurrence_limit, "occurrence_limit")
+        validate_non_negative_float(attachment_point, "attachment_point")
+        validate_non_negative_float(pct_covered, "pct_covered")
+        validate_non_negative_float(pct_placed, "pct_placed")
+        validate_non_negative_float(pct_share, "pct_share")
+        validate_non_negative_float(pct_retention, "pct_retention")
+        validate_non_negative_float(premium, "premium")
+        validate_non_negative_int(num_reinstatements, "num_reinstatements")
+        validate_non_negative_float(pct_reinstatement_charge, "pct_reinstatement_charge")
+        validate_non_negative_float(aggregate_limit, "aggregate_limit")
+        validate_non_negative_float(aggregate_deductible, "aggregate_deductible")
 
-        # Fetch required reference data
-        cedant_response = self.edm_manager.get_cedants_by_edm(edm_name)
+        if treaty_type not in TREATY_TYPES:
+            raise IRPValidationError(
+                f"Invalid treaty_type '{treaty_type}'. Must be one of: {list(TREATY_TYPES.keys())}"
+            )
+
+        if attachment_basis not in TREATY_ATTACHMENT_BASES:
+            raise IRPValidationError(
+                f"Invalid attachment_basis '{attachment_basis}'. Must be one of: {list(TREATY_ATTACHMENT_BASES.keys())}"
+            )
+
+        if attachment_level not in TREATY_ATTACHMENT_LEVELS:
+            raise IRPValidationError(
+                f"Invalid attachment_level '{attachment_level}'. Must be one of: {list(TREATY_ATTACHMENT_LEVELS.keys())}"
+            )
+        
         try:
-            cedant_data = cedant_response['searchItems']
+            cedant_response = self.edm_manager.get_cedants_by_edm(exposure_id)
+            if not cedant_response:
+                raise IRPReferenceDataError(f"No cedants found for exposure ID '{exposure_id}'")
+            if len(cedant_response) > 1:
+                raise IRPReferenceDataError(f"Multiple cedants found for exposure ID '{exposure_id}'")
+            cedant = cedant_response[0]
+            cedant_data = {
+                "cedantId": cedant["cedantId"],
+                "cedantName": cedant["cedantName"]
+            }
         except (KeyError, TypeError) as e:
             raise IRPAPIError(
-                f"Missing 'searchItems' in cedants response for EDM '{edm_name}': {e}"
+                f"Missing required fields in cedant data for exposure ID '{exposure_id}': {e}"
             ) from e
-
-        if not cedant_data:
-            raise IRPReferenceDataError(f"No cedants found in EDM '{edm_name}'")
-
-        lob_response = self.edm_manager.get_lobs_by_edm(edm_name)
+        except Exception as e:
+            raise IRPAPIError(f"Failed to retrieve cedants for exposure ID '{exposure_id}': {e}")
+        
         try:
-            lob_data = lob_response['searchItems']
+            currency_response = self.reference_data_manager.get_currency_by_name(currency_name)
+            currency_data = {
+                "id": currency_response["currencyId"],
+                "code": currency_response["currencyCode"],
+                "name": currency_response["currencyName"]
+            }
         except (KeyError, TypeError) as e:
             raise IRPAPIError(
-                f"Missing 'searchItems' in LOBs response for EDM '{edm_name}': {e}"
+                f"Missing required fields in currency data for currency '{currency_name}': {e}"
             ) from e
 
-        if not lob_data:
-            raise IRPReferenceDataError(f"No LOBs found in EDM '{edm_name}'")
-
-        # Look up treaty type
-        treaty_type_data = self.get_treaty_types_by_edm(edm_name)
-        try:
-            treaty_type_values = treaty_type_data['entityItems']['values']
-        except (KeyError, TypeError) as e:
-            raise IRPAPIError(f"Missing required fields in treaty type data: {e}") from e
-
-        treaty_type = find_reference_data_by_name(
-            treaty_type_values,
-            treaty_type_name,
-            data_type="treaty type"
-        )
-
-        # Look up attachment basis
-        attachment_basis_data = self.get_treaty_attachment_bases_by_edm(edm_name)
-        try:
-            attachment_basis_values = attachment_basis_data['entityItems']['values']
-        except (KeyError, TypeError) as e:
-            raise IRPAPIError(f"Missing required fields in attachment basis data: {e}") from e
-
-        attachment_basis = find_reference_data_by_name(
-            attachment_basis_values,
-            attachment_basis_name,
-            data_type="attachment basis"
-        )
-
-        # Look up attachment level
-        attachment_level_data = self.get_treaty_attachment_levels_by_edm(edm_name)
-        try:
-            attachment_level_values = attachment_level_data['entityItems']['values']
-        except (KeyError, TypeError) as e:
-            raise IRPAPIError(f"Missing required fields in attachment level data: {e}") from e
-
-        attachment_level = find_reference_data_by_name(
-            attachment_level_values,
-            attachment_level_name,
-            data_type="attachment level"
-        )
-
-        # Look up currency
-        currency_data = self.reference_data_manager.get_currencies()
-        try:
-            currency_values = currency_data['entityItems']['values']
-        except (KeyError, TypeError) as e:
-            raise IRPAPIError(f"Missing required fields in currency data: {e}") from e
-
-        currency = find_reference_data_by_name(
-            currency_values,
-            currency_name,
-            data_type="currency"
-        )
-
-        # Build treaty data
-        treaty_data = {
-            "treatyNumber": treaty_name[:20],  # Truncate to 20 chars
+        data = {
             "treatyName": treaty_name,
-            "treatyType": treaty_type,
-            "riskLimit": risk_limit,
-            "occurLimit": occur_limit,
-            "attachPt": attach_pt,
-            "cedant": cedant_data[0],
-            "effectDate": effect_date,
-            "expireDate": expire_date,
-            "currency": {
-                'code': currency['code'],
-                'name': currency['name']
-            },
-            "attachBasis": attachment_basis,
-            "attachLevel": attachment_level,
-            "pcntCovered": pcnt_covered,
-            "pcntPlaced": pcnt_placed,
-            "pcntRiShare": pcnt_ri_share,
-            "pcntRetent": pcnt_retent,
+            "treatyNumber": treaty_number[:20],  # Truncate to 20 chars
+            "treatyType": TREATY_TYPES[treaty_type],
+            "riskLimit": per_risk_limit,
+            "occurrenceLimit": occurrence_limit,
+            "attachmentPoint": attachment_point,
+            "effectiveDate": inception_date,
+            "expirationDate": expiration_date,
+            "currency": currency_data,
+            "attachmentBasis": TREATY_ATTACHMENT_BASES[attachment_basis],
+            "attachmentLevel": TREATY_ATTACHMENT_LEVELS[attachment_level],
+            "percentageCovered": pct_covered,
+            "percentagePlaced": pct_placed,
+            "percentageRiShare": pct_share,
+            "percentageRetention": pct_retention,
             "premium": premium,
-            "numOfReinst": num_of_reinst,
-            "reinstCharge": reinst_charge,
+            "numberOfReinstatements": num_reinstatements,
+            "reinstatementCharge": pct_reinstatement_charge,
             "aggregateLimit": aggregate_limit,
             "aggregateDeductible": aggregate_deductible,
             "priority": priority,
-            "retentAmt": "",
-            "isValid": True,
-            "userId1": "",
-            "userId2": "",
-            "maolAmount": "",
-            "lobs": lob_data,
-            "tagIds": []
+            "cedant": cedant_data
         }
-
-        # Add any additional kwargs
-        treaty_data.update(kwargs)
-
-        # Create treaty
-        treaty_response = self.create_treaty(edm_name, treaty_data)
 
         try:
-            treaty_id = treaty_response['id']
-        except (KeyError, TypeError) as e:
-            raise IRPAPIError(f"Missing 'id' in treaty creation response: {e}") from e
+            response = self.client.request('POST', CREATE_TREATY.format(exposureId=exposure_id), json=data)
+            treaty_id = extract_id_from_location_header(response, "treaty creation")
 
-        result: Dict[str, Any] = {
-            'id': treaty_id,
-            'treaty_name': treaty_name
+            lobs = self.edm_manager.get_lobs_by_edm(exposure_id)
+            for lob in lobs:
+                self.create_treaty_lob(exposure_id, int(treaty_id), int(lob['lobId']), lob['lobName'])
+
+            return int(treaty_id)
+        except KeyError as e:
+            raise IRPAPIError(f"Missing expected LOB field during treaty creation: {e}")
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create treaty '{treaty_name}': {e}")
+        
+
+    def create_treaty_lob(self, exposure_id: int, treaty_id: int, lob_id: int, lobName: str) -> int:
+        """
+        Create a Line of Business (LOB) for a treaty.
+
+        Args:
+            exposure_id: Exposure ID
+            treaty_id: Treaty ID
+            lob_id: LOB ID
+            lobName: LOB Name
+
+        Returns:
+            LOB ID of the created LOB
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If LOB creation fails
+        """
+        validate_positive_int(exposure_id, "exposure_id")
+        validate_positive_int(treaty_id, "treaty_id")
+        validate_positive_int(lob_id, "lob_id")
+        validate_non_empty_string(lobName, "lobName")
+
+        data = {
+            "lobId": lob_id,
+            "lobName": lobName
         }
 
-        # Optionally assign LOBs
-        if auto_assign_lobs:
-            lob_ids = []
-            for lob in lob_data:
-                try:
-                    lob_ids.append(lob['id'])
-                except (KeyError, TypeError) as e:
-                    raise IRPAPIError(f"Missing 'id' in LOB data: {e}") from e
-            lob_assignment = self.assign_lobs(
-                edm_name,
-                treaty_id,
-                lob_ids
+        try:
+            response = self.client.request(
+                'POST',
+                CREATE_TREATY_LOB.format(exposureId=exposure_id, id=treaty_id),
+                json=data
             )
-            result['lob_assignment'] = lob_assignment
-            result['lobs_assigned'] = len(lob_ids)
-
-        return result
+            created_lob_id = extract_id_from_location_header(response, "treaty LOB creation")
+            return int(created_lob_id)
+        except Exception as e:
+            raise IRPAPIError(f"Failed to create treaty LOB '{lobName}': {e}")
