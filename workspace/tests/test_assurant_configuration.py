@@ -25,6 +25,7 @@ from datetime import datetime
 
 from helpers.configuration import (
     load_configuration_file,
+    validate_configuration_file,
     read_configuration,
     ConfigurationError,
     _validate_key_value,
@@ -545,7 +546,6 @@ def test_load_assurant_config_success(test_schema):
     config_id = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -590,7 +590,6 @@ def test_load_assurant_config_data_structure(test_schema):
     config_id = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -629,8 +628,7 @@ def test_load_config_missing_file(test_schema):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path='/non/existent/path.xlsx',
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -650,8 +648,7 @@ def test_load_config_archived_cycle_fails(test_schema):
         load_configuration_file(
             cycle_id=archived_cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -666,7 +663,6 @@ def test_load_config_duplicate_active_fails(test_schema):
     config_id_1 = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -679,26 +675,8 @@ def test_load_config_duplicate_active_fails(test_schema):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
-
-
-@pytest.mark.database
-@pytest.mark.integration
-@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Assurant Excel file not found")
-def test_load_config_without_register(test_schema):
-    """Test loading configuration with register=False"""
-    cycle_id = create_test_cycle(test_schema, 'test-no-register')
-
-    with pytest.raises(ConfigurationError, match="validated successfully but not registered"):
-        load_configuration_file(
-            cycle_id=cycle_id,
-            excel_config_path=VALID_EXCEL_PATH,
-            register=False,
-            schema=test_schema
-        )
-
 
 # ============================================================================
 # Tests - Error Scenarios
@@ -722,8 +700,7 @@ def test_load_config_invalid_excel(test_schema):
             load_configuration_file(
                 cycle_id=cycle_id,
                 excel_config_path=str(fake_excel_path),
-                register=True,
-                schema=test_schema
+                        schema=test_schema
             )
     finally:
         if fake_excel_path.exists():

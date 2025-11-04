@@ -27,6 +27,7 @@ from helpers.configuration import (
     create_configuration,
     update_configuration_status,
     load_configuration_file,
+    validate_configuration_file,
     ConfigurationError,
     create_job_configurations,
     BATCH_TYPE_TRANSFORMERS
@@ -329,7 +330,6 @@ def test_load_configuration_file_success(test_schema):
     config_id = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -393,8 +393,7 @@ def test_load_configuration_file_validation_errors(test_schema):
             load_configuration_file(
                 cycle_id=cycle_id,
                 excel_config_path=str(bad_file_path),
-                register=True,
-                schema=test_schema
+                        schema=test_schema
             )
     finally:
         # Clean up
@@ -413,7 +412,6 @@ def test_load_configuration_active_cycle(test_schema):
     config_id = load_configuration_file(
         cycle_id=active_cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -438,8 +436,7 @@ def test_load_configuration_archived_cycle_fails(test_schema):
         load_configuration_file(
             cycle_id=archived_cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -454,7 +451,6 @@ def test_load_configuration_duplicate_active_fails(test_schema):
     config_id_1 = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -466,8 +462,7 @@ def test_load_configuration_duplicate_active_fails(test_schema):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -742,8 +737,7 @@ def test_load_configuration_file_not_found(test_schema):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path='/non/existent/path/config.xlsx',
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -766,8 +760,7 @@ def test_load_configuration_file_not_excel(test_schema):
             load_configuration_file(
                 cycle_id=cycle_id,
                 excel_config_path=str(fake_excel_path),
-                register=True,
-                schema=test_schema
+                        schema=test_schema
             )
     finally:
         # Clean up
@@ -777,19 +770,22 @@ def test_load_configuration_file_not_excel(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_load_configuration_without_register(test_schema):
-    """Test load_configuration_file with register=False"""
-    cycle_id = create_test_cycle(test_schema, 'test-no-register')
+def test_validate_configuration_file(test_schema):
+    """Test validate_configuration_file (validation only, no DB insert)"""
+    cycle_id = create_test_cycle(test_schema, 'test-validate-only')
 
     # Create a valid test Excel file path
     if not Path(VALID_EXCEL_PATH).exists():
         pytest.skip("Test Excel file not found")
 
-    # Try to load without registering (dry-run mode)
-    with pytest.raises(ConfigurationError, match="not registered"):
-        load_configuration_file(
-            cycle_id=cycle_id,
-            excel_config_path=VALID_EXCEL_PATH,
-            register=False,
-            schema=test_schema
-        )
+    # Validate without loading to database
+    result = validate_configuration_file(
+        cycle_id=cycle_id,
+        excel_config_path=VALID_EXCEL_PATH
+    )
+
+    # Verify result structure
+    assert 'validation_passed' in result
+    assert 'configuration_data' in result
+    assert 'file_info' in result
+    assert result['validation_passed'] is True
