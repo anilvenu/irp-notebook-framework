@@ -22,12 +22,13 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
-from helpers.database import execute_query, execute_command, execute_insert, DatabaseError
+# Database imports are lazy to avoid connection on module import
+# Functions that need database will import these locally
+# from helpers.database import execute_query, execute_command, execute_insert, DatabaseError
 from helpers.constants import (
     ConfigurationStatus, CONFIGURATION_TAB_LIST,
     EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES
 )
-from helpers.cycle import get_active_cycle_id
 
 
 class ConfigurationError(Exception):
@@ -986,6 +987,9 @@ def create_configuration(
     Raises:
         ConfigurationError: If creation fails
     """
+    # Lazy import of database functions
+    from helpers.database import execute_insert, DatabaseError
+
     # Validate status
     if status not in ConfigurationStatus.all():
         raise ConfigurationError(f"Invalid status: {status}. Must be one of {ConfigurationStatus.all()}")
@@ -1044,6 +1048,9 @@ def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]
     Raises:
         ConfigurationError: If configuration not found
     """
+    # Lazy import of database functions
+    from helpers.database import execute_query
+
     query = """
         SELECT id, cycle_id, configuration_file_name, configuration_data,
                status, file_last_updated_ts, created_ts, updated_ts
@@ -1086,6 +1093,9 @@ def update_configuration_status(config_id: int, status: str, schema: str = 'publ
     Raises:
         ConfigurationError: If configuration not found or invalid status
     """
+    # Lazy import of database functions
+    from helpers.database import execute_command
+
     # Validate status
     if status not in ConfigurationStatus.all():
         raise ConfigurationError(f"Invalid status: {status}. Must be one of {ConfigurationStatus.all()}")
@@ -1269,8 +1279,11 @@ def load_configuration_file(
     Raises:
         ConfigurationError: If validation fails or file issues
     """
+    # Lazy import of database functions
+    from helpers.database import execute_query, execute_command, execute_insert, schema_context
+    from helpers.cycle import get_active_cycle_id
+
     # Validate that the provided cycle_id matches the active cycle
-    from helpers.database import schema_context
     with schema_context(schema):
         active_cycle_id = get_active_cycle_id()
     if active_cycle_id != cycle_id:
@@ -1314,7 +1327,7 @@ def load_configuration_file(
     return config_id
 
 
-def validate_configuration_file(cycle_id: int, excel_config_path: str) -> dict:
+def validate_configuration_file(excel_config_path: str, cycle_id: Optional[int] = None) -> dict:
     """
     Validate Excel configuration file without loading to database.
 
@@ -1322,8 +1335,9 @@ def validate_configuration_file(cycle_id: int, excel_config_path: str) -> dict:
     into the database. Useful for preview/validation before committing.
 
     Args:
-        cycle_id: Cycle ID to validate against (checks if active)
         excel_config_path: Path to Excel configuration file
+        cycle_id: Optional cycle ID to validate against (checks if active).
+                  If None, skips cycle validation (useful for pure file validation)
 
     Returns:
         dict: {
@@ -1339,12 +1353,14 @@ def validate_configuration_file(cycle_id: int, excel_config_path: str) -> dict:
     Raises:
         ConfigurationError: If validation fails or file issues
     """
-    # Validate that the provided cycle_id matches the active cycle
-    active_cycle_id = get_active_cycle_id()
-    if active_cycle_id != cycle_id:
-        raise ConfigurationError(
-            _format_error('BUS-004', cycle_id=cycle_id, active_cycle_id=active_cycle_id)
-        )
+    # Optionally validate that the provided cycle_id matches the active cycle
+    if cycle_id is not None:
+        from helpers.cycle import get_active_cycle_id
+        active_cycle_id = get_active_cycle_id()
+        if active_cycle_id != cycle_id:
+            raise ConfigurationError(
+                _format_error('BUS-004', cycle_id=cycle_id, active_cycle_id=active_cycle_id)
+            )
 
     # Validate Excel file using helper function
     config_data, validation_results, all_valid, file_mtime = _validate_excel_file(excel_config_path)
