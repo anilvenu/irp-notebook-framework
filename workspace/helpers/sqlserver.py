@@ -13,36 +13,31 @@ The framework supports multiple named MSSQL database connections configured
 via environment variables. Each connection requires:
 
 Environment Variable Pattern:
-    MSSQL_{CONNECTION_NAME}_SERVER    - Server hostname or IP
-    MSSQL_{CONNECTION_NAME}_DATABASE  - Database name
-    MSSQL_{CONNECTION_NAME}_USER      - SQL Server authentication username
-    MSSQL_{CONNECTION_NAME}_PASSWORD  - SQL Server authentication password
+    MSSQL_{CONNECTION_NAME}_SERVER    - Server hostname or IP (required)
+    MSSQL_{CONNECTION_NAME}_USER      - SQL Server authentication username (required)
+    MSSQL_{CONNECTION_NAME}_PASSWORD  - SQL Server authentication password (required)
     MSSQL_{CONNECTION_NAME}_PORT      - Port (optional, defaults to 1433)
+    MSSQL_{CONNECTION_NAME}_DATABASE  - Database name (optional, use USE statements in SQL scripts)
 
 Example Configuration:
-    # AWS Data Warehouse connection
+    # AWS Data Warehouse connection (no default database, use USE statements in SQL)
     MSSQL_AWS_DW_SERVER=aws-db.company.com
-    MSSQL_AWS_DW_DATABASE=DataWarehouse
     MSSQL_AWS_DW_USER=irp_service
     MSSQL_AWS_DW_PASSWORD=secretpassword
 
-    # Analytics Database connection
+    # Analytics Database connection (no default database, use USE statements in SQL)
     MSSQL_ANALYTICS_SERVER=analytics.company.com
-    MSSQL_ANALYTICS_DATABASE=Analytics
     MSSQL_ANALYTICS_USER=irp_service
     MSSQL_ANALYTICS_PASSWORD=secretpassword
 
 Usage in Notebooks:
     from helpers.sqlserver import execute_query, execute_script_file
 
-    # Execute query with parameters
-    df = execute_query(
-        "SELECT * FROM portfolios WHERE value > {min_value}",
-        params={'min_value': 1000000},
-        connection='AWS_DW'
-    )
+    # Execute query with parameters (include USE statement to specify database)
+    query = "USE DataWarehouse; SELECT * FROM portfolios WHERE value > {min_value}"
+    df = execute_query(query, params={'min_value': 1000000}, connection='AWS_DW')
 
-    # Execute SQL script from file
+    # Execute SQL script from file (script should include USE statement)
     rows_affected = execute_script_file(
         'workspace/sql/extract_policies.sql',
         params={'cycle_name': 'Q1-2025', 'run_date': '2025-01-15'},
@@ -76,6 +71,7 @@ This module follows the same patterns as database.py:
 Differences from PostgreSQL integration (database.py):
 - No schema context (MSSQL uses databases instead of schemas)
 - Named connections instead of single DB_CONFIG
+- No default database (use USE statements in SQL scripts to specify database)
 - Focus on read operations and script execution (not full ORM)
 - SQL Server specific features (SCOPE_IDENTITY(), etc.)
 """

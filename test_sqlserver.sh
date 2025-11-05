@@ -68,8 +68,9 @@ else
 fi
 
 # Run pytest with SQL Server marker
+# Note: We need to override the --ignore setting from pytest.ini
 echo -e "${YELLOW}Running SQL Server tests...${NC}"
-python -m pytest -m sqlserver "$@"
+python -m pytest workspace/tests/test_sqlserver.py -m sqlserver "$@"
 
 # Capture exit code
 TEST_EXIT_CODE=$?
