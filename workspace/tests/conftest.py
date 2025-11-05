@@ -409,10 +409,10 @@ def mssql_env():
         load_dotenv(env_file)
 
     # Set test-specific defaults if not already set
+    # Note: No DATABASE env var - we pass database parameter to execute functions
     test_defaults = {
         'MSSQL_TEST_SERVER': 'localhost',  # Connect from host machine to Docker
         'MSSQL_TEST_PORT': '1433',
-        'MSSQL_TEST_DATABASE': 'test_db',
         'MSSQL_TEST_USER': 'sa',
         'MSSQL_TEST_PASSWORD': os.getenv('MSSQL_SA_PASSWORD', 'TestPass123!'),
     }
@@ -422,8 +422,8 @@ def mssql_env():
         if key not in os.environ:
             os.environ[key] = default_value
 
-    # Verify required variables are now set
-    required_vars = ['MSSQL_TEST_SERVER', 'MSSQL_TEST_DATABASE', 'MSSQL_TEST_USER', 'MSSQL_TEST_PASSWORD']
+    # Verify required variables are now set (DATABASE not required)
+    required_vars = ['MSSQL_TEST_SERVER', 'MSSQL_TEST_USER', 'MSSQL_TEST_PASSWORD']
     missing = [var for var in required_vars if not os.getenv(var)]
 
     if missing:
@@ -547,10 +547,10 @@ def clean_sqlserver_db(init_sqlserver_db):
 
     # Truncate tables (this will cascade to risks due to FK)
     try:
-        sqlserver.execute_command("DELETE FROM test_risks", connection='TEST')
-        sqlserver.execute_command("DELETE FROM test_portfolios", connection='TEST')
-        sqlserver.execute_command("DBCC CHECKIDENT ('test_portfolios', RESEED, 0)", connection='TEST')
-        sqlserver.execute_command("DBCC CHECKIDENT ('test_risks', RESEED, 0)", connection='TEST')
+        sqlserver.execute_command("DELETE FROM test_risks", connection='TEST', database='test_db')
+        sqlserver.execute_command("DELETE FROM test_portfolios", connection='TEST', database='test_db')
+        sqlserver.execute_command("DBCC CHECKIDENT ('test_portfolios', RESEED, 0)", connection='TEST', database='test_db')
+        sqlserver.execute_command("DBCC CHECKIDENT ('test_risks', RESEED, 0)", connection='TEST', database='test_db')
 
 
         # Re-insert initial data
@@ -566,7 +566,7 @@ def clean_sqlserver_db(init_sqlserver_db):
             sqlserver.execute_command(
                 "INSERT INTO test_portfolios (portfolio_name, portfolio_value, status) VALUES (?, ?, ?)",
                 params=(name, value, status),
-                connection='TEST'
+                connection='TEST', database='test_db'
             )
 
         # Re-insert risk data
@@ -587,7 +587,7 @@ def clean_sqlserver_db(init_sqlserver_db):
             sqlserver.execute_command(
                 "INSERT INTO test_risks (portfolio_id, risk_type, risk_value) VALUES (?, ?, ?)",
                 params=(portfolio_id, risk_type, risk_value),
-                connection='TEST'
+                connection='TEST', database='test_db'
             )
 
     except Exception as e:

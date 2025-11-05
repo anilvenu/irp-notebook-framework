@@ -55,10 +55,11 @@ def test_get_connection_config_success(mssql_env):
     config = get_connection_config('TEST')
 
     assert config['server'] == 'localhost'
-    assert config['database'] == 'test_db'
     assert config['user'] == 'sa'
     assert config['port'] == '1433'
     assert 'password' in config
+    # database field should not be present (no default database)
+    assert 'database' not in config
 
 
 def test_get_connection_config_missing_vars(monkeypatch):
@@ -77,8 +78,19 @@ def test_get_connection_config_missing_vars(monkeypatch):
 
 
 def test_build_connection_string(mssql_env):
-    """Test building ODBC connection string"""
+    """Test building ODBC connection string without database"""
     conn_str = build_connection_string('TEST')
+
+    assert 'DRIVER={ODBC Driver 18 for SQL Server}' in conn_str
+    assert 'SERVER=localhost,1433' in conn_str
+    assert 'DATABASE=' not in conn_str  # No default database
+    assert 'UID=sa' in conn_str
+    assert 'TrustServerCertificate=yes' in conn_str
+
+
+def test_build_connection_string_with_database(mssql_env):
+    """Test building ODBC connection string with database parameter"""
+    conn_str = build_connection_string('TEST', database='test_db')
 
     assert 'DRIVER={ODBC Driver 18 for SQL Server}' in conn_str
     assert 'SERVER=localhost,1433' in conn_str
@@ -89,7 +101,7 @@ def test_build_connection_string(mssql_env):
 
 def test_connection_context_manager(mssql_env, wait_for_sqlserver):
     """Test connection context manager opens and closes properly"""
-    with get_connection('TEST') as conn:
+    with get_connection('TEST', database='test_db') as conn:
         assert conn is not None
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
@@ -258,7 +270,7 @@ def test_substitute_named_parameters_empty_dict():
 
 def test_execute_query_simple(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test simple SELECT query"""
-    df = execute_query("SELECT * FROM test_portfolios", connection='TEST')
+    df = execute_query("SELECT * FROM test_portfolios", connection='TEST', database='test_db')
 
     assert isinstance(df, pd.DataFrame)
     assert len(df) > 0
@@ -271,7 +283,7 @@ def test_execute_query_with_positional_params(mssql_env, wait_for_sqlserver, cle
     df = execute_query(
         "SELECT * FROM test_portfolios WHERE id = ?",
         params=(1,),
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert isinstance(df, pd.DataFrame)
@@ -284,7 +296,7 @@ def test_execute_query_with_named_params(mssql_env, wait_for_sqlserver, clean_sq
     df = execute_query(
         "SELECT * FROM test_portfolios WHERE portfolio_value > {min_value}",
         params={'min_value': 1000000},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert isinstance(df, pd.DataFrame)
@@ -302,7 +314,7 @@ def test_execute_query_with_multiple_named_params(mssql_env, wait_for_sqlserver,
         WHERE p.id = {portfolio_id} AND r.risk_type = {risk_type}
         """,
         params={'portfolio_id': 1, 'risk_type': 'VaR_95'},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert isinstance(df, pd.DataFrame)
@@ -316,7 +328,7 @@ def test_execute_query_with_numpy_params(mssql_env, wait_for_sqlserver, clean_sq
     df = execute_query(
         "SELECT * FROM test_portfolios WHERE portfolio_value > {min_value}",
         params={'min_value': np.float64(1000000.0)},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert isinstance(df, pd.DataFrame)
@@ -328,7 +340,7 @@ def test_execute_query_empty_result(mssql_env, wait_for_sqlserver, clean_sqlserv
     df = execute_query(
         "SELECT * FROM test_portfolios WHERE portfolio_value > {min_value}",
         params={'min_value': 99999999},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert isinstance(df, pd.DataFrame)
@@ -347,7 +359,7 @@ def test_execute_query_connection_error():
 
 def test_execute_scalar_count(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test scalar query for COUNT"""
-    count = execute_scalar("SELECT COUNT(*) FROM test_portfolios", connection='TEST')
+    count = execute_scalar("SELECT COUNT(*) FROM test_portfolios", connection='TEST', database='test_db')
 
     assert isinstance(count, int)
     assert count == 5
@@ -358,7 +370,7 @@ def test_execute_scalar_with_params(mssql_env, wait_for_sqlserver, clean_sqlserv
     count = execute_scalar(
         "SELECT COUNT(*) FROM test_portfolios WHERE portfolio_value > {min_value}",
         params={'min_value': 1000000},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert isinstance(count, int)
@@ -369,7 +381,7 @@ def test_execute_scalar_null_result(mssql_env, wait_for_sqlserver, clean_sqlserv
     """Test scalar query that returns no results"""
     result = execute_scalar(
         "SELECT portfolio_name FROM test_portfolios WHERE id = 9999",
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert result is None
@@ -387,7 +399,7 @@ def test_execute_command_insert(mssql_env, wait_for_sqlserver, clean_sqlserver_d
         VALUES ({name}, {value}, {status})
         """,
         params={'name': 'Test Portfolio F', 'value': 3000000.0, 'status': 'ACTIVE'},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert rows == 1
@@ -396,7 +408,7 @@ def test_execute_command_insert(mssql_env, wait_for_sqlserver, clean_sqlserver_d
     df = execute_query(
         "SELECT * FROM test_portfolios WHERE portfolio_name = {name}",
         params={'name': 'Test Portfolio F'},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
     assert len(df) == 1
     assert df.iloc[0]['portfolio_value'] == 3000000.0
@@ -407,7 +419,7 @@ def test_execute_command_update(mssql_env, wait_for_sqlserver, clean_sqlserver_d
     rows = execute_command(
         "UPDATE test_portfolios SET status = {status} WHERE portfolio_value < {min_value}",
         params={'status': 'LOW_VALUE', 'min_value': 1000000},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert rows == 3  # Portfolio A, C, and E have values < 1M
@@ -415,7 +427,7 @@ def test_execute_command_update(mssql_env, wait_for_sqlserver, clean_sqlserver_d
     # Verify update
     df = execute_query(
         "SELECT * FROM test_portfolios WHERE status = 'LOW_VALUE'",
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
     assert len(df) == 3
 
@@ -425,13 +437,13 @@ def test_execute_command_delete(mssql_env, wait_for_sqlserver, clean_sqlserver_d
     # First insert a record to delete
     execute_command(
         "INSERT INTO test_portfolios (portfolio_name, portfolio_value, status) VALUES ('TO_DELETE', 100, 'TEMP')",
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     # Now delete it
     rows = execute_command(
         "DELETE FROM test_portfolios WHERE status = 'TEMP'",
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert rows == 1
@@ -439,7 +451,7 @@ def test_execute_command_delete(mssql_env, wait_for_sqlserver, clean_sqlserver_d
     # Verify deletion
     count = execute_scalar(
         "SELECT COUNT(*) FROM test_portfolios WHERE status = 'TEMP'",
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
     assert count == 0
 
@@ -453,7 +465,7 @@ def test_execute_query_from_file(mssql_env, wait_for_sqlserver, init_sqlserver_d
     df = execute_query_from_file(
         sample_sql_file,
         params={'portfolio_id': 1, 'risk_type': 'VaR_95'},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert isinstance(df, pd.DataFrame)
@@ -467,7 +479,7 @@ def test_execute_query_from_file_relative_path(mssql_env, wait_for_sqlserver, cl
     df = execute_query_from_file(
         'examples/sample_query.sql',
         params={'portfolio_id': 2, 'risk_type': 'VaR_99'},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert isinstance(df, pd.DataFrame)
@@ -478,7 +490,7 @@ def test_execute_query_from_file_relative_path(mssql_env, wait_for_sqlserver, cl
 def test_execute_query_from_file_not_found(mssql_env):
     """Test error when SQL file doesn't exist"""
     with pytest.raises(SQLServerQueryError) as exc_info:
-        execute_query_from_file('nonexistent.sql', connection='TEST')
+        execute_query_from_file('nonexistent.sql', connection='TEST', database='test_db')
 
     assert 'not found' in str(exc_info.value)
 
@@ -496,7 +508,7 @@ def test_execute_script_file_single_statement(mssql_env, wait_for_sqlserver, ini
     rows = execute_script_file(
         script_path,
         params={'new_status': 'UPDATED', 'min_value': 1000000},
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
 
     assert rows == 3
@@ -504,7 +516,7 @@ def test_execute_script_file_single_statement(mssql_env, wait_for_sqlserver, ini
     # Verify update
     count = execute_scalar(
         "SELECT COUNT(*) FROM test_portfolios WHERE status = 'UPDATED'",
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
     assert count == 3
 
@@ -517,12 +529,12 @@ def test_execute_script_file_multi_statement(mssql_env, wait_for_sqlserver, init
     """
     script_path = temp_sql_file(script_content)
 
-    rows = execute_script_file(script_path, connection='TEST')
+    rows = execute_script_file(script_path, connection='TEST', database='test_db')
 
     # Verify both updates
     df = execute_query(
         "SELECT * FROM test_portfolios WHERE id IN (1, 2)",
-        connection='TEST'
+        connection='TEST', database='test_db'
     )
     assert df[df['id'] == 1]['status'].iloc[0] == 'STAGE1'
     assert df[df['id'] == 2]['status'].iloc[0] == 'STAGE2'
@@ -535,13 +547,13 @@ def test_execute_script_file_multi_statement(mssql_env, wait_for_sqlserver, init
 def test_execute_query_syntax_error(mssql_env, wait_for_sqlserver):
     """Test query with SQL syntax error"""
     with pytest.raises(SQLServerQueryError):
-        execute_query("INVALID SQL SYNTAX HERE", connection='TEST')
+        execute_query("INVALID SQL SYNTAX HERE", connection='TEST', database='test_db')
 
 
 def test_execute_query_invalid_table(mssql_env, wait_for_sqlserver):
     """Test query referencing non-existent table"""
     with pytest.raises(SQLServerQueryError):
-        execute_query("SELECT * FROM nonexistent_table", connection='TEST')
+        execute_query("SELECT * FROM nonexistent_table", connection='TEST', database='test_db')
 
 
 def test_execute_command_constraint_violation(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
@@ -550,7 +562,7 @@ def test_execute_command_constraint_violation(mssql_env, wait_for_sqlserver, cle
         # Try to insert risk with non-existent portfolio_id
         execute_command(
             "INSERT INTO test_risks (portfolio_id, risk_type, risk_value) VALUES (9999, 'VaR_95', 100.0)",
-            connection='TEST'
+            connection='TEST', database='test_db'
         )
 
 
@@ -583,7 +595,7 @@ def test_execute_query_from_file_nonexistent():
     from helpers.sqlserver import execute_query_from_file
 
     with pytest.raises(SQLServerQueryError) as exc_info:
-        execute_query_from_file('nonexistent_file.sql', connection='TEST')
+        execute_query_from_file('nonexistent_file.sql', connection='TEST', database='test_db')
 
     assert 'SQL script file not found' in str(exc_info.value)
 
@@ -594,3 +606,110 @@ def test_execute_script_file_connection_error(temp_sql_file):
 
     with pytest.raises(SQLServerConfigurationError):
         execute_script_file(script, connection='INVALID_CONNECTION_NAME')
+
+
+# ==============================================================================
+# DATABASE PARAMETER TESTS
+# ==============================================================================
+
+def test_execute_query_with_database_parameter(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
+    """Test that execute_query works with database parameter"""
+    df = execute_query(
+        "SELECT * FROM test_portfolios",
+        connection='TEST',
+        database='test_db'
+    )
+
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 5
+
+
+def test_execute_query_without_database_parameter_fails(mssql_env, wait_for_sqlserver):
+    """Test that queries without database parameter fail when table is not fully qualified"""
+    with pytest.raises(SQLServerQueryError):
+        # This should fail because no database is specified and table is not fully qualified
+        execute_query("SELECT * FROM test_portfolios", connection='TEST')
+
+
+def test_execute_scalar_with_database_parameter(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
+    """Test that execute_scalar works with database parameter"""
+    count = execute_scalar(
+        "SELECT COUNT(*) FROM test_portfolios",
+        connection='TEST',
+        database='test_db'
+    )
+
+    assert count == 5
+
+
+def test_execute_command_with_database_parameter(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
+    """Test that execute_command works with database parameter"""
+    rows = execute_command(
+        "UPDATE test_portfolios SET status = 'TEST' WHERE id = 1",
+        connection='TEST',
+        database='test_db'
+    )
+
+    assert rows == 1
+
+    # Verify the update
+    df = execute_query(
+        "SELECT status FROM test_portfolios WHERE id = 1",
+        connection='TEST',
+        database='test_db'
+    )
+    assert df.iloc[0]['status'] == 'TEST'
+
+
+def test_execute_query_from_file_with_database_parameter(mssql_env, wait_for_sqlserver, clean_sqlserver_db, sample_sql_file):
+    """Test that execute_query_from_file works with database parameter"""
+    df = execute_query_from_file(
+        sample_sql_file,
+        params={'portfolio_id': 1, 'risk_type': 'VaR_95'},
+        connection='TEST',
+        database='test_db'
+    )
+
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 1
+
+
+def test_execute_script_file_with_database_parameter(mssql_env, wait_for_sqlserver, clean_sqlserver_db, temp_sql_file):
+    """Test that execute_script_file works with database parameter"""
+    script_content = "UPDATE test_portfolios SET status = 'SCRIPTED' WHERE id IN (1, 2)"
+    script_path = temp_sql_file(script_content)
+
+    rows = execute_script_file(
+        script_path,
+        connection='TEST',
+        database='test_db'
+    )
+
+    assert rows == 2
+
+    # Verify the updates
+    count = execute_scalar(
+        "SELECT COUNT(*) FROM test_portfolios WHERE status = 'SCRIPTED'",
+        connection='TEST',
+        database='test_db'
+    )
+    assert count == 2
+
+
+def test_connection_with_database_parameter(mssql_env, wait_for_sqlserver):
+    """Test that get_connection works with database parameter"""
+    with get_connection('TEST', database='test_db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DB_NAME()")
+        db_name = cursor.fetchone()[0]
+        assert db_name == 'test_db'
+
+
+def test_connection_without_database_parameter(mssql_env, wait_for_sqlserver):
+    """Test that get_connection works without database parameter (no default database)"""
+    with get_connection('TEST') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DB_NAME()")
+        db_name = cursor.fetchone()[0]
+        # When no database is specified, DB_NAME() returns NULL or master
+        # This is expected behavior - no default database

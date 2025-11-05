@@ -33,16 +33,44 @@ Example Configuration:
 Usage in Notebooks:
     from helpers.sqlserver import execute_query, execute_script_file
 
-    # Execute query with parameters (include USE statement to specify database)
+    # Option 1: Specify database via connection parameter
+    df = execute_query(
+        "SELECT * FROM portfolios WHERE value > {min_value}",
+        params={'min_value': 1000000},
+        connection='AWS_DW',
+        database='DataWarehouse'
+    )
+
+    # Option 2: Include USE statement in SQL (if script needs multiple databases)
     query = "USE DataWarehouse; SELECT * FROM portfolios WHERE value > {min_value}"
     df = execute_query(query, params={'min_value': 1000000}, connection='AWS_DW')
 
-    # Execute SQL script from file (script should include USE statement)
+    # Execute SQL script from file with database parameter
     rows_affected = execute_script_file(
         'workspace/sql/extract_policies.sql',
         params={'cycle_name': 'Q1-2025', 'run_date': '2025-01-15'},
-        connection='ANALYTICS'
+        connection='ANALYTICS',
+        database='AnalyticsDB'
     )
+
+================================================================================
+DATABASE SPECIFICATION
+================================================================================
+
+All SQL Server methods accept an optional 'database' parameter to specify which
+database to use. There are two ways to specify the database:
+
+1. **database parameter** (Recommended): Pass database name to any execute method
+   - Cleanest approach when working with a single database
+   - Connection string includes DATABASE= clause
+   - Example: execute_query(..., database='DataWarehouse')
+
+2. **USE statement in SQL**: Include USE [database] in your SQL script
+   - Useful when script needs to access multiple databases
+   - Example: "USE DataWarehouse; SELECT * FROM portfolios"
+
+If neither is specified, connection will not default to any database and queries
+must use fully qualified table names (database.schema.table) or will fail.
 
 ================================================================================
 PARAMETER SUBSTITUTION
@@ -139,7 +167,6 @@ def get_connection_config(connection_name: str = 'TEST') -> Dict[str, str]:
         config = get_connection_config('AWS_DW')
         # Returns: {
         #     'server': 'aws-db.company.com',
-        #     'database': 'DataWarehouse',
         #     'user': 'irp_service',
         #     'password': 'secret',
         #     'port': '1433'
@@ -152,7 +179,6 @@ def get_connection_config(connection_name: str = 'TEST') -> Dict[str, str]:
 
     config = {
         'server': os.getenv(f'{prefix}SERVER'),
-        'database': os.getenv(f'{prefix}DATABASE'),
         'user': os.getenv(f'{prefix}USER'),
         'password': os.getenv(f'{prefix}PASSWORD'),
         'port': os.getenv(f'{prefix}PORT', '1433'),
@@ -173,18 +199,18 @@ def get_connection_config(connection_name: str = 'TEST') -> Dict[str, str]:
             f"  MSSQL_{connection_name}_SERVER=<server>\n"
             f"  MSSQL_{connection_name}_USER=<user>\n"
             f"  MSSQL_{connection_name}_PASSWORD=<password>\n"
-            f"  MSSQL_{connection_name}_PORT=<port> (optional, defaults to 1433)"
         )
 
     return config
 
 
-def build_connection_string(connection_name: str = 'TEST') -> str:
+def build_connection_string(connection_name: str = 'TEST', database: Optional[str] = None) -> str:
     """
     Build ODBC connection string for SQL Server.
 
     Args:
         connection_name: Name of the connection
+        database: Optional database name to connect to
 
     Returns:
         ODBC connection string
@@ -192,6 +218,9 @@ def build_connection_string(connection_name: str = 'TEST') -> str:
     Example:
         conn_str = build_connection_string('AWS_DW')
         # Returns: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=aws-db.company.com,1433;..."
+
+        conn_str = build_connection_string('AWS_DW', database='DataWarehouse')
+        # Returns: "...DATABASE=DataWarehouse;..."
     """
     config = get_connection_config(connection_name)
 
@@ -200,9 +229,9 @@ def build_connection_string(connection_name: str = 'TEST') -> str:
         f"SERVER={config['server']},{config['port']};"
     )
 
-    # Only include DATABASE if it's specified (for USE statement support)
-    if config['database']:
-        connection_string += f"DATABASE={config['database']};"
+    # Only include DATABASE if explicitly provided
+    if database:
+        connection_string += f"DATABASE={database};"
 
     connection_string += (
         f"UID={config['user']};"
@@ -215,7 +244,7 @@ def build_connection_string(connection_name: str = 'TEST') -> str:
 
 
 @contextmanager
-def get_connection(connection_name: str = 'TEST'):
+def get_connection(connection_name: str = 'TEST', database: Optional[str] = None):
     """
     Context manager for SQL Server database connections.
 
@@ -226,6 +255,7 @@ def get_connection(connection_name: str = 'TEST'):
 
     Args:
         connection_name: Name of the connection to use
+        database: Optional database name to connect to
 
     Yields:
         pyodbc.Connection object
@@ -238,8 +268,13 @@ def get_connection(connection_name: str = 'TEST'):
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM portfolios")
             rows = cursor.fetchall()
+
+        with get_connection('AWS_DW', database='DataWarehouse') as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM portfolios")
+            rows = cursor.fetchall()
     """
-    connection_string = build_connection_string(connection_name)
+    connection_string = build_connection_string(connection_name, database=database)
     conn = None
 
     try:
@@ -417,7 +452,8 @@ def _substitute_named_parameters(query: str, params: Optional[Dict[str, Any]] = 
 def execute_query(
     query: str,
     params: Optional[Union[Dict[str, Any], Tuple]] = None,
-    connection: str = 'TEST'
+    connection: str = 'TEST',
+    database: Optional[str] = None
 ) -> pd.DataFrame:
     """
     Execute SELECT query and return results as DataFrame.
@@ -426,6 +462,7 @@ def execute_query(
         query: SQL SELECT query (supports {param_name} placeholders)
         params: Query parameters (dict with named params or tuple for ? placeholders)
         connection: Name of the SQL Server connection to use
+        database: Optional database name to connect to (overrides connection config)
 
     Returns:
         pandas DataFrame with query results
@@ -434,11 +471,12 @@ def execute_query(
         SQLServerQueryError: If query execution fails
 
     Example:
-        # With named parameters
+        # With named parameters and database specification
         df = execute_query(
             "SELECT * FROM portfolios WHERE value > {min_value}",
             params={'min_value': 1000000},
-            connection='AWS_DW'
+            connection='AWS_DW',
+            database='DataWarehouse'
         )
 
         # With positional parameters
@@ -456,7 +494,7 @@ def execute_query(
         if isinstance(params, dict):
             query, params = _substitute_named_parameters(query, params)
 
-        with get_connection(connection) as conn:
+        with get_connection(connection, database=database) as conn:
             df = pd.read_sql(query, conn, params=params)
 
         return df
@@ -473,7 +511,8 @@ def execute_query(
 def execute_scalar(
     query: str,
     params: Optional[Union[Dict[str, Any], Tuple]] = None,
-    connection: str = 'TEST'
+    connection: str = 'TEST',
+    database: Optional[str] = None
 ) -> Any:
     """
     Execute query and return single scalar value (first column of first row).
@@ -482,6 +521,7 @@ def execute_scalar(
         query: SQL query returning single value
         params: Query parameters
         connection: Name of the SQL Server connection to use
+        database: Optional database name to connect to (overrides connection config)
 
     Returns:
         Single value from query result (or None if no results)
@@ -490,7 +530,8 @@ def execute_scalar(
         count = execute_scalar(
             "SELECT COUNT(*) FROM portfolios WHERE value > {min_value}",
             params={'min_value': 1000000},
-            connection='AWS_DW'
+            connection='AWS_DW',
+            database='DataWarehouse'
         )
     """
     try:
@@ -501,7 +542,7 @@ def execute_scalar(
         if isinstance(params, dict):
             query, params = _substitute_named_parameters(query, params)
 
-        with get_connection(connection) as conn:
+        with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
             cursor.execute(query, params or ())
             row = cursor.fetchone()
@@ -519,7 +560,8 @@ def execute_scalar(
 def execute_command(
     query: str,
     params: Optional[Union[Dict[str, Any], Tuple]] = None,
-    connection: str = 'TEST'
+    connection: str = 'TEST',
+    database: Optional[str] = None
 ) -> int:
     """
     Execute non-query command (INSERT, UPDATE, DELETE) and return rows affected.
@@ -528,6 +570,7 @@ def execute_command(
         query: SQL command
         params: Query parameters
         connection: Name of the SQL Server connection to use
+        database: Optional database name to connect to (overrides connection config)
 
     Returns:
         Number of rows affected
@@ -536,7 +579,8 @@ def execute_command(
         rows = execute_command(
             "UPDATE portfolios SET status = {status} WHERE value < {min_value}",
             params={'status': 'INACTIVE', 'min_value': 100000},
-            connection='AWS_DW'
+            connection='AWS_DW',
+            database='DataWarehouse'
         )
         print(f"Updated {rows} rows")
     """
@@ -548,7 +592,7 @@ def execute_command(
         if isinstance(params, dict):
             query, params = _substitute_named_parameters(query, params)
 
-        with get_connection(connection) as conn:
+        with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
             cursor.execute(query, params or ())
             conn.commit()
@@ -655,6 +699,7 @@ def execute_query_from_file(
     file_path: Union[str, Path],
     params: Optional[Dict[str, Any]] = None,
     connection: str = 'TEST',
+    database: Optional[str] = None,
     use_direct_substitution: bool = False
 ) -> pd.DataFrame:
     """
@@ -664,6 +709,7 @@ def execute_query_from_file(
         file_path: Path to SQL file (absolute or relative to workspace/sql/)
         params: Query parameters (supports {param_name} placeholders, case-insensitive)
         connection: Name of the SQL Server connection to use
+        database: Optional database name to connect to (overrides connection config)
         use_direct_substitution: If True, use direct string substitution instead of
                                 parameterized queries. Required for scripts with USE
                                 statements or other commands that don't support parameters.
@@ -677,7 +723,8 @@ def execute_query_from_file(
         df = execute_query_from_file(
             'portfolio_query.sql',
             params={'min_value': 1000000},
-            connection='AWS_DW'
+            connection='AWS_DW',
+            database='DataWarehouse'
         )
 
         # With direct substitution (for USE statements)
@@ -696,7 +743,7 @@ def execute_query_from_file(
 
         # Handle multi-statement scripts (e.g., USE followed by SELECT)
         try:
-            with get_connection(connection) as conn:
+            with get_connection(connection, database=database) as conn:
                 cursor = conn.cursor()
 
                 # Execute the entire script at once
@@ -730,13 +777,14 @@ def execute_query_from_file(
             ) from e
     else:
         # Parameterized query (safe from SQL injection)
-        return execute_query(query, params=params, connection=connection)
+        return execute_query(query, params=params, connection=connection, database=database)
 
 
 def execute_script_file(
     file_path: Union[str, Path],
     params: Optional[Dict[str, Any]] = None,
-    connection: str = 'TEST'
+    connection: str = 'TEST',
+    database: Optional[str] = None
 ) -> int:
     """
     Execute SQL script from file (supports multi-statement scripts).
@@ -745,6 +793,7 @@ def execute_script_file(
         file_path: Path to SQL file (absolute or relative to workspace/sql/)
         params: Script parameters (supports {param_name} placeholders)
         connection: Name of the SQL Server connection to use
+        database: Optional database name to connect to (overrides connection config)
 
     Returns:
         Total number of rows affected (sum across all statements)
@@ -757,7 +806,8 @@ def execute_script_file(
         rows = execute_script_file(
             'update_portfolios.sql',
             params={'status': 'INACTIVE', 'min_value': 100000},
-            connection='AWS_DW'
+            connection='AWS_DW',
+            database='DataWarehouse'
         )
         print(f"Total rows affected: {rows}")
     """
@@ -773,7 +823,7 @@ def execute_script_file(
 
         total_rows = 0
 
-        with get_connection(connection) as conn:
+        with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
 
             # Execute script (pyodbc handles multiple statements)
