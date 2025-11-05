@@ -25,6 +25,7 @@ from datetime import datetime
 
 from helpers.configuration import (
     load_configuration_file,
+    validate_configuration_file,
     read_configuration,
     ConfigurationError,
     _validate_key_value,
@@ -148,6 +149,57 @@ def test_validate_metadata_invalid_pattern():
 
 
 @pytest.mark.unit
+def test_validate_key_value_type_checking():
+    """Test _validate_key_value type checking (line 536-537: when type matches and when it doesn't)"""
+    # First test: types match
+    data = {
+        0: ['DLM Model Version', 'EDM Data Version', 'Wildfire HD Model Version'],
+        1: [23, '23.0.0', 2.5]  # int, str, float
+    }
+    df = pd.DataFrame(data)
+
+    schema = {
+        'required_keys': ['DLM Model Version', 'EDM Data Version'],
+        'value_types': {
+            'DLM Model Version': 'integer',
+            'EDM Data Version': 'string',
+            'Wildfire HD Model Version': 'float'
+        }
+    }
+
+    is_valid, errors, warnings, parsed_data = _validate_key_value(df, schema, 'Metadata')
+
+    assert is_valid == True
+    assert len(errors) == 0
+    assert parsed_data['DLM Model Version'] == 23
+    assert parsed_data['EDM Data Version'] == '23.0.0'
+
+
+@pytest.mark.unit
+def test_validate_key_value_type_mismatch():
+    """Test _validate_key_value type checking when type doesn't match (line 537)"""
+    data = {
+        0: ['DLM Model Version', 'EDM Data Version'],
+        1: ['not_a_number', 12345]  # String instead of int, int instead of string
+    }
+    df = pd.DataFrame(data)
+
+    schema = {
+        'required_keys': ['DLM Model Version'],
+        'value_types': {
+            'DLM Model Version': 'integer',  # Expects integer, gets string
+            'EDM Data Version': 'string'  # Expects string, gets int
+        }
+    }
+
+    is_valid, errors, warnings, parsed_data = _validate_key_value(df, schema, 'Metadata')
+
+    assert is_valid == False
+    assert len(errors) >= 1
+    assert any('TYPE-002' in err or 'type' in err.lower() for err in errors)
+
+
+@pytest.mark.unit
 def test_validate_databases_success():
     """Test _validate_table with valid Databases structure"""
     df = pd.DataFrame({
@@ -206,6 +258,111 @@ def test_validate_databases_null_value():
     assert is_valid == False
     assert len(errors) > 0
     assert any('null' in err.lower() for err in errors)
+
+
+@pytest.mark.unit
+def test_validate_table_nullable_column_allows_nulls():
+    """Test _validate_table with nullable column (lines 579-580: is_nullable=True)"""
+    # Create schema with a nullable column
+    schema = {
+        'required_columns': ['Name', 'Optional_Field'],
+        'nullable': {
+            'Name': False,  # Not nullable
+            'Optional_Field': True  # Nullable (this is the branch we're testing)
+        }
+    }
+
+    df = pd.DataFrame({
+        'Name': ['Value1', 'Value2'],
+        'Optional_Field': ['Data', None]  # Has null but should be allowed
+    })
+
+    is_valid, errors, warnings, parsed_data = _validate_table(df, schema, 'TestSheet')
+
+    assert is_valid == True
+    assert len(errors) == 0
+    assert parsed_data is not None
+
+
+@pytest.mark.unit
+def test_validate_table_pattern_all_values_valid():
+    """Test _validate_table pattern validation when all values match (lines 590-594)"""
+    schema = {
+        'required_columns': ['Database', 'Flag'],
+        'value_patterns': {
+            'Database': r'^RM_EDM_\d{6}_[A-Z]+$',
+            'Flag': r'^[YN]$'
+        }
+    }
+
+    df = pd.DataFrame({
+        'Database': ['RM_EDM_202503_USAP', 'RM_EDM_202503_TEST'],
+        'Flag': ['Y', 'N']  # All values match pattern
+    })
+
+    is_valid, errors, warnings, parsed_data = _validate_table(df, schema, 'TestSheet')
+
+    assert is_valid == True
+    assert len(errors) == 0
+
+
+@pytest.mark.unit
+def test_validate_table_range_boundary_values():
+    """Test _validate_table range constraints at boundaries (lines 597-606)"""
+    schema = {
+        'required_columns': ['Percentage'],
+        'range_constraints': {
+            'Percentage': (0, 100)  # Min and max
+        }
+    }
+
+    # Test values at exact boundaries and within range
+    df = pd.DataFrame({
+        'Percentage': [0, 50, 100]  # Min, middle, max
+    })
+
+    is_valid, errors, warnings, parsed_data = _validate_table(df, schema, 'TestSheet')
+
+    assert is_valid == True
+    assert len(errors) == 0
+
+
+@pytest.mark.unit
+def test_validate_table_range_non_numeric_value():
+    """Test _validate_table range validation with non-numeric value (lines 605-606)"""
+    schema = {
+        'required_columns': ['Amount'],
+        'range_constraints': {
+            'Amount': (0, 1000000)
+        }
+    }
+
+    df = pd.DataFrame({
+        'Amount': [100, 'invalid_number', 500]  # Non-numeric value in middle
+    })
+
+    is_valid, errors, warnings, parsed_data = _validate_table(df, schema, 'TestSheet')
+
+    assert is_valid == False
+    assert len(errors) > 0
+    assert any('non-numeric' in err.lower() for err in errors)
+    assert any('invalid_number' in err for err in errors)
+
+
+@pytest.mark.unit
+def test_validate_table_date_ordering_valid():
+    """Test _validate_table date ordering validation with valid dates (lines 609-613)"""
+    df = pd.DataFrame({
+        'Treaty Name': ['Treaty1', 'Treaty2'],
+        'Inception Date': [pd.Timestamp('2025-01-01'), pd.Timestamp('2025-06-01')],
+        'Expiration Date': [pd.Timestamp('2025-12-31'), pd.Timestamp('2025-12-31')]
+    })
+
+    from helpers.constants import REINSURANCE_TREATIES_SCHEMA
+    is_valid, errors, warnings, parsed_data = _validate_table(df, REINSURANCE_TREATIES_SCHEMA, 'Reinsurance Treaties')
+
+    # Should pass date ordering check (expiration after inception)
+    assert not any('BUS-002' in err for err in errors)
 
 
 @pytest.mark.unit
@@ -531,6 +688,48 @@ def test_validate_business_rules_no_base_portfolio():
 
 
 # ============================================================================
+# Tests - validate_configuration_file (no database)
+# ============================================================================
+
+@pytest.mark.unit
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Valid Excel file not found")
+def test_validate_configuration_file_success():
+    """Test validate_configuration_file() with valid Excel configuration"""
+    result = validate_configuration_file(excel_config_path=VALID_EXCEL_PATH)
+
+    # Check result structure
+    assert 'validation_passed' in result
+    assert 'configuration_data' in result
+    assert 'file_info' in result
+
+    # Validation should pass
+    assert result['validation_passed'] == True
+
+    # Configuration data should have all required sheets
+    config_data = result['configuration_data']
+    required_sheets = [
+        'Metadata', 'Databases', 'Portfolios', 'Reinsurance Treaties',
+        'GeoHaz Thresholds', 'Analysis Table', 'Groupings',
+        'Products and Perils', "Moody's Reference Data"
+    ]
+    for sheet in required_sheets:
+        assert sheet in config_data, f"Missing sheet: {sheet}"
+
+    # File info should be populated
+    assert 'path' in result['file_info']
+    assert 'last_modified' in result['file_info']
+    assert 'size_bytes' in result['file_info']
+
+    # Metadata should be a dict
+    assert isinstance(config_data['Metadata'], dict)
+    assert 'EDM Data Version' in config_data['Metadata']
+
+    # Databases should be a list
+    assert isinstance(config_data['Databases'], list)
+    assert len(config_data['Databases']) > 0
+
+
+# ============================================================================
 # Tests - Integration with Actual Excel File
 # ============================================================================
 
@@ -545,7 +744,6 @@ def test_load_assurant_config_success(test_schema):
     config_id = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -590,7 +788,6 @@ def test_load_assurant_config_data_structure(test_schema):
     config_id = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -629,8 +826,7 @@ def test_load_config_missing_file(test_schema):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path='/non/existent/path.xlsx',
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -650,8 +846,7 @@ def test_load_config_archived_cycle_fails(test_schema):
         load_configuration_file(
             cycle_id=archived_cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -666,7 +861,6 @@ def test_load_config_duplicate_active_fails(test_schema):
     config_id_1 = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -679,26 +873,8 @@ def test_load_config_duplicate_active_fails(test_schema):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
-
-
-@pytest.mark.database
-@pytest.mark.integration
-@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Assurant Excel file not found")
-def test_load_config_without_register(test_schema):
-    """Test loading configuration with register=False"""
-    cycle_id = create_test_cycle(test_schema, 'test-no-register')
-
-    with pytest.raises(ConfigurationError, match="validated successfully but not registered"):
-        load_configuration_file(
-            cycle_id=cycle_id,
-            excel_config_path=VALID_EXCEL_PATH,
-            register=False,
-            schema=test_schema
-        )
-
 
 # ============================================================================
 # Tests - Error Scenarios
@@ -722,8 +898,7 @@ def test_load_config_invalid_excel(test_schema):
             load_configuration_file(
                 cycle_id=cycle_id,
                 excel_config_path=str(fake_excel_path),
-                register=True,
-                schema=test_schema
+                        schema=test_schema
             )
     finally:
         if fake_excel_path.exists():
