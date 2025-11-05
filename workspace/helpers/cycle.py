@@ -450,6 +450,11 @@ def create_cycle(cycle_name: str) -> bool:
         shutil.copytree(TEMPLATE_PATH, new_dir)
         print(f"Created directory: {new_dir}")
 
+        # Create a /files/data subdirectory
+        data_dir = new_dir / "files" / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Created data directory: {data_dir}")
+
         # Parse directory structure to validate it contains stages/steps
         print('\nValidating directory structure...')
         stages_steps = generate_stages_and_steps(new_dir)
