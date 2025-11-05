@@ -15,7 +15,7 @@ SQL Database: QEM Exposure Database
 Runtime: < 10 seconds
 **********************************************************************************************************************************************/
 
-USE RMS_EDM_202503_Quarterly_USFL_Skyi
+USE {EDM_FULL_NAME}
 
 /*--Portfolios:
 Select * from portinfo
@@ -66,8 +66,8 @@ DECLARE @Date		VARCHAR(MAX)
 DECLARE @portinfoid	INT
 DECLARE @SQL		VARCHAR(MAX)
 
-SET @portinfoid = '3' --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
-SET @Date = '2025-08-14 12:39:35.610' --Update by running (Select getdate())
+SET @portinfoid = {PORTFOLIO_ID} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
+SET @Date = {DATETIME_VALUE} --Update by running (Select getdate())
 
 --US Lender Placed
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)

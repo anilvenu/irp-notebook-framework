@@ -19,7 +19,6 @@ Output Tables:
 Runtime: < 10 seconds
 **********************************************************************************************************************************************/
 
--- USE [RMS_EDM_202503_Quarterly_USEQ_rQzz] --Update
 USE [{EDM_FULL_NAME}] --Update
 
 /*US Portfolios:  If these differ, the script will need to be updated
@@ -48,9 +47,7 @@ DECLARE @Date		VARCHAR(MAX)
 DECLARE @portinfoid	INT
 DECLARE @SQL		VARCHAR(MAX)
 
--- SET @portinfoid = '1' --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
 SET @portinfoid = {PORTFOLIO_ID}
--- SET @Date = '2025-08-20 21:04:48.367' --Update by running (Select getdate())
 SET @Date = {DATETIME_VALUE}
 
 
