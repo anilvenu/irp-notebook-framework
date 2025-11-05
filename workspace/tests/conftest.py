@@ -392,27 +392,44 @@ def create_test_hierarchy(cycle_name, schema):
 # MSSQL FIXTURES
 # ==============================================================================
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def mssql_env():
     """
-    Verify MSSQL environment variables are set.
+    Configure MSSQL test environment variables from .env file.
 
-    This fixture ensures that MSSQL connection configuration is available
-    before running tests that require SQL Server connectivity.
+    This fixture loads environment variables from .env and sets defaults
+    for test-specific MSSQL configuration that may not be in docker-compose.yml.
     """
-    required_vars = [
-        'MSSQL_TEST_SERVER',
-        'MSSQL_TEST_DATABASE',
-        'MSSQL_TEST_USER',
-        'MSSQL_TEST_PASSWORD'
-    ]
+    from dotenv import load_dotenv
+    from pathlib import Path
 
+    # Load .env from project root
+    env_file = Path(__file__).parent.parent.parent / '.env'
+    if env_file.exists():
+        load_dotenv(env_file)
+
+    # Set test-specific defaults if not already set
+    test_defaults = {
+        'MSSQL_TEST_SERVER': 'localhost',  # Connect from host machine to Docker
+        'MSSQL_TEST_PORT': '1433',
+        'MSSQL_TEST_DATABASE': 'test_db',
+        'MSSQL_TEST_USER': 'sa',
+        'MSSQL_TEST_PASSWORD': os.getenv('MSSQL_SA_PASSWORD', 'TestPass123!'),
+    }
+
+    # Only set if not already in environment
+    for key, default_value in test_defaults.items():
+        if key not in os.environ:
+            os.environ[key] = default_value
+
+    # Verify required variables are now set
+    required_vars = ['MSSQL_TEST_SERVER', 'MSSQL_TEST_DATABASE', 'MSSQL_TEST_USER', 'MSSQL_TEST_PASSWORD']
     missing = [var for var in required_vars if not os.getenv(var)]
 
     if missing:
         pytest.skip(
             f"MSSQL environment variables not set: {', '.join(missing)}\n"
-            f"Set these variables to run MSSQL integration tests."
+            f"Configure these in .env file or set as environment variables."
         )
 
     return True
