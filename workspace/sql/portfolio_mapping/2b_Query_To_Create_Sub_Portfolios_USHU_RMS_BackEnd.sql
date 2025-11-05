@@ -30,7 +30,7 @@ Output Tables:
 Runtime: < 10 seconds
 **********************************************************************************************************************************************/
 
-USE [{EDM_FULL_NAME}]
+USE [{{ EDM_FULL_NAME }}]
 /* Run these scripts to find values to update. If there are any changes to the LOB the script will need updating
 Select * from portinfo
 1	US_HU_Full
@@ -58,9 +58,9 @@ DECLARE @portinfoidFull	INT
 DECLARE @portinfoidLeak	INT
 DECLARE @SQL		VARCHAR(MAX)
 
-SET @portinfoidFull = {PORTFOLIO_ID_FULL} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
-SET @portinfoidLeak = {PORTFOLIO_ID_LEAK} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
-SET @Date = {DATETIME_VALUE} --Update by running (Select getdate())
+SET @portinfoidFull = {{ PORTFOLIO_ID_FULL }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
+SET @portinfoidLeak = {{ PORTFOLIO_ID_LEAK }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
+SET @Date = {{ DATETIME_VALUE }} --Update by running (Select getdate())
 
 
 

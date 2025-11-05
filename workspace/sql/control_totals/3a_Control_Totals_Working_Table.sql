@@ -1,16 +1,16 @@
 /**********************************************************************************************************************************************
 Purpose:	This script obtains the Working_AIR table control totals that are used to compare to the import files
-			The outputs are pasted into Spreadsheet "AIR Exposure Control Totals {DATE_VALUE}_QEM_Group_AllPeril_xFlood"
+			The outputs are pasted into Spreadsheet "AIR Exposure Control Totals {{ DATE_VALUE }}_QEM_Group_AllPeril_xFlood"
 Author: Teryn Mueller
 Edited By: Teryn Mueller
 Instructions: 
-				1. Update quarter e.g. 202403 to {DATE_VALUE}. Use Replace all function
+				1. Update quarter e.g. 202403 to {{ DATE_VALUE }}. Use Replace all function
 				2. Execute the script
 
 SQL Server: AIZOVSQLP100001.CEAD.PRD
 SQL Database: DW_EXP_MGMT_USER
 
-Input Table:	dbo.CombinedData_{DATE_VALUE}_Working, dbo].[Just_Product_Group_Roe_Power_BI]
+Input Table:	dbo.CombinedData_{{ DATE_VALUE }}_Working, dbo].[Just_Product_Group_Roe_Power_BI]
 Output Tables:  No output tables
 
 Runtime: <1 min
@@ -29,7 +29,7 @@ SUM((CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN EarthquakeDe
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovB END)	+				
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovC END)	+					
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State IN ('PR','VI')
 and EQModeled = 'Y'
@@ -49,7 +49,7 @@ SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDed
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+				
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+					
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State IN ('PR','VI')
 and HUModeled = 'Y'
@@ -69,7 +69,7 @@ SUM((CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN EarthquakeDe
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovB END)	+				
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovC END)	+					
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and EQModeled = 'Y'
@@ -89,7 +89,7 @@ SUM((CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN EarthquakeDe
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovB END)	+				
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovC END)	+					
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working
+From dbo.CombinedData_{{ DATE_VALUE }}_Working
 Where State NOT IN ('PR','VI','GU')
 and EQModeled = 'Y'
 and main_bu = 'Clay'
@@ -109,7 +109,7 @@ SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowin
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and FFModeled = 'Y'
@@ -128,7 +128,7 @@ SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowin
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and FFModeled = 'Y'
@@ -149,7 +149,7 @@ SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowin
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working
+From dbo.CombinedData_{{ DATE_VALUE }}_Working
 Where State NOT IN ('PR','VI','GU')
 and FFModeled = 'Y'
 and main_bu = 'Clay'
@@ -169,7 +169,7 @@ SUM((CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN TORNADOHAILD
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovB END)	+				
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovC END)	+					
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and THModeled = 'Y'
@@ -188,7 +188,7 @@ SUM((CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN TORNADOHAILD
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovB END)	+				
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovC END)	+					
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and THModeled = 'Y'
@@ -209,7 +209,7 @@ SUM((CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN TORNADOHAILD
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovB END)	+				
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovC END)	+					
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working
+From dbo.CombinedData_{{ DATE_VALUE }}_Working
 Where State NOT IN ('PR','VI','GU')
 and THModeled = 'Y'
 and main_bu = 'Clay'
@@ -229,7 +229,7 @@ SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDed
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+				
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+					
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and HUModeled = 'Y'
@@ -249,7 +249,7 @@ SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDed
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+				
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+					
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and HUModeled = 'Y'
@@ -271,7 +271,7 @@ SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDed
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+				
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+					
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working
+From dbo.CombinedData_{{ DATE_VALUE }}_Working
 Where State NOT IN ('PR','VI','GU')
 and HUModeled = 'Y'
 and main_bu = 'Clay'
@@ -301,7 +301,7 @@ SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDed
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovB ELSE 0 END) + 
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovC ELSE 0 END) + 
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovD ELSE 0 END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and HUModeled = 'Y'
@@ -331,7 +331,7 @@ SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDed
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovB ELSE 0 END) + 
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovC ELSE 0 END) + 
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovD ELSE 0 END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working
+From dbo.CombinedData_{{ DATE_VALUE }}_Working
 Where State NOT IN ('PR','VI','GU')
 and HUModeled = 'Y'
 and main_bu = 'Clay'
@@ -352,7 +352,7 @@ SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowin
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and FFModeled = 'Y'
@@ -371,7 +371,7 @@ SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowin
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State NOT IN ('PR','VI','GU')
 and FFModeled = 'Y'
@@ -392,7 +392,7 @@ SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowin
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working
+From dbo.CombinedData_{{ DATE_VALUE }}_Working
 Where State NOT IN ('PR','VI','GU')
 and FFModeled = 'Y'
 and main_bu = 'Clay'
@@ -413,8 +413,8 @@ SELECT Product_Group_ROE as Portfolio, b.AssociationAcctNum
 		ELSE '' END AS AggregateLimit
 	,CASE WHEN BLANKET_DED_TYPE = 'Per Occurrence' AND FloodDeductible IS NOT NULL AND FloodDeductible > 0 THEN FloodDeductible ELSE 0 END AS DedAmt1
 	,CASE WHEN SUBLIMIT_TYPE = 'Policy Level Per Occurrence' THEN MAX(Sublimit) ELSE 0 END AS Policy_Sublimit
-FROM dbo.CombinedData_{DATE_VALUE}_Working a
-JOIN dbo.AssociationNumberLookup_{DATE_VALUE} b on a.AssociationName = b.AssociationName
+FROM dbo.CombinedData_{{ DATE_VALUE }}_Working a
+JOIN dbo.AssociationNumberLookup_{{ DATE_VALUE }} b on a.AssociationName = b.AssociationName
 WHERE ProductType in ('FB')
 GROUP BY Product_Group_ROE, b.AssociationAcctNum, BLANKET_LIMIT_TYPE, SEPERATE_BLANKET_BUILDING_AND_CONTENT, BLANKET_DED_TYPE, FloodDeductible, SUBLIMIT_TYPE ) ,
 CommercialFlood_ByCov_LocControlTotals AS (
@@ -442,7 +442,7 @@ SELECT Product_Group_ROE as Portfolio
  ,CASE WHEN BLANKET_DED_TYPE = 'Per Building Per Occurrence' THEN FloodDeductible 
 	WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD = 0 AND (BLANKET_DED_TYPE <> 'Per Building Per Occurrence' OR BLANKET_DED_TYPE IS NULL) THEN FloodDeductible 
 	ELSE 0 END AS WSSITEDED
-FROM dbo.CombinedData_{DATE_VALUE}_Working
+FROM dbo.CombinedData_{{ DATE_VALUE }}_Working
 WHERE ProductType in ('FB') )
 
 SELECT Count(Distinct AssociationName) PolicyCount
@@ -456,7 +456,7 @@ SELECT Count(Distinct AssociationName) PolicyCount
 ,SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue
 ,(SELECT SUM(WSCV4LIMIT+WSCV5LIMIT+WSCV6LIMIT+WSCV7LIMIT+WSCOMBINEDLIM) FROM CommercialFlood_ByCov_LocControlTotals) LocationLimit
 ,(SELECT SUM(WSCV4DED+WSCV5DED+WSCV6DED+WSCV7DED+WSSITEDED) FROM CommercialFlood_ByCov_LocControlTotals) LocationDeductible
-FROM dbo.CombinedData_{DATE_VALUE}_Working
+FROM dbo.CombinedData_{{ DATE_VALUE }}_Working
 WHERE ProductType in ('FB')
 
 /*===========================================
@@ -473,7 +473,7 @@ SELECT Count(Distinct AssociationName) PolicyCount
 ,SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue
 ,SUM(CovAlimit_Flood+CovBlimit_Flood+CovClimit_Flood+CovDlimit_Flood) LocationLimit
 ,SUM(FloodAttachmentPoint_CovA+FloodAttachmentPoint_CovC) LocationDeductible
-FROM dbo.CombinedData_{DATE_VALUE}_Working
+FROM dbo.CombinedData_{{ DATE_VALUE }}_Working
 WHERE ProductType in ('EF','EG')
 
 /*===========================================
@@ -491,7 +491,7 @@ Count(*) PolicyCount
 ,SUM(CovAValue+CovBValue+CovCValue+CovDValue+FloodAttachmentPoint_CovA) TotalReplacementValue
 ,SUM(CovAlimit_Flood+CovBlimit_Flood+CovClimit_Flood+CovDlimit_Flood) LocationLimit
 ,SUM(FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD) LocationDeductible
-FROM dbo.CombinedData_{DATE_VALUE}_Working
+FROM dbo.CombinedData_{{ DATE_VALUE }}_Working
 WHERE OTHER_FLOOD_IND = 'Y' --All Other Flood
 GROUP BY CASE WHEN QEM_Product_Group = 'Lender Placed' AND State IN ('PR','VI','GU') THEN 'Other_CB' ELSE QEM_Product_Group END
 ORDER BY 1

@@ -3,26 +3,26 @@ Purpose: This script creates the Risk Modeler import files for US Fire Following
 Author: Charlene Chia
 Edited by: Teryn Mueller-- Put the name of the person updating this script.
 Instructions: 
-				1. Update quarter e.g. 202212 to {DATE_VALUE}
+				1. Update quarter e.g. 202212 to {{ DATE_VALUE }}
 				2. Execute the script
 
 SQL Server: vdbpdw-housing-secondary.database.cead.prd
 SQL Database: DW_EXP_MGMT_USER
 
-Input Table:	CombinedData_{DATE_VALUE}_Working
+Input Table:	CombinedData_{{ DATE_VALUE }}_Working
 Output Tables:
-				 Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USWF_Account
-				 Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USWF_Location -- includes supression
+				 Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account
+				 Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location -- includes supression
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
 
 --Export import files to CSV via export wizard after table creation
---Select COUNT(*) Count From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USWF_Account --3783832
---Select COUNT(*) Count From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USWF_Location --3783832
+--Select COUNT(*) Count From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account --3783832
+--Select COUNT(*) Count From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location --3783832
 
 -- US WF Account File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USWF_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME
@@ -75,8 +75,8 @@ SELECT
 	,AssurantGroupedLOB AS POLICYUSERTXT2 --varchar(20)
 	,NetLegalEntity AS POLICYUSERTXT3 --varchar(20)
 	,LegalEntity AS POLICYUSERTXT4 --varchar(20)
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USWF_Account
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU') and FFMODELED = 'Y'
 --(3816610 rows affected)
 
@@ -96,13 +96,13 @@ WFSUPPRESS field:
 -- 3 = None                 
 */
 --All codes look correct comparing to the SRC coding Moodys document
---SELECT DISTINCT RMS_ROOFCOVERING_CODE FROM CombinedData_{DATE_VALUE}_Working WHERE FFModeled = 'Y' AND State NOT IN ('PR','VI','GU')
---SELECT DISTINCT RMS_ROOFSHAPE_CODE FROM CombinedData_{DATE_VALUE}_Working WHERE FFModeled = 'Y' AND State NOT IN ('PR','VI','GU')
---SELECT DISTINCT RMS_ROOFAGE_CODE FROM CombinedData_{DATE_VALUE}_Working WHERE FFModeled = 'Y' AND State NOT IN ('PR','VI','GU')
---SELECT DISTINCT RMS_CLADCODE_EQ FROM CombinedData_{DATE_VALUE}_Working WHERE FFModeled = 'Y' AND State NOT IN ('PR','VI','GU')
+--SELECT DISTINCT RMS_ROOFCOVERING_CODE FROM CombinedData_{{ DATE_VALUE }}_Working WHERE FFModeled = 'Y' AND State NOT IN ('PR','VI','GU')
+--SELECT DISTINCT RMS_ROOFSHAPE_CODE FROM CombinedData_{{ DATE_VALUE }}_Working WHERE FFModeled = 'Y' AND State NOT IN ('PR','VI','GU')
+--SELECT DISTINCT RMS_ROOFAGE_CODE FROM CombinedData_{{ DATE_VALUE }}_Working WHERE FFModeled = 'Y' AND State NOT IN ('PR','VI','GU')
+--SELECT DISTINCT RMS_CLADCODE_EQ FROM CombinedData_{{ DATE_VALUE }}_Working WHERE FFModeled = 'Y' AND State NOT IN ('PR','VI','GU')
 
 -- US WF Location File including Suppression:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USWF_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -184,7 +184,7 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USWF_Location
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU')	and FFMODELED = 'Y'
 --(3816610 rows affected)

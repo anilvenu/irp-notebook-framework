@@ -564,8 +564,8 @@ def clean_sqlserver_db(init_sqlserver_db):
 
         for name, value, status in portfolios:
             sqlserver.execute_command(
-                "INSERT INTO test_portfolios (portfolio_name, portfolio_value, status) VALUES (?, ?, ?)",
-                params=(name, value, status),
+                "INSERT INTO test_portfolios (portfolio_name, portfolio_value, status) VALUES ({{ name }}, {{ value }}, {{ status }})",
+                params={'name': name, 'value': value, 'status': status},
                 connection='TEST', database='test_db'
             )
 
@@ -585,8 +585,8 @@ def clean_sqlserver_db(init_sqlserver_db):
 
         for portfolio_id, risk_type, risk_value in risks:
             sqlserver.execute_command(
-                "INSERT INTO test_risks (portfolio_id, risk_type, risk_value) VALUES (?, ?, ?)",
-                params=(portfolio_id, risk_type, risk_value),
+                "INSERT INTO test_risks (portfolio_id, risk_type, risk_value) VALUES ({{ portfolio_id }}, {{ risk_type }}, {{ risk_value }})",
+                params={'portfolio_id': portfolio_id, 'risk_type': risk_type, 'risk_value': risk_value},
                 connection='TEST', database='test_db'
             )
 
@@ -615,8 +615,8 @@ SELECT
     r.calculated_ts
 FROM test_portfolios p
 INNER JOIN test_risks r ON p.id = r.portfolio_id
-WHERE p.id = {portfolio_id}
-  AND r.risk_type = {risk_type}
+WHERE p.id = {{ portfolio_id }}
+  AND r.risk_type = {{ risk_type }}
 ORDER BY r.calculated_ts DESC;
 """
 

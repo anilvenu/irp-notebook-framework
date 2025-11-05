@@ -10,14 +10,14 @@ SQL Server: vdbpdw-housing-secondary.database.cead.prd
 SQL Database: DW_EXP_MGMT_USER
 
 Input Tables:	
-				CombinedData_{DATE_VALUE}_Working
-				AssociationNumberLookup_{DATE_VALUE}
-				ASST_{DATE_VALUE}_FloodSolutions_Elevation_Lookup
+				CombinedData_{{ DATE_VALUE }}_Working
+				AssociationNumberLookup_{{ DATE_VALUE }}
+				ASST_{{ DATE_VALUE }}_FloodSolutions_Elevation_Lookup
 Output Tables:
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Commercial_Account
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Commercial_Location
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Excess_Account
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Excess_Location
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Account
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Location
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Account
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Location
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
@@ -26,7 +26,7 @@ Runtime: 00:00:25
 	Commercial Flood
 =======================================================*/
 --Create Contract File
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Commercial_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Account
 SELECT
 	b.AssociationAcctNum AS ACCNTNUM
 	,b.AssociationAcctNum AS POLICYNUM
@@ -55,9 +55,9 @@ SELECT
 	,'USD' AS UNDCOVCUR
 	,'ASST' AS CEDANTID
 	,'ASST' AS CEDANTNAME
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Commercial_Account
-FROM CombinedData_{DATE_VALUE}_Working a
-JOIN AssociationNumberLookup_{DATE_VALUE} b ON a.AssociationName = b.AssociationName
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working a
+JOIN AssociationNumberLookup_{{ DATE_VALUE }} b ON a.AssociationName = b.AssociationName
 WHERE ProductType in ('FB')
 GROUP BY 
 	b.AssociationAcctNum,
@@ -73,8 +73,8 @@ GROUP BY
 
 --Create Location File:
 --First building, which has the actual number of stories and full location details with cov a/b/d assigned
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Commercial_Location
-SELECT * INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Commercial_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Location
+SELECT * INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Location
 FROM (
 SELECT
 	b.AssociationAcctNum AS ACCNTNUM
@@ -168,9 +168,9 @@ SELECT
 	,CASE WHEN c.CustomElevation <> '-999' THEN '13' ELSE 0 END AS ElevMatch
 	,c.LFE_Feet AS BuildingElevation
 	,CASE WHEN c.LFE_Feet <> '-999' THEN '13' ELSE 0 END AS BuildingElevationMatch
-FROM CombinedData_{DATE_VALUE}_Working a
-JOIN AssociationNumberLookup_{DATE_VALUE} b ON a.AssociationName = b.AssociationName 
-JOIN ASST_{DATE_VALUE}_FloodSolutions_Elevation_Lookup c ON a.LocationID = c.LocationID
+FROM CombinedData_{{ DATE_VALUE }}_Working a
+JOIN AssociationNumberLookup_{{ DATE_VALUE }} b ON a.AssociationName = b.AssociationName 
+JOIN ASST_{{ DATE_VALUE }}_FloodSolutions_Elevation_Lookup c ON a.LocationID = c.LocationID
 WHERE ProductType in ('FB')
 UNION ALL
 SELECT
@@ -245,9 +245,9 @@ SELECT
 	,CASE WHEN c.CustomElevation <> '-999' THEN '13' ELSE 0 END AS ElevMatch
 	,c.LFE_Feet AS BuildingElevation
 	,CASE WHEN c.LFE_Feet <> '-999' THEN '13' ELSE 0 END AS BuildingElevationMatch
-FROM CombinedData_{DATE_VALUE}_Working a
-JOIN AssociationNumberLookup_{DATE_VALUE} b ON a.AssociationName = b.AssociationName 
-JOIN ASST_{DATE_VALUE}_FloodSolutions_Elevation_Lookup c ON a.LocationID = c.LocationID
+FROM CombinedData_{{ DATE_VALUE }}_Working a
+JOIN AssociationNumberLookup_{{ DATE_VALUE }} b ON a.AssociationName = b.AssociationName 
+JOIN ASST_{{ DATE_VALUE }}_FloodSolutions_Elevation_Lookup c ON a.LocationID = c.LocationID
 WHERE ProductType in ('FB')
 AND CovCValue <> 0 
 AND Model_NumberofStories > 1
@@ -257,7 +257,7 @@ AND Model_NumberofStories > 1
 	Excess Flood
 =======================================================*/
 --Create Contract File
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Excess_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Account
 SELECT
 	b.AssociationAcctNum AS ACCNTNUM
 	,b.AssociationAcctNum AS POLICYNUM
@@ -277,9 +277,9 @@ SELECT
 	,'USD' AS UNDCOVCUR
 	,'ASST' AS CEDANTID
 	,'ASST' AS CEDANTNAME
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Excess_Account
-FROM CombinedData_{DATE_VALUE}_Working a
-JOIN AssociationNumberLookup_{DATE_VALUE} b ON a.AssociationName = b.AssociationName
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working a
+JOIN AssociationNumberLookup_{{ DATE_VALUE }} b ON a.AssociationName = b.AssociationName
 WHERE ProductType in ('EF','EG')
 GROUP BY 
 	b.AssociationAcctNum,
@@ -291,8 +291,8 @@ GROUP BY
 
 --Create Location File:
 --First building, which has the actual number of stories and full location details with cov a/b/d assigned
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Excess_Location
-SELECT * INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Excess_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Location
+SELECT * INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Location
 FROM (
 SELECT
 	b.AssociationAcctNum AS ACCNTNUM
@@ -353,9 +353,9 @@ SELECT
 	,CASE WHEN c.CustomElevation <> '-999' THEN '13' ELSE 0 END AS ElevMatch
 	,c.LFE_Feet AS BuildingElevation
 	,CASE WHEN c.LFE_Feet <> '-999' THEN '13' ELSE 0 END AS BuildingElevationMatch
-FROM CombinedData_{DATE_VALUE}_Working a
-JOIN AssociationNumberLookup_{DATE_VALUE} b ON a.AssociationName = b.AssociationName 
-JOIN ASST_{DATE_VALUE}_FloodSolutions_Elevation_Lookup c ON a.LocationID = c.LocationID
+FROM CombinedData_{{ DATE_VALUE }}_Working a
+JOIN AssociationNumberLookup_{{ DATE_VALUE }} b ON a.AssociationName = b.AssociationName 
+JOIN ASST_{{ DATE_VALUE }}_FloodSolutions_Elevation_Lookup c ON a.LocationID = c.LocationID
 WHERE ProductType in ('EF','EG')
 UNION ALL
 SELECT
@@ -416,9 +416,9 @@ SELECT
 	,CASE WHEN c.CustomElevation <> '-999' THEN '13' ELSE 0 END AS ElevMatch
 	,c.LFE_Feet AS BuildingElevation
 	,CASE WHEN c.LFE_Feet <> '-999' THEN '13' ELSE 0 END AS BuildingElevationMatch
-FROM CombinedData_{DATE_VALUE}_Working a
-JOIN AssociationNumberLookup_{DATE_VALUE} b ON a.AssociationName = b.AssociationName 
-JOIN ASST_{DATE_VALUE}_FloodSolutions_Elevation_Lookup c ON a.LocationID = c.LocationID
+FROM CombinedData_{{ DATE_VALUE }}_Working a
+JOIN AssociationNumberLookup_{{ DATE_VALUE }} b ON a.AssociationName = b.AssociationName 
+JOIN ASST_{{ DATE_VALUE }}_FloodSolutions_Elevation_Lookup c ON a.LocationID = c.LocationID
 WHERE ProductType in ('EF','EG')
 AND CovCValue <> 0 
 AND Model_NumberofStories > 1

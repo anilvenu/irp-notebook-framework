@@ -7,22 +7,22 @@ Purpose:	This script creates the RiskLink import files for CB Hurricane exposure
 Author: Charlene Chia
 Edited by: Teryn Mueller-- Put the name of the person updating this script.
 Instructions: 
-				1. Update quarter e.g. 202209 to {DATE_VALUE}
+				1. Update quarter e.g. 202209 to {{ DATE_VALUE }}
 				2. Execute the script
 
 SQL Server: vdbpdw-housing-secondary.database.cead.prd
 SQL Database: DW_EXP_MGMT_USER
 
-Input Table:	CombinedData_{DATE_VALUE}_Working
+Input Table:	CombinedData_{{ DATE_VALUE }}_Working
 Output Tables:
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Account
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Location
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Account
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Location
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
 
 -- CB HU Account File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME --varchar(40), we are at the maximum limit. This was previously AccountNumber.
@@ -77,8 +77,8 @@ SELECT
 	,AssurantGroupedLOB AS POLICYUSERTXT2 --varchar(20)
 	,NetLegalEntity AS POLICYUSERTXT3 --varchar(20)
 	,LegalEntity AS POLICYUSERTXT4 --varchar(20)
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Account
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State IN ('PR','VI')
 	and HurricaneCoverage = 'Y'  
 	and HU_Remetrica_RDMF_Bucket <> 'NULL'
@@ -86,7 +86,7 @@ WHERE State IN ('PR','VI')
 --(2723 rows affected)
 
 -- CB HU Location File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -167,8 +167,8 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Location
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Location
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State IN ('PR','VI')
 	and HurricaneCoverage = 'Y'  
 	and HU_Remetrica_RDMF_Bucket <> 'NULL'
@@ -177,5 +177,5 @@ WHERE State IN ('PR','VI')
 
 
 --Export import files to CSV
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Account --2579
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Location --2579
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Account --2579
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Location --2579

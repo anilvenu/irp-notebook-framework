@@ -19,7 +19,7 @@ Input Tables:	All RMS Exposure Database tables
 Output Tables:  No output tables
 
 ******************************************************************************************************************************************************/
-Use [{WORKSPACE_EDM}]
+Use [{{ WORKSPACE_EDM }}]
  -- Create the DB Schema if it doesn't exist
 IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'asu') --Rename the schema name as desired
 BEGIN
@@ -28,11 +28,11 @@ END
 
 
 --Step 1: Create list of EDMs 
-Drop Table {WORKSPACE_EDM}.asu.EDM_List_{CYCLE_TYPE}_{DATE_VALUE}
-Create Table {WORKSPACE_EDM}.asu.EDM_List_{CYCLE_TYPE}_{DATE_VALUE} (
+Drop Table {{ WORKSPACE_EDM }}.asu.EDM_List_{{ CYCLE_TYPE }}_{{ DATE_VALUE }}
+Create Table {{ WORKSPACE_EDM }}.asu.EDM_List_{{ CYCLE_TYPE }}_{{ DATE_VALUE }} (
 	DBName VARCHAR(50));
-Insert into {WORKSPACE_EDM}.asu.EDM_List_{CYCLE_TYPE}_{DATE_VALUE}
-select name from sys.databases where name like '%EDM%' and name like '%{DATE_VALUE}%' and name like '%{CYCLE_TYPE}%' ----CHANGE 
+Insert into {{ WORKSPACE_EDM }}.asu.EDM_List_{{ CYCLE_TYPE }}_{{ DATE_VALUE }}
+select name from sys.databases where name like '%EDM%' and name like '%{{ DATE_VALUE }}%' and name like '%{{ CYCLE_TYPE }}%' ----CHANGE 
 
 --Step 2: Update the table that you created in Step 1 below. Then select everthing below this line and execute.
 
@@ -43,7 +43,7 @@ DECLARE @DBList		VARCHAR(100)
 DECLARE	@SQL		VARCHAR(MAX)
 
 DECLARE Database_Cursor CURSOR LOCAL FOR
-Select * From {WORKSPACE_EDM}.asu.EDM_List_{CYCLE_TYPE}_{DATE_VALUE} --UPDATE
+Select * From {{ WORKSPACE_EDM }}.asu.EDM_List_{{ CYCLE_TYPE }}_{{ DATE_VALUE }} --UPDATE
 
 OPEN Database_Cursor
 FETCH NEXT FROM Database_Cursor INTO @DBName

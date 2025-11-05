@@ -19,7 +19,7 @@ Output Tables:
 Runtime: < 10 seconds
 **********************************************************************************************************************************************/
 
-USE [{EDM_FULL_NAME}] --Update
+USE [{{ EDM_FULL_NAME }}] --Update
 /*
 Select * from portinfo
 --1	US_FF
@@ -44,8 +44,8 @@ DECLARE @Date		VARCHAR(MAX)
 DECLARE @portinfoid	INT
 DECLARE @SQL		VARCHAR(MAX)
 
-SET @portinfoid = {PORTFOLIO_ID} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
-SET @Date = {DATETIME_VALUE} --Update by running (Select getdate())
+SET @portinfoid = {{ PORTFOLIO_ID }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
+SET @Date = {{ DATETIME_VALUE }} --Update by running (Select getdate())
 
 
 

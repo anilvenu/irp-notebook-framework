@@ -8,7 +8,7 @@ SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDed
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+				
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+					
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END)) LocationDeductible
-From dbo.CombinedData_{DATE_VALUE}_Working a
+From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
 Where State IN ('PR','VI')
 and HUModeled = 'Y'

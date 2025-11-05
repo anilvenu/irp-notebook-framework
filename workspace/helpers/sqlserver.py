@@ -35,14 +35,14 @@ Usage in Notebooks:
 
     # Option 1: Specify database via connection parameter
     df = execute_query(
-        "SELECT * FROM portfolios WHERE value > {min_value}",
+        "SELECT * FROM portfolios WHERE value > {{ min_value }}",
         params={'min_value': 1000000},
         connection='AWS_DW',
         database='DataWarehouse'
     )
 
     # Option 2: Include USE statement in SQL (if script needs multiple databases)
-    query = "USE DataWarehouse; SELECT * FROM portfolios WHERE value > {min_value}"
+    query = "USE DataWarehouse; SELECT * FROM portfolios WHERE value > {{ min_value }}"
     df = execute_query(query, params={'min_value': 1000000}, connection='AWS_DW')
 
     # Execute SQL script from file with database parameter
@@ -76,14 +76,17 @@ must use fully qualified table names (database.schema.table) or will fail.
 PARAMETER SUBSTITUTION
 ================================================================================
 
-SQL queries and scripts support named parameters using {param_name} syntax:
+SQL queries and scripts support named parameters using {{ param_name }} syntax:
 
     SELECT * FROM portfolios
-    WHERE portfolio_id = {portfolio_id}
-      AND created_date >= {start_date}
+    WHERE portfolio_id = {{ portfolio_id }}
+      AND created_date >= {{ start_date }}
 
-Parameters are automatically converted to pyodbc-compatible format and types.
-Numpy and pandas types are converted to native Python types.
+Parameters are safely substituted with SQL injection protection:
+- String values are escaped (single quotes doubled)
+- Numeric values are inserted directly
+- NULL values handled appropriately
+- Numpy and pandas types are converted to native Python types
 
 ================================================================================
 DESIGN PHILOSOPHY
@@ -105,10 +108,10 @@ Differences from PostgreSQL integration (database.py):
 """
 
 import os
-import re
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Optional, Dict, Any, Union, Tuple
+from string import Template
 import pandas as pd
 import numpy as np
 
@@ -120,6 +123,31 @@ except ImportError as e:
         "Install it with: pip install pyodbc\n"
         "Note: Microsoft ODBC Driver 18 for SQL Server must also be installed."
     ) from e
+
+
+# ============================================================================
+# TEMPLATE SYSTEM
+# ============================================================================
+
+class ExpressionTemplate(Template):
+    """
+    Custom Template class for SQL parameter substitution.
+
+    Uses {{ PARAM }} syntax with space padding to avoid conflicts with SQL syntax.
+    Example: SELECT * FROM table WHERE id = {{ ID }}
+    """
+    delimiter = '{{'
+    # Pattern matches: {{ PARAM_NAME }}
+    # Template class will compile this pattern automatically
+    pattern = r'''
+    \{\{\s*
+    (?:
+    (?P<escaped>\{\{)|
+    (?P<named>[_a-zA-Z][_a-zA-Z0-9]*)\s*\}\}|
+    (?P<braced>[_a-zA-Z][_a-zA-Z0-9]*)\s*\}\}|
+    (?P<invalid>)
+    )
+    ''' # type: ignore
 
 
 # ============================================================================
@@ -329,6 +357,42 @@ def test_connection(connection_name: str = 'TEST') -> bool:
 # PARAMETER CONVERSION
 # ============================================================================
 
+def _escape_sql_value(value: Any) -> str:
+    """
+    Escape parameter values for safe SQL substitution.
+
+    Prevents SQL injection by properly escaping values based on type.
+
+    Args:
+        value: Parameter value to escape
+
+    Returns:
+        Escaped string representation safe for SQL substitution
+
+    Example:
+        _escape_sql_value(123) -> "123"
+        _escape_sql_value("O'Brien") -> "'O''Brien'"
+        _escape_sql_value(None) -> "NULL"
+    """
+    if value is None:
+        return 'NULL'
+    elif isinstance(value, bool):
+        # Handle bool before int (bool is subclass of int in Python)
+        return '1' if value else '0'
+    elif isinstance(value, (int, float)):
+        # Numbers are safe - no injection risk
+        return str(value)
+    elif isinstance(value, str):
+        # Escape single quotes by doubling them (SQL standard)
+        # This prevents breaking out of string literals
+        escaped = value.replace("'", "''")
+        return f"'{escaped}'"
+    else:
+        # Convert to string and escape (handles dates, etc.)
+        escaped = str(value).replace("'", "''")
+        return f"'{escaped}'"
+
+
 def _convert_param_value(value: Any) -> Any:
     """
     Convert numpy/pandas types to native Python types for pyodbc.
@@ -388,61 +452,110 @@ def _convert_params_to_native_types(params: Union[Dict[str, Any], Tuple, None]) 
         return params
 
 
-def _substitute_named_parameters(query: str, params: Optional[Dict[str, Any]] = None) -> Tuple[str, Optional[Tuple]]:
+def _substitute_named_parameters(query: str, params: Optional[Dict[str, Any]] = None) -> str:
     """
-    Convert named parameters {param_name} to pyodbc ? placeholders.
+    Substitute named parameters {{ param_name }} using Template system with context-aware escaping.
 
-    Note: This function removes SQL comments before processing to avoid
-    matching parameter placeholders in comments.
+    Parameters are escaped differently based on their context:
+    - IDENTIFIER CONTEXTS (no quoting - raw substitution):
+      * Inside square brackets: [{{ param }}]
+      * Inside string literals: '...{{ param }}...'
+      * As part of object names: table_{{ param }}_suffix or {{ param }}_table
+    - VALUE CONTEXTS (escaped and quoted appropriately):
+      * Strings: Quoted with single quotes, SQL injection protected
+      * Numbers: Unquoted
+      * NULL: NULL keyword
 
     Args:
-        query: SQL query with {param_name} placeholders
+        query: SQL query with {{ param_name }} placeholders
         params: Dictionary of parameter values
 
     Returns:
-        Tuple of (converted_query, ordered_params_tuple)
+        SQL query with parameters substituted
 
-    Example:
-        query = "SELECT * FROM table WHERE id = {user_id} AND name = {user_name}"
+    Examples:
+        # Value context (quoted/escaped):
+        query = "SELECT * FROM table WHERE id = {{ user_id }} AND name = {{ user_name }}"
         params = {'user_id': 123, 'user_name': 'John'}
+        # Returns: "SELECT * FROM table WHERE id = 123 AND name = 'John'"
 
-        new_query, new_params = _substitute_named_parameters(query, params)
-        # new_query: "SELECT * FROM table WHERE id = ? AND name = ?"
-        # new_params: (123, 'John')
+        # Identifier in brackets (not quoted):
+        query = "USE [{{ db_name }}]"
+        params = {'db_name': 'my_database'}
+        # Returns: "USE [my_database]"
+
+        # Identifier in table name (not quoted):
+        query = "SELECT * FROM CombinedData_{{ date_val }}_Working"
+        params = {'date_val': '20250115'}
+        # Returns: "SELECT * FROM CombinedData_20250115_Working"
+
+        # Inside string literal (not quoted):
+        query = "SELECT 'Modeling_{{ date_val }}_Moodys' as table_name"
+        params = {'date_val': '202501'}
+        # Returns: "SELECT 'Modeling_202501_Moodys' as table_name"
     """
     if not params:
-        return query, None
+        return query
 
-    # Remove SQL comments to avoid matching parameters in comments
-    # Remove single-line comments (-- comment)
-    query_no_comments = re.sub(r'--[^\n]*', '', query)
-    # Remove multi-line comments (/* comment */)
-    query_no_comments = re.sub(r'/\*.*?\*/', '', query_no_comments, flags=re.DOTALL)
+    # Convert numpy/pandas types to native Python types first
+    converted_params = _convert_params_to_native_types(params)
 
-    # Find all {param_name} patterns in order (including duplicates)
-    param_pattern = re.compile(r'\{(\w+)\}')
-    param_names = param_pattern.findall(query_no_comments)
+    # Ensure we have a dict (not tuple) after conversion
+    if not isinstance(converted_params, dict):
+        return query
 
-    if not param_names:
-        return query, None
+    # Import re for pattern matching
+    import re
 
-    # Validate all parameters are provided
-    unique_param_names = list(dict.fromkeys(param_names))  # Preserve order, remove duplicates
-    missing_params = [name for name in unique_param_names if name not in params]
-    if missing_params:
+    # Create parameter dict with context-aware escaping
+    escaped_params = {}
+
+    for key, value in converted_params.items():
+        # Check if this parameter appears in an identifier context (no quoting needed)
+        # Pattern 1: Inside square brackets: [{{ param }}]
+        # Pattern 2: Inside string literals: '...{{ param }}...'
+        # Pattern 3: As part of a table/column name: word_{{ param }}_word or word_{{ param }} or {{ param }}_word
+        identifier_patterns = [
+            rf'\[\s*\{{\{{\s*{re.escape(key)}\s*\}}\}}\s*\]',  # [{{ param }}]
+            rf"'[^']*\{{\{{\s*{re.escape(key)}\s*\}}\}}[^']*'",  # '...{{ param }}...' (inside string literal)
+            rf'\w+_\{{\{{\s*{re.escape(key)}\s*\}}\}}',  # word_{{ param }}
+            rf'\{{\{{\s*{re.escape(key)}\s*\}}\}}_\w+',  # {{ param }}_word
+        ]
+
+        is_identifier = any(re.search(pattern, query) for pattern in identifier_patterns)
+
+        if is_identifier:
+            # Identifier context: no quoting, just validate and use raw value
+            if isinstance(value, str):
+                # Basic validation for identifiers (alphanumeric, underscore, hyphen)
+                # Allow more characters for string literal context
+                if not all(c.isalnum() or c in ('_', '-', ' ', '/') for c in value):
+                    raise ValueError(
+                        f"Invalid identifier value for parameter '{key}': {value}. "
+                        f"Identifiers can only contain alphanumeric characters, underscores, hyphens, and spaces."
+                    )
+            escaped_params[key] = str(value)
+        else:
+            # Value context: use normal escaping with quotes for strings
+            escaped_params[key] = _escape_sql_value(value)
+
+    try:
+        # Use ExpressionTemplate for substitution
+        template = ExpressionTemplate(query)
+        substituted_query = template.substitute(escaped_params)
+        return substituted_query
+    except KeyError as e:
+        # Template raises KeyError for missing parameters
         raise SQLServerQueryError(
-            f"Missing required parameters: {', '.join(missing_params)}\n"
-            f"Query requires: {', '.join(unique_param_names)}\n"
-            f"Provided: {', '.join(params.keys())}"
-        )
-
-    # Replace {param_name} with ? in the ORIGINAL query (to preserve formatting)
-    converted_query = param_pattern.sub('?', query)
-
-    # Build ordered tuple of parameter values (one value per placeholder, even if same param used multiple times)
-    ordered_params = tuple(params[name] for name in param_names)
-
-    return converted_query, ordered_params
+            f"Missing required parameter: {str(e)}\n"
+            f"Query requires parameter that was not provided.\n"
+            f"Provided parameters: {', '.join(converted_params.keys())}"
+        ) from e
+    except ValueError as e:
+        # Template raises ValueError for invalid placeholders or identifier validation
+        raise SQLServerQueryError(
+            f"Parameter substitution error: {e}"
+        ) from e
 
 
 # ============================================================================
@@ -451,7 +564,7 @@ def _substitute_named_parameters(query: str, params: Optional[Dict[str, Any]] = 
 
 def execute_query(
     query: str,
-    params: Optional[Union[Dict[str, Any], Tuple]] = None,
+    params: Optional[Dict[str, Any]] = None,
     connection: str = 'TEST',
     database: Optional[str] = None
 ) -> pd.DataFrame:
@@ -459,8 +572,8 @@ def execute_query(
     Execute SELECT query and return results as DataFrame.
 
     Args:
-        query: SQL SELECT query (supports {param_name} placeholders)
-        params: Query parameters (dict with named params or tuple for ? placeholders)
+        query: SQL SELECT query (supports {{ param_name }} placeholders)
+        params: Query parameters as dictionary
         connection: Name of the SQL Server connection to use
         database: Optional database name to connect to (overrides connection config)
 
@@ -471,31 +584,20 @@ def execute_query(
         SQLServerQueryError: If query execution fails
 
     Example:
-        # With named parameters and database specification
         df = execute_query(
-            "SELECT * FROM portfolios WHERE value > {min_value}",
+            "SELECT * FROM portfolios WHERE value > {{ min_value }}",
             params={'min_value': 1000000},
             connection='AWS_DW',
             database='DataWarehouse'
         )
-
-        # With positional parameters
-        df = execute_query(
-            "SELECT * FROM portfolios WHERE value > ?",
-            params=(1000000,),
-            connection='AWS_DW'
-        )
     """
     try:
-        # Convert numpy/pandas types to native Python types
-        params = _convert_params_to_native_types(params)
-
-        # Handle named parameters if dict provided
+        # Substitute named parameters if dict provided
         if isinstance(params, dict):
-            query, params = _substitute_named_parameters(query, params)
+            query = _substitute_named_parameters(query, params)
 
         with get_connection(connection, database=database) as conn:
-            df = pd.read_sql(query, conn, params=params)
+            df = pd.read_sql(query, conn)
 
         return df
 
@@ -503,14 +605,13 @@ def execute_query(
         raise  # Re-raise connection/configuration errors as-is
     except Exception as e:
         raise SQLServerQueryError(
-            f"Query execution failed (connection: {connection}): {e}\n"
-            f"Parameters: {params}"
+            f"Query execution failed (connection: {connection}): {e}"
         ) from e
 
 
 def execute_scalar(
     query: str,
-    params: Optional[Union[Dict[str, Any], Tuple]] = None,
+    params: Optional[Dict[str, Any]] = None,
     connection: str = 'TEST',
     database: Optional[str] = None
 ) -> Any:
@@ -528,23 +629,20 @@ def execute_scalar(
 
     Example:
         count = execute_scalar(
-            "SELECT COUNT(*) FROM portfolios WHERE value > {min_value}",
+            "SELECT COUNT(*) FROM portfolios WHERE value > {{ min_value }}",
             params={'min_value': 1000000},
             connection='AWS_DW',
             database='DataWarehouse'
         )
     """
     try:
-        # Convert numpy/pandas types to native Python types
-        params = _convert_params_to_native_types(params)
-
-        # Handle named parameters if dict provided
+        # Substitute named parameters if dict provided
         if isinstance(params, dict):
-            query, params = _substitute_named_parameters(query, params)
+            query = _substitute_named_parameters(query, params)
 
         with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
-            cursor.execute(query, params or ())
+            cursor.execute(query)
             row = cursor.fetchone()
             return row[0] if row else None
 
@@ -559,7 +657,7 @@ def execute_scalar(
 
 def execute_command(
     query: str,
-    params: Optional[Union[Dict[str, Any], Tuple]] = None,
+    params: Optional[Dict[str, Any]] = None,
     connection: str = 'TEST',
     database: Optional[str] = None
 ) -> int:
@@ -577,7 +675,7 @@ def execute_command(
 
     Example:
         rows = execute_command(
-            "UPDATE portfolios SET status = {status} WHERE value < {min_value}",
+            "UPDATE portfolios SET status = {{ status }} WHERE value < {{ min_value }}",
             params={'status': 'INACTIVE', 'min_value': 100000},
             connection='AWS_DW',
             database='DataWarehouse'
@@ -585,16 +683,13 @@ def execute_command(
         print(f"Updated {rows} rows")
     """
     try:
-        # Convert numpy/pandas types to native Python types
-        params = _convert_params_to_native_types(params)
-
-        # Handle named parameters if dict provided
+        # Substitute named parameters if dict provided
         if isinstance(params, dict):
-            query, params = _substitute_named_parameters(query, params)
+            query = _substitute_named_parameters(query, params)
 
         with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
-            cursor.execute(query, params or ())
+            cursor.execute(query)
             conn.commit()
             return cursor.rowcount
 
@@ -648,78 +743,31 @@ def _read_sql_file(file_path: Union[str, Path]) -> str:
         ) from e
 
 
-def _substitute_params_direct(query: str, params: Optional[Dict[str, Any]] = None) -> str:
-    """
-    Perform direct string substitution of parameters (case-insensitive).
-
-    WARNING: This bypasses SQL injection protection. Only use with trusted input
-    or when parameterized queries are not supported (e.g., USE statements).
-
-    Args:
-        query: SQL query with {param_name} placeholders (case-insensitive)
-        params: Dictionary of parameter values
-
-    Returns:
-        Query with parameters directly substituted
-
-    Example:
-        query = "USE [{database_name}]"
-        params = {'DATABASE_NAME': 'MyDB'}  # or 'database_name': 'MyDB'
-        result = _substitute_params_direct(query, params)
-        # Returns: "USE [MyDB]"
-    """
-    if not params:
-        return query
-
-    # Create case-insensitive parameter lookup
-    params_lower = {k.lower(): v for k, v in params.items()}
-
-    def replace_param(match):
-        param_name = match.group(1).lower()
-        if param_name not in params_lower:
-            raise SQLServerQueryError(
-                f"Missing required parameter: {match.group(1)}\n"
-                f"Available parameters: {', '.join(params.keys())}"
-            )
-        value = params_lower[param_name]
-        # Convert value to string representation
-        if value is None:
-            return 'NULL'
-        elif isinstance(value, str):
-            return value
-        else:
-            return str(value)
-
-    # Replace {param_name} with actual values (case-insensitive)
-    result = re.sub(r'\{(\w+)\}', replace_param, query, flags=re.IGNORECASE)
-    return result
 
 
 def execute_query_from_file(
     file_path: Union[str, Path],
     params: Optional[Dict[str, Any]] = None,
     connection: str = 'TEST',
-    database: Optional[str] = None,
-    use_direct_substitution: bool = False
+    database: Optional[str] = None
 ) -> pd.DataFrame:
     """
     Execute SELECT query from SQL file and return DataFrame.
 
+    Handles both single-statement queries and multi-statement scripts
+    (e.g., scripts with USE statements followed by SELECT).
+
     Args:
         file_path: Path to SQL file (absolute or relative to workspace/sql/)
-        params: Query parameters (supports {param_name} placeholders, case-insensitive)
+        params: Query parameters (supports {{ param_name }} placeholders)
         connection: Name of the SQL Server connection to use
         database: Optional database name to connect to (overrides connection config)
-        use_direct_substitution: If True, use direct string substitution instead of
-                                parameterized queries. Required for scripts with USE
-                                statements or other commands that don't support parameters.
-                                WARNING: Only use with trusted input.
 
     Returns:
         pandas DataFrame with query results
 
     Example:
-        # With parameterized query (safe from SQL injection)
+        # Standard query with parameters
         df = execute_query_from_file(
             'portfolio_query.sql',
             params={'min_value': 1000000},
@@ -727,57 +775,48 @@ def execute_query_from_file(
             database='DataWarehouse'
         )
 
-        # With direct substitution (for USE statements)
+        # Script with USE statements (automatically handled)
         df = execute_query_from_file(
             'list_edm_tables.sql',
             params={'EDM_FULL_NAME': 'CBHU_Automated_FxHJ'},
-            connection='DATABRIDGE',
-            use_direct_substitution=True
+            connection='DATABRIDGE'
         )
     """
     query = _read_sql_file(file_path)
 
-    if use_direct_substitution:
-        # Direct string substitution (for USE statements, etc.)
-        query = _substitute_params_direct(query, params)
+    try:
+        # Substitute named parameters if dict provided
+        if isinstance(params, dict):
+            query = _substitute_named_parameters(query, params)
 
-        # Handle multi-statement scripts (e.g., USE followed by SELECT)
-        try:
-            with get_connection(connection, database=database) as conn:
-                cursor = conn.cursor()
+        with get_connection(connection, database=database) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
 
-                # Execute the entire script at once
-                # SQL Server can handle multiple statements separated by semicolons
-                cursor.execute(query)
+            # Navigate to the last result set (which should be the SELECT)
+            # Skip over USE and other statements that don't return data
+            while cursor.description is None:
+                if not cursor.nextset():
+                    raise SQLServerQueryError(
+                        f"Query file does not return a result set: {file_path}"
+                    )
 
-                # Move through result sets until we find one with data
-                # (USE statements produce no results, so we need to skip to the SELECT)
-                while cursor.description is None:
-                    if not cursor.nextset():
-                        # No more result sets and no data found
-                        cursor.close()
-                        return pd.DataFrame()
+            # Now cursor.description is not None, so we can fetch results
+            columns = [column[0] for column in cursor.description]
+            rows = cursor.fetchall()
 
-                # Now we have a result set with data
-                columns = [column[0] for column in cursor.description]
-                rows = cursor.fetchall()
-                cursor.close()
+            # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
+            data = [tuple(row) for row in rows]
+            df = pd.DataFrame.from_records(data, columns=columns)
 
-                # Convert pyodbc Row objects to tuples for pandas compatibility
-                data = [tuple(row) for row in rows]
-                df = pd.DataFrame(data, columns=columns)
-                return df
+        return df
 
-        except (SQLServerConnectionError, SQLServerConfigurationError):
-            raise  # Re-raise connection/configuration errors as-is
-        except Exception as e:
-            raise SQLServerQueryError(
-                f"Query execution failed (connection: {connection}): {e}\n"
-                f"Query: {query[:500]}{'...' if len(query) > 500 else ''}"
-            ) from e
-    else:
-        # Parameterized query (safe from SQL injection)
-        return execute_query(query, params=params, connection=connection, database=database)
+    except (SQLServerConnectionError, SQLServerConfigurationError):
+        raise  # Re-raise connection/configuration errors as-is
+    except Exception as e:
+        raise SQLServerQueryError(
+            f"Query execution failed (connection: {connection}, file: {file_path}): {e}"
+        ) from e
 
 
 def execute_script_file(
@@ -791,7 +830,7 @@ def execute_script_file(
 
     Args:
         file_path: Path to SQL file (absolute or relative to workspace/sql/)
-        params: Script parameters (supports {param_name} placeholders)
+        params: Script parameters (supports {{ param_name }} placeholders)
         connection: Name of the SQL Server connection to use
         database: Optional database name to connect to (overrides connection config)
 
@@ -800,7 +839,7 @@ def execute_script_file(
 
     Example:
         # Create workspace/sql/update_portfolios.sql with content:
-        # UPDATE portfolios SET status = {status} WHERE value < {min_value};
+        # UPDATE portfolios SET status = {{ status }} WHERE value < {{ min_value }};
         # DELETE FROM portfolios WHERE status = 'CLOSED';
 
         rows = execute_script_file(
@@ -814,20 +853,15 @@ def execute_script_file(
     script = _read_sql_file(file_path)
 
     try:
-        # Convert numpy/pandas types to native Python types
-        params = _convert_params_to_native_types(params)
-
-        # Handle named parameters if dict provided
+        # Substitute named parameters if dict provided
         if isinstance(params, dict):
-            script, params = _substitute_named_parameters(script, params)
+            script = _substitute_named_parameters(script, params)
 
         total_rows = 0
 
         with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
-
-            # Execute script (pyodbc handles multiple statements)
-            cursor.execute(script, params or ())
+            cursor.execute(script)
 
             # Sum up rows affected across all statements
             total_rows = cursor.rowcount

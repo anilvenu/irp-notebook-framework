@@ -3,7 +3,7 @@ Purpose: This script creates the RiskLink import files for CB Earthquake exposur
 Author: Charlene Chia
 Edited by: Teryn Mueller-- Put the name of the person updating this script.
 Instructions: 
-				1. Update quarter e.g. 202212 to {DATE_VALUE}
+				1. Update quarter e.g. 202212 to {{ DATE_VALUE }}
 				2. Execute the script
 
 SQL Server: vdbpdw-housing-secondary.database.cead.prd
@@ -11,14 +11,14 @@ SQL Database: DW_EXP_MGMT_USER
 
 Input Table:	CombinedData_202209_Working
 Output Tables:
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBEQ_Account
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBEQ_Location
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
 
 -- CB EQ Account File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBEQ_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME --varchar(40), we are at the maximum limit. This was previously AccountNumber.
@@ -73,8 +73,8 @@ SELECT
 	,AssurantGroupedLOB AS POLICYUSERTXT2 --varchar(20)
 	,NetLegalEntity AS POLICYUSERTXT3 --varchar(20)
 	,LegalEntity AS POLICYUSERTXT4 --varchar(20)
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBEQ_Account
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State IN ('PR','VI')
 	and EarthquakeCoverage = 'Y'  
 	and EQ_Remetrica_RDMF_Bucket <> 'NULL'
@@ -82,7 +82,7 @@ WHERE State IN ('PR','VI')
 --(9 rows affected)
 
 -- CB EQ Location File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBEQ_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -157,8 +157,8 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBEQ_Location
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State IN ('PR','VI')
 	and EarthquakeCoverage = 'Y' 
 	and EQ_Remetrica_RDMF_Bucket <> 'NULL'
@@ -167,5 +167,5 @@ WHERE State IN ('PR','VI')
 
 
 --Export import files to CSV
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBEQ_Account --4
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBEQ_Location --4
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account --4
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location --4

@@ -9,16 +9,16 @@ Instructions:
 SQL Server: vdbpdw-housing-secondary.database.cead.prd
 SQL Database: DW_EXP_MGMT_USER
 
-Input Table:	CombinedData_{DATE_VALUE}_Working
+Input Table:	CombinedData_{{ DATE_VALUE }}_Working
 Output Tables:
-				 Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFF_Account
-				 Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFF_Location
+				 Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account
+				 Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
 
 -- US FF Account File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFF_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME --varchar(40), we are at the maximum limit. This was previously AccountNumber.
@@ -71,15 +71,15 @@ SELECT
 	,AssurantGroupedLOB AS POLICYUSERTXT2 --varchar(20)
 	,NetLegalEntity AS POLICYUSERTXT3 --varchar(20)
 	,LegalEntity AS POLICYUSERTXT4 --varchar(20)
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFF_Account
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU')
 	and FFMODELED = 'Y'
 --(3816610 rows affected)
 
 
 -- US FF Location File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFF_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -151,14 +151,14 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFF_Location
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU')
 	and FFMODELED = 'Y'
 --(3816610 rows affected)
 
 --Export import files to CSV via export wizard
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFF_Account--3816610
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFF_Location--3816610
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account--3816610
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location--3816610
 	  
 	

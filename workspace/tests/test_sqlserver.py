@@ -11,7 +11,7 @@ Test Coverage:
 - Command execution (INSERT/UPDATE/DELETE)
 - File-based query execution
 - File-based script execution
-- Parameter substitution ({param_name} style)
+- Parameter substitution ({{ param_name }} style with Template system)
 - Type conversions (numpy/pandas to native Python)
 - Error handling
 - Configuration validation
@@ -209,37 +209,47 @@ def test_convert_params_tuple():
 # ==============================================================================
 
 def test_substitute_named_parameters_simple():
-    """Test simple named parameter substitution"""
-    query = "SELECT * FROM table WHERE id = {user_id}"
+    """Test simple named parameter substitution with Template"""
+    query = "SELECT * FROM table WHERE id = {{ user_id }}"
     params = {'user_id': 123}
 
-    new_query, new_params = _substitute_named_parameters(query, params)
+    new_query = _substitute_named_parameters(query, params)
 
-    assert new_query == "SELECT * FROM table WHERE id = ?"
-    assert new_params == (123,)
+    assert "123" in new_query  # Value substituted directly
 
 
 def test_substitute_named_parameters_multiple():
-    """Test multiple named parameter substitution"""
-    query = "SELECT * FROM table WHERE id = {user_id} AND name = {user_name} AND age > {min_age}"
+    """Test multiple named parameter substitution with Template"""
+    query = "SELECT * FROM table WHERE id = {{ user_id }} AND name = {{ user_name }} AND age > {{ min_age }}"
     params = {'user_id': 123, 'user_name': 'John', 'min_age': 21}
 
-    new_query, new_params = _substitute_named_parameters(query, params)
+    new_query = _substitute_named_parameters(query, params)
 
-    assert new_query == "SELECT * FROM table WHERE id = ? AND name = ? AND age > ?"
-    assert new_params == (123, 'John', 21)
+    assert "123" in new_query
+    assert "'John'" in new_query  # String values are quoted
+    assert "21" in new_query
+
+
+def test_substitute_named_parameters_sql_injection_protection():
+    """Test that SQL injection attempts are escaped"""
+    query = "SELECT * FROM table WHERE name = {{ name }}"
+    params = {'name': "'; DROP TABLE users; --"}
+
+    new_query = _substitute_named_parameters(query, params)
+
+    # Single quotes should be doubled (escaped)
+    assert "''; DROP TABLE users; --'" in new_query
 
 
 def test_substitute_named_parameters_missing_param():
     """Test error when required parameter is missing"""
-    query = "SELECT * FROM table WHERE id = {user_id} AND name = {user_name}"
+    query = "SELECT * FROM table WHERE id = {{ user_id }} AND name = {{ user_name }}"
     params = {'user_id': 123}  # Missing user_name
 
     with pytest.raises(SQLServerQueryError) as exc_info:
         _substitute_named_parameters(query, params)
 
-    assert 'Missing required parameters' in str(exc_info.value)
-    assert 'user_name' in str(exc_info.value)
+    assert 'Missing required parameter' in str(exc_info.value)
 
 
 def test_substitute_named_parameters_no_params():
@@ -247,10 +257,9 @@ def test_substitute_named_parameters_no_params():
     query = "SELECT * FROM table"
     params = None
 
-    new_query, new_params = _substitute_named_parameters(query, params)
+    new_query = _substitute_named_parameters(query, params)
 
     assert new_query == "SELECT * FROM table"
-    assert new_params is None
 
 
 def test_substitute_named_parameters_empty_dict():
@@ -258,10 +267,9 @@ def test_substitute_named_parameters_empty_dict():
     query = "SELECT * FROM table"
     params = {'unused': 123}
 
-    new_query, new_params = _substitute_named_parameters(query, params)
+    new_query = _substitute_named_parameters(query, params)
 
     assert new_query == "SELECT * FROM table"
-    assert new_params is None
 
 
 # ==============================================================================
@@ -278,23 +286,10 @@ def test_execute_query_simple(mssql_env, wait_for_sqlserver, clean_sqlserver_db)
     assert 'portfolio_value' in df.columns
 
 
-def test_execute_query_with_positional_params(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
-    """Test query with positional parameters"""
-    df = execute_query(
-        "SELECT * FROM test_portfolios WHERE id = ?",
-        params=(1,),
-        connection='TEST', database='test_db'
-    )
-
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 1
-    assert df.iloc[0]['portfolio_name'] == 'Test Portfolio A'
-
-
 def test_execute_query_with_named_params(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test query with named parameters"""
     df = execute_query(
-        "SELECT * FROM test_portfolios WHERE portfolio_value > {min_value}",
+        "SELECT * FROM test_portfolios WHERE portfolio_value > {{ min_value }}",
         params={'min_value': 1000000},
         connection='TEST', database='test_db'
     )
@@ -311,7 +306,7 @@ def test_execute_query_with_multiple_named_params(mssql_env, wait_for_sqlserver,
         SELECT p.*, r.risk_type, r.risk_value
         FROM test_portfolios p
         INNER JOIN test_risks r ON p.id = r.portfolio_id
-        WHERE p.id = {portfolio_id} AND r.risk_type = {risk_type}
+        WHERE p.id = {{ portfolio_id }} AND r.risk_type = {{ risk_type }}
         """,
         params={'portfolio_id': 1, 'risk_type': 'VaR_95'},
         connection='TEST', database='test_db'
@@ -326,7 +321,7 @@ def test_execute_query_with_multiple_named_params(mssql_env, wait_for_sqlserver,
 def test_execute_query_with_numpy_params(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test query with numpy parameter types"""
     df = execute_query(
-        "SELECT * FROM test_portfolios WHERE portfolio_value > {min_value}",
+        "SELECT * FROM test_portfolios WHERE portfolio_value > {{ min_value }}",
         params={'min_value': np.float64(1000000.0)},
         connection='TEST', database='test_db'
     )
@@ -338,7 +333,7 @@ def test_execute_query_with_numpy_params(mssql_env, wait_for_sqlserver, clean_sq
 def test_execute_query_empty_result(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test query that returns no results"""
     df = execute_query(
-        "SELECT * FROM test_portfolios WHERE portfolio_value > {min_value}",
+        "SELECT * FROM test_portfolios WHERE portfolio_value > {{ min_value }}",
         params={'min_value': 99999999},
         connection='TEST', database='test_db'
     )
@@ -368,7 +363,7 @@ def test_execute_scalar_count(mssql_env, wait_for_sqlserver, clean_sqlserver_db)
 def test_execute_scalar_with_params(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test scalar query with parameters"""
     count = execute_scalar(
-        "SELECT COUNT(*) FROM test_portfolios WHERE portfolio_value > {min_value}",
+        "SELECT COUNT(*) FROM test_portfolios WHERE portfolio_value > {{ min_value }}",
         params={'min_value': 1000000},
         connection='TEST', database='test_db'
     )
@@ -396,7 +391,7 @@ def test_execute_command_insert(mssql_env, wait_for_sqlserver, clean_sqlserver_d
     rows = execute_command(
         """
         INSERT INTO test_portfolios (portfolio_name, portfolio_value, status)
-        VALUES ({name}, {value}, {status})
+        VALUES ({{ name }}, {{ value }}, {{ status }})
         """,
         params={'name': 'Test Portfolio F', 'value': 3000000.0, 'status': 'ACTIVE'},
         connection='TEST', database='test_db'
@@ -406,7 +401,7 @@ def test_execute_command_insert(mssql_env, wait_for_sqlserver, clean_sqlserver_d
 
     # Verify insert
     df = execute_query(
-        "SELECT * FROM test_portfolios WHERE portfolio_name = {name}",
+        "SELECT * FROM test_portfolios WHERE portfolio_name = {{ name }}",
         params={'name': 'Test Portfolio F'},
         connection='TEST', database='test_db'
     )
@@ -417,7 +412,7 @@ def test_execute_command_insert(mssql_env, wait_for_sqlserver, clean_sqlserver_d
 def test_execute_command_update(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test UPDATE command"""
     rows = execute_command(
-        "UPDATE test_portfolios SET status = {status} WHERE portfolio_value < {min_value}",
+        "UPDATE test_portfolios SET status = {{ status }} WHERE portfolio_value < {{ min_value }}",
         params={'status': 'LOW_VALUE', 'min_value': 1000000},
         connection='TEST', database='test_db'
     )
@@ -500,8 +495,8 @@ def test_execute_script_file_single_statement(mssql_env, wait_for_sqlserver, ini
     # Create a simple UPDATE script
     script_content = """
     UPDATE test_portfolios
-    SET status = {new_status}
-    WHERE portfolio_value < {min_value}
+    SET status = {{ new_status }}
+    WHERE portfolio_value < {{ min_value }}
     """
     script_path = temp_sql_file(script_content)
 
@@ -694,6 +689,73 @@ def test_execute_script_file_with_database_parameter(mssql_env, wait_for_sqlserv
         database='test_db'
     )
     assert count == 2
+
+
+def test_parameterized_database_in_brackets(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
+    """Test that database names in brackets can be parameterized (like USE [{{ db_name }}])"""
+    # Note: pd.read_sql doesn't support multi-statement queries (USE + SELECT)
+    # So we test the parameterization logic directly with _substitute_named_parameters
+    from helpers.sqlserver import _substitute_named_parameters
+
+    query = "USE [{{ db_name }}]"
+    params = {'db_name': 'test_db'}
+
+    result = _substitute_named_parameters(query, params)
+    assert result == "USE [test_db]"
+    assert "'" not in result  # Should NOT be quoted
+
+
+def test_parameterized_value_in_string_literal(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
+    """Test that parameters inside string literals are substituted without extra quotes"""
+    # This pattern is used extensively in the control totals SQL files
+    df = execute_query(
+        "SELECT 'Modeling_{{ date_val }}_Moodys_{{ cycle_type }}' as table_name",
+        params={'date_val': '202501', 'cycle_type': 'Full'},
+        connection='TEST',
+        database='test_db'
+    )
+
+    assert len(df) == 1
+    assert df.iloc[0]['table_name'] == 'Modeling_202501_Moodys_Full'
+
+
+def test_use_statement_with_table_name_parameter(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
+    """Test that table names can be parameterized (like CombinedData_{{ DATE_VALUE }}_Working)"""
+    # This pattern is used in CBHU_Control_Totals_Working_Table.sql
+    # Create a test table with date suffix
+    execute_command(
+        "CREATE TABLE dbo.TestData_{{ date_val }}_Working (id INT, value VARCHAR(50))",
+        params={'date_val': '20250115'},
+        connection='TEST',
+        database='test_db'
+    )
+
+    # Insert test data
+    execute_command(
+        "INSERT INTO dbo.TestData_{{ date_val }}_Working (id, value) VALUES (1, {{ test_value }})",
+        params={'date_val': '20250115', 'test_value': 'test'},
+        connection='TEST',
+        database='test_db'
+    )
+
+    # Query the parameterized table
+    df = execute_query(
+        "SELECT * FROM dbo.TestData_{{ date_val }}_Working WHERE id = {{ id_val }}",
+        params={'date_val': '20250115', 'id_val': 1},
+        connection='TEST',
+        database='test_db'
+    )
+
+    assert len(df) == 1
+    assert df.iloc[0]['value'] == 'test'
+
+    # Cleanup
+    execute_command(
+        "DROP TABLE dbo.TestData_{{ date_val }}_Working",
+        params={'date_val': '20250115'},
+        connection='TEST',
+        database='test_db'
+    )
 
 
 def test_connection_with_database_parameter(mssql_env, wait_for_sqlserver):

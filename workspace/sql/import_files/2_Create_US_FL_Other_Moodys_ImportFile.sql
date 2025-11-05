@@ -9,16 +9,16 @@ Instructions:
 SQL Server: vdbpdw-housing-secondary.database.cead.prd
 SQL Database: DW_EXP_MGMT_USER
 
-Input Table:	CombinedData_{DATE_VALUE}_Working
+Input Table:	CombinedData_{{ DATE_VALUE }}_Working
 Output Tables:
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Other_Account
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Other_Location
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Location
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
 
 -- US Other Flood Account File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Other_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME
@@ -67,12 +67,12 @@ SELECT
 	,AssurantGroupedLOB AS POLICYUSERTXT2
 	,NetLegalEntity AS POLICYUSERTXT3
 	,LegalEntity AS POLICYUSERTXT4
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Other_Account
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE OTHER_FLOOD_IND = 'Y'
 
 -- US Other Flood Location File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Other_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -148,6 +148,6 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USFL_Other_Location
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Location
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE OTHER_FLOOD_IND = 'Y'

@@ -19,7 +19,7 @@ Output Tables:
 Runtime: < 10 seconds
 **********************************************************************************************************************************************/
 
-USE [{EDM_FULL_NAME}] --Update
+USE [{{ EDM_FULL_NAME }}] --Update
 
 /*US Portfolios:  If these differ, the script will need to be updated
 Select distinct userid1 from accgrp
@@ -47,8 +47,8 @@ DECLARE @Date		VARCHAR(MAX)
 DECLARE @portinfoid	INT
 DECLARE @SQL		VARCHAR(MAX)
 
-SET @portinfoid = {PORTFOLIO_ID}
-SET @Date = {DATETIME_VALUE}
+SET @portinfoid = {{ PORTFOLIO_ID }}
+SET @Date = {{ DATETIME_VALUE }}
 
 
 --Manufactured Housing

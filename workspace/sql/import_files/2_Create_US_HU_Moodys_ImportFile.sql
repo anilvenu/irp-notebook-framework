@@ -3,24 +3,24 @@ Purpose: This script creates the RiskLink import files for US Hurricane exposure
 Author: Charlene Chia
 Edited by: Teryn Mueller
 Instructions: 
-				1. Update quarter e.g. 202212 to {DATE_VALUE}
+				1. Update quarter e.g. 202212 to {{ DATE_VALUE }}
 				2. Execute the script
 
 SQL Server: vdbpdw-housing-secondary.database.cead.prd
 SQL Database: DW_EXP_MGMT_USER
 
-Input Table:	CombinedData_{DATE_VALUE}_Working
+Input Table:	CombinedData_{{ DATE_VALUE }}_Working
 Output Tables:
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Full_Account
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Full_Location
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Leak_Account
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Leak_Location
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Account
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Location
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Location
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
 
 -- US HU Account File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Full_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME --varchar(40), we are at the maximum limit. This was previously AccountNumber.
@@ -77,15 +77,15 @@ SELECT
 	,CASE WHEN BusinessUnit = 'Clay' THEN ClientName ELSE AccountNumber END AS POLICYUSERTXT1 --varchar(20)
 	,NetLegalEntity AS POLICYUSERTXT3 --varchar(20)
 	,LegalEntity AS POLICYUSERTXT4 --varchar(20)
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Full_Account
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU')
 	and HUMODELED = 'Y'
 	and Flood_Flag_Total = 'Y'
 --(322867 rows affected)
 
 -- US HU Location File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Full_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -163,14 +163,14 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Full_Location
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Location
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU')
 	and HUMODELED = 'Y'
 	and Flood_Flag_Total = 'Y'
 --(322867 rows affected)
 
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Leak_Account
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME --varchar(40), we are at the maximum limit. This was previously AccountNumber.
@@ -228,15 +228,15 @@ SELECT
 	,AssurantGroupedLOB AS POLICYUSERTXT2 --varchar(20)
 	,NetLegalEntity AS POLICYUSERTXT3 --varchar(20)
 	,LegalEntity AS POLICYUSERTXT4 --varchar(20)
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Leak_Account
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU')
 	and HUMODELED = 'Y'
 	and Flood_Flag_Total <> 'Y'
 --(2008532 rows affected)
 
 -- US HU Location File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Leak_Location
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -314,8 +314,8 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Leak_Location
-FROM CombinedData_{DATE_VALUE}_Working
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Location
+FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU')
 	and HUMODELED = 'Y'
 	and Flood_Flag_Total <> 'Y'
@@ -323,7 +323,7 @@ WHERE State NOT IN ('PR','VI','GU')
 
 
 --Export import files to CSV via export wizard
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Full_Account --327435
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Full_Location --327435
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Leak_Account --2031776
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USHU_Leak_Location --2031776
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Account --327435
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Location --327435
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account --2031776
+--Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Location --2031776
