@@ -148,7 +148,7 @@ def test_create_batch_default(test_schema):
 
     # Create batch
     batch_id = create_batch(
-        batch_type='default',
+        batch_type='test_default',
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
@@ -161,7 +161,7 @@ def test_create_batch_default(test_schema):
     # Verify batch
     batch = read_batch(batch_id, schema=test_schema)
     assert batch['id'] == batch_id
-    assert batch['batch_type'] == 'default'
+    assert batch['batch_type'] == 'test_default'
 
     # Verify jobs were created
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -175,7 +175,7 @@ def test_create_batch_default(test_schema):
 @pytest.mark.database
 @pytest.mark.integration
 def test_create_batch_multi_job(test_schema):
-    """Test creating batch with multi_job transformer"""
+    """Test creating batch with test_multi_job transformer"""
     # Create hierarchy with multi-job config
     cycle_id = execute_insert(
         "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
@@ -213,7 +213,7 @@ def test_create_batch_multi_job(test_schema):
 
     # Create batch
     batch_id = create_batch(
-        batch_type='multi_job',
+        batch_type='test_multi_job',
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
@@ -288,7 +288,7 @@ def test_recon_batch_all_completed(test_schema):
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_completed')
 
     # Create batch with jobs
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     # Get jobs and mark them as FINISHED
@@ -312,7 +312,7 @@ def test_recon_batch_with_failures(test_schema):
     """Test reconciling batch with failed jobs"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_failed')
 
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     # Get jobs and mark some as FAILED
@@ -331,7 +331,7 @@ def test_recon_batch_all_cancelled(test_schema):
     """Test reconciling batch with all jobs cancelled"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_cancelled')
 
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     # Get jobs and mark them as CANCELLED
@@ -402,11 +402,11 @@ def test_create_batch_invalid_configuration_id(test_schema):
 
     # Test with 0
     with pytest.raises(BatchError, match="Invalid configuration_id"):
-        create_batch('default', 0, step_id, schema=test_schema)
+        create_batch('test_default', 0, step_id, schema=test_schema)
 
     # Test with negative
     with pytest.raises(BatchError, match="Invalid configuration_id"):
-        create_batch('default', -1, step_id, schema=test_schema)
+        create_batch('test_default', -1, step_id, schema=test_schema)
 
 
 @pytest.mark.database
@@ -440,7 +440,7 @@ def test_create_batch_configuration_wrong_status(test_schema):
     )
 
     with pytest.raises(BatchError, match="has invalid status"):
-        create_batch('default', config_id, step_id, schema=test_schema)
+        create_batch('test_default', config_id, step_id, schema=test_schema)
 
 
 @pytest.mark.database
@@ -459,7 +459,7 @@ def test_create_batch_configuration_new_status(test_schema):
     )
 
     with pytest.raises(BatchError, match="has invalid status"):
-        create_batch('default', config_id, step_id, schema=test_schema)
+        create_batch('test_default', config_id, step_id, schema=test_schema)
 
 
 @pytest.mark.database
@@ -470,7 +470,7 @@ def test_create_batch_no_step_id_lookup(test_schema):
 
     # Since _lookup_step_id returns None, this should fail
     with pytest.raises(BatchError, match="step_id is required"):
-        create_batch('default', config_id, step_id=None, schema=test_schema)
+        create_batch('test_default', config_id, step_id=None, schema=test_schema)
 
 
 @pytest.mark.database
@@ -481,45 +481,55 @@ def test_create_batch_invalid_step_id(test_schema):
 
     # Test with 0
     with pytest.raises(BatchError, match="Invalid step_id"):
-        create_batch('default', config_id, step_id=0, schema=test_schema)
+        create_batch('test_default', config_id, step_id=0, schema=test_schema)
 
     # Test with negative
     with pytest.raises(BatchError, match="Invalid step_id"):
-        create_batch('default', config_id, step_id=-5, schema=test_schema)
+        create_batch('test_default', config_id, step_id=-5, schema=test_schema)
 
 
 @pytest.mark.database
 @pytest.mark.integration
 def test_create_batch_transformer_exception(test_schema):
     """Test create_batch when transformer raises exception"""
-    from helpers.configuration import ConfigurationTransformer
+    from helpers.configuration import BATCH_TYPE_TRANSFORMERS
 
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_transformer_exc')
 
-    # Register a transformer that raises exception
-    @ConfigurationTransformer.register('test_error_transformer')
+    # Temporarily add a transformer that raises exception
     def transform_error(config):
         raise ValueError("Transformer failed!")
 
-    with pytest.raises(BatchError, match="Transformer failed"):
-        create_batch('test_error_transformer', config_id, step_id, schema=test_schema)
+    BATCH_TYPE_TRANSFORMERS['test_error_transformer'] = transform_error
+
+    try:
+        with pytest.raises(BatchError, match="Transformer failed"):
+            create_batch('test_error_transformer', config_id, step_id, schema=test_schema)
+    finally:
+        # Cleanup
+        del BATCH_TYPE_TRANSFORMERS['test_error_transformer']
 
 
 @pytest.mark.database
 @pytest.mark.integration
 def test_create_batch_transformer_returns_empty(test_schema):
     """Test create_batch when transformer returns empty list"""
-    from helpers.configuration import ConfigurationTransformer
+    from helpers.configuration import BATCH_TYPE_TRANSFORMERS
 
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_empty_transformer')
 
-    # Register a transformer that returns empty list
-    @ConfigurationTransformer.register('test_empty_transformer')
+    # Temporarily add a transformer that returns empty list
     def transform_empty(config):
         return []
 
-    with pytest.raises(BatchError, match="returned no job configurations"):
-        create_batch('test_empty_transformer', config_id, step_id, schema=test_schema)
+    BATCH_TYPE_TRANSFORMERS['test_empty_transformer'] = transform_empty
+
+    try:
+        with pytest.raises(BatchError, match="returned no job configurations"):
+            create_batch('test_empty_transformer', config_id, step_id, schema=test_schema)
+    finally:
+        # Cleanup
+        del BATCH_TYPE_TRANSFORMERS['test_empty_transformer']
 
 
 @pytest.mark.database
@@ -529,7 +539,7 @@ def test_submit_batch_configuration_error_status(test_schema):
     from helpers.database import execute_command
 
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_submit_error')
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
 
     # Set config to ERROR status
     execute_command(
@@ -549,7 +559,7 @@ def test_submit_batch_cycle_not_active(test_schema):
     from helpers.database import execute_command
 
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_cycle_archived')
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
 
     # Archive the cycle
     execute_command(
@@ -569,7 +579,7 @@ def test_get_batch_jobs_with_json_parsing(test_schema):
     from helpers.database import execute_command
 
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_json_parse')
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
 
     # Get jobs
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -593,7 +603,7 @@ def test_get_batch_jobs_with_json_parsing(test_schema):
 def test_get_batch_job_configurations_with_skipped_filter(test_schema):
     """Test get_batch_job_configurations with skipped filter"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_config_skip')
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
 
     # Get all configs
     all_configs = get_batch_job_configurations(batch_id, schema=test_schema)
@@ -613,7 +623,7 @@ def test_get_batch_job_configurations_with_skipped_filter(test_schema):
 def test_get_batch_job_configurations_json_parsing(test_schema):
     """Test get_batch_job_configurations parses JSON correctly"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_config_json')
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
 
     # Get job configurations
     job_configs = get_batch_job_configurations(batch_id, schema=test_schema)
@@ -632,7 +642,7 @@ def test_get_batch_job_configurations_json_parsing(test_schema):
 def test_recon_batch_with_error_jobs(test_schema):
     """Test recon_batch with ERROR status jobs"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_error')
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     # Mark job as ERROR
@@ -648,7 +658,7 @@ def test_recon_batch_with_error_jobs(test_schema):
 def test_recon_batch_all_skipped(test_schema):
     """Test recon_batch with all jobs skipped"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_skipped')
-    batch_id = create_batch('default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     # Skip all jobs
@@ -748,7 +758,7 @@ def test_recon_batch_mixed_job_states(test_schema):
         schema=test_schema
     )
 
-    batch_id = create_batch('multi_job', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('test_multi_job', config_id, step_id, schema=test_schema)
     submit_batch(batch_id, schema=test_schema)
 
     # Set different job states

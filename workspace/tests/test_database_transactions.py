@@ -233,7 +233,7 @@ def test_transaction_atomic_batch_creation(test_schema):
 
     # Create configuration directly (since create_configuration doesn't exist)
     config_data = {
-        'batch_type': 'default',
+        'batch_type': 'test_default',
         'items': ['A', 'B', 'C']
     }
 
@@ -245,7 +245,7 @@ def test_transaction_atomic_batch_creation(test_schema):
 
     # Create batch (should be atomic)
     batch_id = create_batch(
-        batch_type='default',
+        batch_type='test_default',
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
@@ -254,9 +254,9 @@ def test_transaction_atomic_batch_creation(test_schema):
     # Verify batch exists
     batch = read_batch(batch_id, schema=test_schema)
     assert batch['id'] == batch_id
-    assert batch['batch_type'] == 'default'
+    assert batch['batch_type'] == 'test_default'
 
-    # Verify job was created (default transformer returns 1 job)
+    # Verify job was created (test_default transformer returns 1 job)
     jobs = get_batch_jobs(batch_id, schema=test_schema)
     assert len(jobs) == 1
 

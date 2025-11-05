@@ -40,7 +40,10 @@ from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
 from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus
-from helpers.configuration import read_configuration, update_configuration_status, ConfigurationTransformer
+from helpers.configuration import (
+    read_configuration, update_configuration_status,
+    create_job_configurations, BATCH_TYPE_TRANSFORMERS
+)
 from helpers.cycle import get_active_cycle_id
 
 
@@ -69,7 +72,7 @@ def _create_batch(
         - Safe to call within or outside transaction_context()
 
     Args:
-        batch_type: Type of batch (must be registered in ConfigurationTransformer)
+        batch_type: Type of batch (must be in BATCH_TYPE_TRANSFORMERS)
         configuration_id: Configuration to use for this batch
         step_id: Step this batch belongs to
         schema: Database schema
@@ -263,7 +266,7 @@ def create_batch(
 
     Process:
     1. Validate configuration is VALID or ACTIVE
-    2. Validate batch_type is registered in ConfigurationTransformer
+    2. Validate batch_type is in BATCH_TYPE_TRANSFORMERS
     3. Lookup step_id if not provided (from configuration context)
     4. Apply transformer to generate job configurations
     5. In transaction:
@@ -295,10 +298,11 @@ def create_batch(
         raise BatchError(f"Invalid batch_type: {batch_type}")
 
     # Validate batch_type is registered
-    if batch_type not in ConfigurationTransformer.list_types():
+    if batch_type not in BATCH_TYPE_TRANSFORMERS:
+        available_types = list(BATCH_TYPE_TRANSFORMERS.keys())
         raise BatchError(
             f"Unknown batch_type '{batch_type}'. "
-            f"Registered types: {ConfigurationTransformer.list_types()}"
+            f"Available types: {available_types}"
         )
 
     # Read and validate configuration
@@ -324,7 +328,7 @@ def create_batch(
 
     # Apply transformer to generate job configurations
     try:
-        job_configs = ConfigurationTransformer.create_job_configurations(
+        job_configs = create_job_configurations(
             batch_type,
             config['configuration_data']
         )

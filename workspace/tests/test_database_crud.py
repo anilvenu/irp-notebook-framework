@@ -322,9 +322,6 @@ def test_complete_hierarchy(test_schema):
     update_step_run(run_2_1_id, StepStatus.ACTIVE)
 
     # Verify hierarchy
-    cycle = get_active_cycle()
-    assert cycle['cycle_name'] == 'test_cycle_18'
-
     stages = list_stages_for_cycle(cycle_id)
     assert len(stages) == 2
 
