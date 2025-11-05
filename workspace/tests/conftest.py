@@ -501,11 +501,12 @@ def init_sqlserver_db(wait_for_sqlserver):
         # Try to run sqlcmd in Docker container
         result = subprocess.run(
             [
-                'docker', 'exec', 'irp-sqlserver',
-                '/opt/mssql-tools/bin/sqlcmd',
+                'docker', 'exec', 'irp-sqlserver-test',
+                '/opt/mssql-tools18/bin/sqlcmd',
                 '-S', 'localhost',
                 '-U', user,
                 '-P', password,
+                '-C',
                 '-i', f'/docker-entrypoint-initdb.d/init_sqlserver.sql'
             ],
             capture_output=True,

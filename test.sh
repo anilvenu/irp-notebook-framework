@@ -65,7 +65,8 @@ pip install -r requirements-test.txt -q
 #python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')"
 
 # Run ALL pytest tests in a single command for unified results
-pytest workspace/tests/ -v "$@"
+# Exclude SQL Server tests by default (use ./test_sqlserver.sh for SQL Server tests)
+pytest workspace/tests/ -v -m "not sqlserver" "$@"
 
 # Deactivate venv if it was activated
 if [ -n "$VIRTUAL_ENV" ]; then

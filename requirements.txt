@@ -2,7 +2,7 @@
 psycopg2-binary==2.9.9
 sqlalchemy==2.0.25
 pandas==2.1.4
-pyodbc==5.1.0
+pyodbc==5.1.0  # SQL Server driver (for Jupyter notebooks and SQL Server tests)
 
 # Utilities
 python-dotenv==1.0.0

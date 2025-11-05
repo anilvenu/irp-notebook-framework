@@ -7,9 +7,11 @@ The IRP Notebook Framework uses a sophisticated test infrastructure built on pyt
 
 ---
 
-### Test Execution Infrastructure (test.sh)
+### Test Execution Infrastructure
 
-The `test.sh` script orchestrates the entire test execution process:
+#### Main Test Runner (test.sh)
+
+The `test.sh` script orchestrates the main test execution process:
 
 **Environment Preparation**:
 - Detects and activates virtual environment (`venv` or `.venv`)
@@ -21,8 +23,35 @@ The `test.sh` script orchestrates the entire test execution process:
 - Auto-creates test database (`test_db`) and test user (`test_user`) if they don't exist
 
 **Test Execution**:
-- Runs all tests with single pytest command: `pytest workspace/tests/ -v "$@"`
+- Runs tests excluding SQL Server tests: `pytest workspace/tests/ -v -m "not sqlserver" "$@"`
 - Passes through all arguments (supports `-m`, `-k`, `--preserve-schema`, etc.)
+- **Note**: SQL Server tests are excluded by default (use `test_sqlserver.sh` for SQL Server tests)
+
+#### SQL Server Test Runner (test_sqlserver.sh)
+
+The `test_sqlserver.sh` script orchestrates SQL Server-specific test execution:
+
+**Infrastructure Management**:
+- Starts dedicated SQL Server test container via `docker-compose.sqlserver.yml`
+- Uses separate container `irp-sqlserver-test` (isolated from main environment)
+- Shares `irp-network` with main containers for inter-service communication
+- Automatically tears down container after tests complete
+
+**Database Initialization**:
+- Waits for SQL Server healthcheck (up to 90 seconds)
+- Executes `init_sqlserver.sql` to create test database and sample data
+- Creates `test_db` with `test_portfolios` and `test_risks` tables
+
+**Test Execution**:
+- Verifies `pyodbc` driver is available (installs if needed)
+- Runs only SQL Server tests: `pytest -m sqlserver "$@"`
+- Cleans up container automatically via trap (even on failure)
+
+**Why Separate?**:
+- SQL Server only needed for unit tests (not for main development)
+- Demo notebooks will connect to external SQL Server instances
+- Keeps main environment lean (postgres + jupyter only)
+- On-demand testing reduces resource usage
 
 ---
 
@@ -200,8 +229,10 @@ def test_something(test_schema, cycle_name):
 @pytest.mark.unit          # Unit tests for individual functions
 @pytest.mark.integration   # Integration tests for component interactions
 @pytest.mark.e2e           # End-to-end tests for complete workflows
-@pytest.mark.database      # Tests requiring database connection
+@pytest.mark.database      # Tests requiring PostgreSQL database connection
+@pytest.mark.sqlserver     # Tests requiring SQL Server connection (excluded from main test.sh)
 @pytest.mark.slow          # Tests taking >5 seconds
+@pytest.mark.moody_api     # Tests requiring Moody's API (when implemented)
 ```
 
 **Helper Functions** (defined in conftest.py, usable in tests):
@@ -213,27 +244,29 @@ create_test_hierarchy(cycle_name, schema)  # Creates full cycle→stage→step�
 
 ### Test Execution Examples
 
-**Run All Tests**:
+#### Main Tests (PostgreSQL-based)
+
+**Run All Main Tests** (excludes SQL Server):
 ```bash
-./test.sh workspace/tests/                      # All tests, default verbosity
-./test.sh workspace/tests/ -v                   # Verbose output
-./test.sh workspace/tests/ -s                   # Show print statements
+./test.sh                                       # All main tests (403 tests)
+./test.sh -v                                    # Verbose output
+./test.sh -s                                    # Show print statements
 ```
 
 **Run by Test Type (Marker)**:
 ```bash
-./test.sh workspace/tests/ -m unit              # Only unit tests (fast)
-./test.sh workspace/tests/ -m integration       # Only integration tests
-./test.sh workspace/tests/ -m e2e               # Only end-to-end tests
-./test.sh workspace/tests/ -m database          # Only database tests
-./test.sh workspace/tests/ -m "unit and not slow"  # Fast unit tests
+./test.sh -m unit                               # Only unit tests (fast)
+./test.sh -m integration                        # Only integration tests
+./test.sh -m e2e                                # Only end-to-end tests
+./test.sh -m database                           # Only database tests
+./test.sh -m "unit and not slow"                # Fast unit tests
 ```
 
 **Run Specific Test Files**:
 ```bash
 ./test.sh workspace/tests/test_batch.py -v                   # Single file
 ./test.sh workspace/tests/test_batch.py::test_read_batch -v  # Single test
-./test.sh workspace/tests/ -k "numpy" -v                     # Pattern match
+./test.sh -k "numpy" -v                                      # Pattern match
 ```
 
 **Debugging with Preserved Schemas**:
@@ -251,8 +284,57 @@ test_db=> SELECT * FROM irp_cycle;     # Inspect test data
 **Parallel Execution (File-Level Only)**:
 ```bash
 # Requires: pip install pytest-xdist
-./test.sh workspace/tests/ -n auto     # Auto-detect CPU cores
-./test.sh workspace/tests/ -n 4        # Use 4 workers
+./test.sh -n auto                      # Auto-detect CPU cores
+./test.sh -n 4                         # Use 4 workers
+```
+
+#### SQL Server Tests
+
+**Run All SQL Server Tests** (41 tests):
+```bash
+./test_sqlserver.sh                    # Complete lifecycle: start → test → teardown
+./test_sqlserver.sh -v                 # Verbose output
+./test_sqlserver.sh -s                 # Show print statements
+```
+
+**Run Specific SQL Server Tests**:
+```bash
+./test_sqlserver.sh -k test_connection         # Pattern match
+./test_sqlserver.sh -k "query or scalar"       # Multiple patterns
+./test_sqlserver.sh workspace/tests/test_sqlserver.py::test_execute_query_simple -v
+```
+
+**SQL Server Test with Debugging**:
+```bash
+./test_sqlserver.sh -s -v              # Show all output
+./test_sqlserver.sh --tb=long          # Long traceback format
+
+# Container stays up during test, inspect database:
+# (In another terminal while tests are running)
+docker exec -it irp-sqlserver-test /opt/mssql-tools18/bin/sqlcmd \
+    -S localhost -U sa -P "TestPass123!" -C -Q "SELECT * FROM test_db.dbo.test_portfolios"
+```
+
+**Requirements for SQL Server Tests**:
+- ODBC Driver 18 for SQL Server must be installed on host system
+- `pyodbc==5.1.0` will be installed automatically by `test_sqlserver.sh`
+- Windows: [Download ODBC Driver 18](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
+- Linux: `sudo apt-get install unixodbc-dev` + Microsoft ODBC Driver 18
+- macOS: `brew install unixodbc` + Microsoft ODBC Driver 18
+
+#### Combined Test Execution
+
+**Run All Tests** (main + SQL Server):
+```bash
+# Option 1: Sequential execution
+./test.sh && ./test_sqlserver.sh
+
+# Option 2: Manual pytest (both test suites)
+pytest workspace/tests/ -v             # Runs all 444 tests (if SQL Server available)
+
+# Option 3: Explicit markers
+pytest -m "not sqlserver" -v           # Main tests only (403 tests)
+pytest -m sqlserver -v                 # SQL Server tests only (41 tests)
 ```
 
 ---
@@ -343,18 +425,32 @@ def test_with_context(test_schema):
 
 ## Test Count Summary
 
+**Total Tests**: 444 tests
+- **Main Tests** (PostgreSQL-based): 403 tests
+- **SQL Server Tests**: 41 tests
 
 ### Test Count by Type
 
-| Test Type | Count | Percentage |
-|-----------|-------|------------|
-| Unit Tests (`@pytest.mark.unit`) | 90 | 38.3% |
-| Integration Tests (`@pytest.mark.integration`) | 95 | 40.4% |
-| E2E Tests (`@pytest.mark.e2e`) | 6 | 2.6% |
-| Database Tests (`@pytest.mark.database`) | 201 | 85.5% |
-| Tests without marks | 44 | 18.7% |
+| Test Type | Count | Percentage | Notes |
+|-----------|-------|------------|-------|
+| Unit Tests (`@pytest.mark.unit`) | 90 | 20.3% | Fast, no external dependencies |
+| Integration Tests (`@pytest.mark.integration`) | 95 | 21.4% | Multi-component interactions |
+| E2E Tests (`@pytest.mark.e2e`) | 6 | 1.4% | Complete workflow tests |
+| Database Tests (`@pytest.mark.database`) | 201 | 45.3% | PostgreSQL integration |
+| SQL Server Tests (`@pytest.mark.sqlserver`) | 41 | 9.2% | SQL Server integration (separate runner) |
+| Tests without marks | 44 | 9.9% | Need marker additions |
+
+### Test Execution Breakdown
+
+| Test Runner | Tests | Excluded | Description |
+|-------------|-------|----------|-------------|
+| `./test.sh` | 403 | 41 SQL Server tests | Main test suite (PostgreSQL) |
+| `./test_sqlserver.sh` | 41 | 403 main tests | SQL Server integration tests |
+| `pytest workspace/tests/` | 444 | 0 (if SQL Server available) | All tests (requires both databases) |
 
 ### Test Files Overview
+
+#### Main Test Files (PostgreSQL-based - 403 tests)
 
 | Test File | Test Count | Primary Module Tested | Uses cycle.py | Uses database.py |
 |-----------|-----------|----------------------|--------------|-----------------|
@@ -370,6 +466,21 @@ def test_with_context(test_schema):
 | test_constants.py | 29 | constants.py | N | Y (5 tests) |
 | test_context.py | 30 | context.py | N | Y |
 | test_database.py | 17 | database.py (bulk ops, numpy) | N | Y |
+
+#### SQL Server Test Files (41 tests)
+
+| Test File | Test Count | Primary Module Tested | Test Runner |
+|-----------|-----------|----------------------|-------------|
+| test_sqlserver.py | 41 | sqlserver.py | `./test_sqlserver.sh` |
+
+**SQL Server Test Categories**:
+- Connection management (7 tests)
+- Parameter conversion and substitution (9 tests)
+- Query execution (10 tests)
+- Scalar queries (3 tests)
+- Command execution (INSERT/UPDATE/DELETE) (3 tests)
+- File-based operations (4 tests)
+- Error handling (5 tests)
 
 ---
 
@@ -712,10 +823,12 @@ source ./test.sh --preserve-schema -s -v
 ### Running Tests by Type
 
 ```bash
-... -m unit
-... -m integration
-... -m database
-... -m e2e
+./test.sh -m unit                      # Unit tests only (main suite)
+./test.sh -m integration               # Integration tests only (main suite)
+./test.sh -m database                  # PostgreSQL database tests only
+./test.sh -m e2e                       # End-to-end tests only
+./test_sqlserver.sh                    # SQL Server tests only (all 41 tests)
+./test_sqlserver.sh -m unit            # SQL Server unit tests only
 ```
 
 ### Running Specific Test Files

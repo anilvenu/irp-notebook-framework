@@ -24,13 +24,12 @@ from pathlib import Path
 from helpers import sqlserver
 from helpers.sqlserver import (
     SQLServerError,
-    SQLServerConnectionError,
     SQLServerConfigurationError,
     SQLServerQueryError,
     get_connection_config,
     build_connection_string,
     get_connection,
-    test_connection,
+    test_connection as check_connection,  # Renamed to avoid pytest collection
     execute_query,
     execute_scalar,
     execute_command,
@@ -40,6 +39,11 @@ from helpers.sqlserver import (
     _convert_params_to_native_types,
     _substitute_named_parameters,
 )
+
+# Mark all tests in this module as SQL Server tests
+# These tests require SQL Server container and are excluded from default test runs
+# Run with: ./test_sqlserver.sh or pytest -m sqlserver
+pytestmark = pytest.mark.sqlserver
 
 
 # ==============================================================================
@@ -95,7 +99,7 @@ def test_connection_context_manager(mssql_env, wait_for_sqlserver):
 
 def test_test_connection_success(mssql_env, wait_for_sqlserver):
     """Test successful connection test"""
-    result = test_connection('TEST')
+    result = check_connection('TEST')
     assert result is True
 
 
@@ -104,7 +108,7 @@ def test_test_connection_failure(monkeypatch):
     # Set invalid server
     monkeypatch.setenv('MSSQL_TEST_SERVER', 'invalid-server-that-does-not-exist')
 
-    result = test_connection('TEST')
+    result = check_connection('TEST')
     assert result is False
 
 
@@ -548,3 +552,45 @@ def test_execute_command_constraint_violation(mssql_env, wait_for_sqlserver, cle
             "INSERT INTO test_risks (portfolio_id, risk_type, risk_value) VALUES (9999, 'VaR_95', 100.0)",
             connection='TEST'
         )
+
+
+# ==============================================================================
+# ADDITIONAL ERROR HANDLING TESTS (for coverage)
+# ==============================================================================
+
+def test_convert_params_with_none():
+    """Test _convert_params_to_native_types with None input"""
+    result = _convert_params_to_native_types(None)
+    assert result is None
+
+
+def test_execute_scalar_connection_error():
+    """Test execute_scalar with invalid connection configuration"""
+    # This should trigger SQLServerConfigurationError which is re-raised
+    with pytest.raises(SQLServerConfigurationError):
+        execute_scalar("SELECT 1", connection='INVALID_CONNECTION_NAME')
+
+
+def test_execute_command_connection_error():
+    """Test execute_command with invalid connection configuration"""
+    # This should trigger SQLServerConfigurationError which is re-raised
+    with pytest.raises(SQLServerConfigurationError):
+        execute_command("SELECT 1", connection='INVALID_CONNECTION_NAME')
+
+
+def test_execute_query_from_file_nonexistent():
+    """Test execute_query_from_file with non-existent file"""
+    from helpers.sqlserver import execute_query_from_file
+
+    with pytest.raises(SQLServerQueryError) as exc_info:
+        execute_query_from_file('nonexistent_file.sql', connection='TEST')
+
+    assert 'SQL script file not found' in str(exc_info.value)
+
+
+def test_execute_script_file_connection_error(temp_sql_file):
+    """Test execute_script_file with invalid connection"""
+    script = temp_sql_file("SELECT 1;")
+
+    with pytest.raises(SQLServerConfigurationError):
+        execute_script_file(script, connection='INVALID_CONNECTION_NAME')
