@@ -27,6 +27,7 @@ from helpers.configuration import (
     create_configuration,
     update_configuration_status,
     load_configuration_file,
+    validate_configuration_file,
     ConfigurationError,
     create_job_configurations,
     BATCH_TYPE_TRANSFORMERS
@@ -329,7 +330,6 @@ def test_load_configuration_file_success(test_schema):
     config_id = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -393,8 +393,7 @@ def test_load_configuration_file_validation_errors(test_schema):
             load_configuration_file(
                 cycle_id=cycle_id,
                 excel_config_path=str(bad_file_path),
-                register=True,
-                schema=test_schema
+                        schema=test_schema
             )
     finally:
         # Clean up
@@ -413,7 +412,6 @@ def test_load_configuration_active_cycle(test_schema):
     config_id = load_configuration_file(
         cycle_id=active_cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -438,8 +436,7 @@ def test_load_configuration_archived_cycle_fails(test_schema):
         load_configuration_file(
             cycle_id=archived_cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -454,7 +451,6 @@ def test_load_configuration_duplicate_active_fails(test_schema):
     config_id_1 = load_configuration_file(
         cycle_id=cycle_id,
         excel_config_path=VALID_EXCEL_PATH,
-        register=True,
         schema=test_schema
     )
 
@@ -466,8 +462,7 @@ def test_load_configuration_duplicate_active_fails(test_schema):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -670,6 +665,109 @@ def test_transform_staging_etl():
 
 
 @pytest.mark.unit
+def test_transform_edm_db_upgrade():
+    """Test EDM DB Upgrade transformer creates one job per database"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Databases': [
+            {'Database': 'RMS_EDM_202503_DB1', 'Store in Data Bridge?': 'Y'},
+            {'Database': 'RMS_EDM_202503_DB2', 'Store in Data Bridge?': 'N'}
+        ]
+    }
+
+    result = create_job_configurations('EDM DB Upgrade', config)
+
+    assert len(result) == 2, "Should create one job per database"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Database'] == 'RMS_EDM_202503_DB1'
+    assert result[0]['Store in Data Bridge?'] == 'Y'
+    assert result[1]['Database'] == 'RMS_EDM_202503_DB2'
+    assert result[1]['Store in Data Bridge?'] == 'N'
+
+
+@pytest.mark.unit
+def test_transform_geohaz():
+    """Test GeoHaz transformer creates one job per portfolio"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Portfolios': [
+            {'Portfolio': 'PORTFOLIO_1', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file1.csv'},
+            {'Portfolio': 'PORTFOLIO_2', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file2.csv'}
+        ]
+    }
+
+    result = create_job_configurations('GeoHaz', config)
+
+    assert len(result) == 2, "Should create one job per portfolio"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Portfolio'] == 'PORTFOLIO_1'
+    assert result[0]['Import File'] == 'file1.csv'
+    assert result[1]['Portfolio'] == 'PORTFOLIO_2'
+    assert result[1]['Import File'] == 'file2.csv'
+
+
+@pytest.mark.unit
+def test_transform_portfolio_mapping():
+    """Test Portfolio Mapping transformer creates one job per portfolio"""
+    config = {
+        'Metadata': {'Current Date Value': '202503', 'EDM Data Version': 'v1.2.3'},
+        'Portfolios': [
+            {'Portfolio': 'PORTFOLIO_A', 'Database': 'RMS_EDM_202503_DB1', 'Base Portfolio?': 'Y'},
+            {'Portfolio': 'PORTFOLIO_B', 'Database': 'RMS_EDM_202503_DB1', 'Base Portfolio?': 'N'},
+            {'Portfolio': 'PORTFOLIO_C', 'Database': 'RMS_EDM_202503_DB2', 'Base Portfolio?': 'Y'}
+        ]
+    }
+
+    result = create_job_configurations('Portfolio Mapping', config)
+
+    assert len(result) == 3, "Should create one job per portfolio"
+    assert result[0]['Metadata'] == config['Metadata']
+    assert result[0]['Portfolio'] == 'PORTFOLIO_A'
+    assert result[0]['Base Portfolio?'] == 'Y'
+    assert result[1]['Portfolio'] == 'PORTFOLIO_B'
+    assert result[1]['Base Portfolio?'] == 'N'
+    assert result[2]['Portfolio'] == 'PORTFOLIO_C'
+    assert result[2]['Database'] == 'RMS_EDM_202503_DB2'
+
+
+@pytest.mark.unit
+def test_get_transformer_list():
+    """Test get_transformer_list() function"""
+    from helpers.configuration import get_transformer_list
+
+    # Get list without test transformers
+    transformers = get_transformer_list(include_test=False)
+
+    assert isinstance(transformers, list)
+    assert len(transformers) > 0
+    assert 'EDM Creation' in transformers
+    assert 'Portfolio Creation' in transformers
+    assert 'Analysis' in transformers
+    assert transformers == sorted(transformers), "List should be sorted"
+
+    # Verify test transformers are excluded
+    assert not any(t.startswith('test_') for t in transformers), "Test transformers should be excluded"
+
+
+@pytest.mark.unit
+def test_get_transformer_list_with_test():
+    """Test get_transformer_list() with include_test=True"""
+    from helpers.configuration import get_transformer_list
+
+    # Get list with test transformers
+    transformers = get_transformer_list(include_test=True)
+
+    assert isinstance(transformers, list)
+    assert len(transformers) > 0
+
+    # Get list without test transformers for comparison
+    transformers_no_test = get_transformer_list(include_test=False)
+
+    # List with test should be longer or equal
+    assert len(transformers) >= len(transformers_no_test)
+
+
+@pytest.mark.unit
 def test_transformer_empty_data():
     """Test transformer with empty data"""
     config = {
@@ -742,8 +840,7 @@ def test_load_configuration_file_not_found(test_schema):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path='/non/existent/path/config.xlsx',
-            register=True,
-            schema=test_schema
+                schema=test_schema
         )
 
 
@@ -766,8 +863,7 @@ def test_load_configuration_file_not_excel(test_schema):
             load_configuration_file(
                 cycle_id=cycle_id,
                 excel_config_path=str(fake_excel_path),
-                register=True,
-                schema=test_schema
+                        schema=test_schema
             )
     finally:
         # Clean up
@@ -777,19 +873,22 @@ def test_load_configuration_file_not_excel(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_load_configuration_without_register(test_schema):
-    """Test load_configuration_file with register=False"""
-    cycle_id = create_test_cycle(test_schema, 'test-no-register')
+def test_validate_configuration_file(test_schema):
+    """Test validate_configuration_file (validation only, no DB insert)"""
+    cycle_id = create_test_cycle(test_schema, 'test-validate-only')
 
     # Create a valid test Excel file path
     if not Path(VALID_EXCEL_PATH).exists():
         pytest.skip("Test Excel file not found")
 
-    # Try to load without registering (dry-run mode)
-    with pytest.raises(ConfigurationError, match="not registered"):
-        load_configuration_file(
-            cycle_id=cycle_id,
-            excel_config_path=VALID_EXCEL_PATH,
-            register=False,
-            schema=test_schema
-        )
+    # Validate without loading to database
+    result = validate_configuration_file(
+        cycle_id=cycle_id,
+        excel_config_path=VALID_EXCEL_PATH
+    )
+
+    # Verify result structure
+    assert 'validation_passed' in result
+    assert 'configuration_data' in result
+    assert 'file_info' in result
+    assert result['validation_passed'] is True

@@ -27,8 +27,7 @@ from helpers.configuration import load_configuration_file, read_configuration
 # Load configuration from Excel
 config_id = load_configuration_file(
     cycle_id=1,
-    excel_config_path='/path/to/config.xlsx',
-    register=True  # Deletes existing configs and registers as NEW
+    excel_config_path='/path/to/config.xlsx'
 )
 
 # Read configuration

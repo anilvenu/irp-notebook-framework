@@ -22,12 +22,13 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
-from helpers.database import execute_query, execute_command, execute_insert, DatabaseError
+# Database imports are lazy to avoid connection on module import
+# Functions that need database will import these locally
+# from helpers.database import execute_query, execute_command, execute_insert, DatabaseError
 from helpers.constants import (
     ConfigurationStatus, CONFIGURATION_TAB_LIST,
     EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES
 )
-from helpers.cycle import get_active_cycle_id
 
 
 class ConfigurationError(Exception):
@@ -986,6 +987,9 @@ def create_configuration(
     Raises:
         ConfigurationError: If creation fails
     """
+    # Lazy import of database functions
+    from helpers.database import execute_insert, DatabaseError
+
     # Validate status
     if status not in ConfigurationStatus.all():
         raise ConfigurationError(f"Invalid status: {status}. Must be one of {ConfigurationStatus.all()}")
@@ -1044,6 +1048,9 @@ def read_configuration(config_id: int, schema: str = 'public') -> Dict[str, Any]
     Raises:
         ConfigurationError: If configuration not found
     """
+    # Lazy import of database functions
+    from helpers.database import execute_query
+
     query = """
         SELECT id, cycle_id, configuration_file_name, configuration_data,
                status, file_last_updated_ts, created_ts, updated_ts
@@ -1086,6 +1093,9 @@ def update_configuration_status(config_id: int, status: str, schema: str = 'publ
     Raises:
         ConfigurationError: If configuration not found or invalid status
     """
+    # Lazy import of database functions
+    from helpers.database import execute_command
+
     # Validate status
     if status not in ConfigurationStatus.all():
         raise ConfigurationError(f"Invalid status: {status}. Must be one of {ConfigurationStatus.all()}")
@@ -1130,50 +1140,19 @@ def validate_configuration(config_data: Dict[str, Any]) -> bool:
     return True
 
 
-def load_configuration_file(
-    cycle_id: int,
-    excel_config_path: str,
-    register: bool = False,
-    schema: str = 'public'
-) -> int:
+def _validate_excel_file(excel_config_path: str):
     """
-    Load configuration from Excel file.
-
-    This function validates and loads an Excel configuration file.
+    Internal helper to validate Excel configuration file.
 
     Args:
-        cycle_id: Cycle ID to associate with this configuration
         excel_config_path: Path to Excel configuration file
-        register: If True, delete existing configurations and register this as NEW
-        schema: Database schema to use (default: 'public')
 
     Returns:
-        Configuration ID
+        tuple: (config_data, validation_results, all_valid, file_mtime)
 
     Raises:
         ConfigurationError: If validation fails or file issues
     """
-    # Validate that the provided cycle_id matches the active cycle
-    from helpers.database import schema_context
-    with schema_context(schema):
-        active_cycle_id = get_active_cycle_id()
-    if active_cycle_id != cycle_id:
-        raise ConfigurationError(
-            _format_error('BUS-004', cycle_id=cycle_id, active_cycle_id=active_cycle_id)
-        )
-
-    # Check if there's already an ACTIVE configuration for this cycle
-    query = """
-        SELECT id FROM irp_configuration
-        WHERE cycle_id = %s AND status = %s
-    """
-    df = execute_query(query, (cycle_id, ConfigurationStatus.ACTIVE), schema=schema)
-
-    if not df.empty:
-        raise ConfigurationError(
-            _format_error('BUS-003', cycle_id=cycle_id)
-        )
-
     # Check if configuration file exists
     config_path = Path(excel_config_path)
     if not config_path.exists():
@@ -1275,28 +1254,168 @@ def load_configuration_file(
     except Exception as e:
         raise ConfigurationError(f"Failed to read Excel file: {str(e)}")
 
-    # If register=True, delete existing configs and insert
-    if register:
-        delete_query = "DELETE FROM irp_configuration WHERE cycle_id = %s"
-        execute_command(delete_query, (cycle_id,), schema=schema)
+    return config_data, validation_results, all_valid, file_mtime
 
-        insert_query = """
-            INSERT INTO irp_configuration
-            (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
-            VALUES (%s, %s, %s, %s, %s)
-        """
-        config_id = execute_insert(
-            insert_query,
-            (cycle_id, excel_config_path, json.dumps(config_data), ConfigurationStatus.NEW, file_mtime),
-            schema=schema
-        )
 
-        # Update status to VALID (since validation passed)
-        update_configuration_status(config_id, ConfigurationStatus.VALID, schema=schema)
+def load_configuration_file(
+    cycle_id: int,
+    excel_config_path: str,
+    schema: str = 'public'
+) -> int:
+    """
+    Load configuration from Excel file into the database.
 
-        return config_id
-    else:
+    This function validates and loads an Excel configuration file.
+    It will delete any existing configurations for the cycle before loading.
+
+    Args:
+        cycle_id: Cycle ID to associate with this configuration
+        excel_config_path: Path to Excel configuration file
+        schema: Database schema to use (default: 'public')
+
+    Returns:
+        Configuration ID
+
+    Raises:
+        ConfigurationError: If validation fails or file issues
+    """
+    # Lazy import of database functions
+    from helpers.database import execute_query, execute_command, execute_insert, schema_context
+    from helpers.cycle import get_active_cycle_id
+
+    # Validate that the provided cycle_id matches the active cycle
+    with schema_context(schema):
+        active_cycle_id = get_active_cycle_id()
+    if active_cycle_id != cycle_id:
         raise ConfigurationError(
-            "Configuration file validated successfully but not registered (register=False). "
-            f"Validation results: {validation_results}"
+            _format_error('BUS-004', cycle_id=cycle_id, active_cycle_id=active_cycle_id)
         )
+
+    # Check if there's already an ACTIVE configuration for this cycle
+    query = """
+        SELECT id FROM irp_configuration
+        WHERE cycle_id = %s AND status = %s
+    """
+    df = execute_query(query, (cycle_id, ConfigurationStatus.ACTIVE), schema=schema)
+
+    if not df.empty:
+        raise ConfigurationError(
+            _format_error('BUS-003', cycle_id=cycle_id)
+        )
+
+    # Validate Excel file using helper function
+    config_data, validation_results, all_valid, file_mtime = _validate_excel_file(excel_config_path)
+
+    # Delete existing configs and insert new configuration
+    delete_query = "DELETE FROM irp_configuration WHERE cycle_id = %s"
+    execute_command(delete_query, (cycle_id,), schema=schema)
+
+    insert_query = """
+        INSERT INTO irp_configuration
+        (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    config_id = execute_insert(
+        insert_query,
+        (cycle_id, excel_config_path, json.dumps(config_data), ConfigurationStatus.NEW, file_mtime),
+        schema=schema
+    )
+
+    # Update status to VALID (since validation passed)
+    update_configuration_status(config_id, ConfigurationStatus.VALID, schema=schema)
+
+    return config_id
+
+
+def validate_configuration_file(excel_config_path: str, cycle_id: Optional[int] = None) -> dict:
+    """
+    Validate Excel configuration file without loading to database.
+
+    This function performs all validation checks but does not insert data
+    into the database. Useful for preview/validation before committing.
+
+    Args:
+        excel_config_path: Path to Excel configuration file
+        cycle_id: Optional cycle ID to validate against (checks if active).
+                  If None, skips cycle validation (useful for pure file validation)
+
+    Returns:
+        dict: {
+            'validation_passed': bool,
+            'configuration_data': dict (includes _validation section),
+            'file_info': {
+                'path': str,
+                'last_modified': str,
+                'size_bytes': int
+            }
+        }
+
+    Raises:
+        ConfigurationError: If validation fails or file issues
+    """
+    # Optionally validate that the provided cycle_id matches the active cycle
+    if cycle_id is not None:
+        from helpers.cycle import get_active_cycle_id
+        active_cycle_id = get_active_cycle_id()
+        if active_cycle_id != cycle_id:
+            raise ConfigurationError(
+                _format_error('BUS-004', cycle_id=cycle_id, active_cycle_id=active_cycle_id)
+            )
+
+    # Validate Excel file using helper function
+    config_data, validation_results, all_valid, file_mtime = _validate_excel_file(excel_config_path)
+
+    # Get file info
+    config_path = Path(excel_config_path)
+    file_info = {
+        'path': str(config_path.absolute()),
+        'last_modified': file_mtime.isoformat(),
+        'size_bytes': config_path.stat().st_size
+    }
+
+    return {
+        'validation_passed': all_valid,
+        'configuration_data': config_data,
+        'file_info': file_info
+    }
+
+
+def get_transformer_list(include_test: bool = False) -> List[str]:
+    """
+    Get list of available transformer batch types.
+
+    Args:
+        include_test: If True, include test transformers (default: False)
+
+    Returns:
+        List of batch type names
+    """
+    transformers = []
+    for batch_type in BATCH_TYPE_TRANSFORMERS.keys():
+        if include_test or not batch_type.startswith('test_'):
+            transformers.append(batch_type)
+    return sorted(transformers)
+
+
+def preview_transformer_jobs(
+    batch_type: str,
+    configuration_data: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """
+    Preview job configurations that would be created by a transformer.
+
+    This function runs the transformer on configuration data without
+    creating any batch or job records in the database.
+
+    Args:
+        batch_type: The type of batch transformer to run
+        configuration_data: Configuration dictionary (from validate_configuration_file)
+
+    Returns:
+        List of job configuration dictionaries
+
+    Raises:
+        ConfigurationError: If batch type is not recognized
+    """
+    # Use existing create_job_configurations function which doesn't touch DB
+    return create_job_configurations(batch_type, configuration_data)
