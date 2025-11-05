@@ -404,7 +404,7 @@ def mssql_env():
     from pathlib import Path
 
     # Load .env from project root
-    env_file = Path(__file__).parent.parent.parent / '.env'
+    env_file = Path(__file__).parent.parent.parent / '.env.test'
     if env_file.exists():
         load_dotenv(env_file)
 
