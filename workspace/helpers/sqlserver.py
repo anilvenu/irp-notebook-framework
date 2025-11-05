@@ -166,7 +166,7 @@ def get_connection_config(connection_name: str = 'TEST') -> Dict[str, str]:
     }
 
     # Validate required fields
-    required = ['server', 'database', 'user', 'password']
+    required = ['server', 'user', 'password']
     missing = [field for field in required if not config[field]]
 
     if missing:
@@ -175,7 +175,6 @@ def get_connection_config(connection_name: str = 'TEST') -> Dict[str, str]:
             f"Missing environment variables: {', '.join([f'{prefix}{f.upper()}' for f in missing])}\n"
             f"Required format:\n"
             f"  MSSQL_{connection_name}_SERVER=<server>\n"
-            f"  MSSQL_{connection_name}_DATABASE=<database>\n"
             f"  MSSQL_{connection_name}_USER=<user>\n"
             f"  MSSQL_{connection_name}_PASSWORD=<password>\n"
             f"  MSSQL_{connection_name}_PORT=<port> (optional, defaults to 1433)"
@@ -203,7 +202,13 @@ def build_connection_string(connection_name: str = 'TEST') -> str:
     connection_string = (
         f"DRIVER={{{config['driver']}}};"
         f"SERVER={config['server']},{config['port']};"
-        f"DATABASE={config['database']};"
+    )
+
+    # Only include DATABASE if it's specified (for USE statement support)
+    if config['database']:
+        connection_string += f"DATABASE={config['database']};"
+
+    connection_string += (
         f"UID={config['user']};"
         f"PWD={config['password']};"
         f"TrustServerCertificate={config['trust_cert']};"
@@ -603,34 +608,133 @@ def _read_sql_file(file_path: Union[str, Path]) -> str:
         ) from e
 
 
+def _substitute_params_direct(query: str, params: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Perform direct string substitution of parameters (case-insensitive).
+
+    WARNING: This bypasses SQL injection protection. Only use with trusted input
+    or when parameterized queries are not supported (e.g., USE statements).
+
+    Args:
+        query: SQL query with {param_name} placeholders (case-insensitive)
+        params: Dictionary of parameter values
+
+    Returns:
+        Query with parameters directly substituted
+
+    Example:
+        query = "USE [{database_name}]"
+        params = {'DATABASE_NAME': 'MyDB'}  # or 'database_name': 'MyDB'
+        result = _substitute_params_direct(query, params)
+        # Returns: "USE [MyDB]"
+    """
+    if not params:
+        return query
+
+    # Create case-insensitive parameter lookup
+    params_lower = {k.lower(): v for k, v in params.items()}
+
+    def replace_param(match):
+        param_name = match.group(1).lower()
+        if param_name not in params_lower:
+            raise SQLServerQueryError(
+                f"Missing required parameter: {match.group(1)}\n"
+                f"Available parameters: {', '.join(params.keys())}"
+            )
+        value = params_lower[param_name]
+        # Convert value to string representation
+        if value is None:
+            return 'NULL'
+        elif isinstance(value, str):
+            return value
+        else:
+            return str(value)
+
+    # Replace {param_name} with actual values (case-insensitive)
+    result = re.sub(r'\{(\w+)\}', replace_param, query, flags=re.IGNORECASE)
+    return result
+
+
 def execute_query_from_file(
     file_path: Union[str, Path],
     params: Optional[Dict[str, Any]] = None,
-    connection: str = 'TEST'
+    connection: str = 'TEST',
+    use_direct_substitution: bool = False
 ) -> pd.DataFrame:
     """
     Execute SELECT query from SQL file and return DataFrame.
 
     Args:
         file_path: Path to SQL file (absolute or relative to workspace/sql/)
-        params: Query parameters (supports {param_name} placeholders)
+        params: Query parameters (supports {param_name} placeholders, case-insensitive)
         connection: Name of the SQL Server connection to use
+        use_direct_substitution: If True, use direct string substitution instead of
+                                parameterized queries. Required for scripts with USE
+                                statements or other commands that don't support parameters.
+                                WARNING: Only use with trusted input.
 
     Returns:
         pandas DataFrame with query results
 
     Example:
-        # Create workspace/sql/portfolio_query.sql with content:
-        # SELECT * FROM portfolios WHERE value > {min_value}
-
+        # With parameterized query (safe from SQL injection)
         df = execute_query_from_file(
             'portfolio_query.sql',
             params={'min_value': 1000000},
             connection='AWS_DW'
         )
+
+        # With direct substitution (for USE statements)
+        df = execute_query_from_file(
+            'list_edm_tables.sql',
+            params={'EDM_FULL_NAME': 'CBHU_Automated_FxHJ'},
+            connection='DATABRIDGE',
+            use_direct_substitution=True
+        )
     """
     query = _read_sql_file(file_path)
-    return execute_query(query, params=params, connection=connection)
+
+    if use_direct_substitution:
+        # Direct string substitution (for USE statements, etc.)
+        query = _substitute_params_direct(query, params)
+
+        # Handle multi-statement scripts (e.g., USE followed by SELECT)
+        try:
+            with get_connection(connection) as conn:
+                cursor = conn.cursor()
+
+                # Execute the entire script at once
+                # SQL Server can handle multiple statements separated by semicolons
+                cursor.execute(query)
+
+                # Move through result sets until we find one with data
+                # (USE statements produce no results, so we need to skip to the SELECT)
+                while cursor.description is None:
+                    if not cursor.nextset():
+                        # No more result sets and no data found
+                        cursor.close()
+                        return pd.DataFrame()
+
+                # Now we have a result set with data
+                columns = [column[0] for column in cursor.description]
+                rows = cursor.fetchall()
+                cursor.close()
+
+                # Convert pyodbc Row objects to tuples for pandas compatibility
+                data = [tuple(row) for row in rows]
+                df = pd.DataFrame(data, columns=columns)
+                return df
+
+        except (SQLServerConnectionError, SQLServerConfigurationError):
+            raise  # Re-raise connection/configuration errors as-is
+        except Exception as e:
+            raise SQLServerQueryError(
+                f"Query execution failed (connection: {connection}): {e}\n"
+                f"Query: {query[:500]}{'...' if len(query) > 500 else ''}"
+            ) from e
+    else:
+        # Parameterized query (safe from SQL injection)
+        return execute_query(query, params=params, connection=connection)
 
 
 def execute_script_file(
