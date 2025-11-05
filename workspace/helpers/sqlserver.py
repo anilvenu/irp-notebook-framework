@@ -110,7 +110,7 @@ Differences from PostgreSQL integration (database.py):
 import os
 from pathlib import Path
 from contextlib import contextmanager
-from typing import Optional, Dict, Any, Union, Tuple
+from typing import List, Optional, Dict, Any, Union, Tuple
 from string import Template
 import pandas as pd
 import numpy as np
@@ -750,7 +750,7 @@ def execute_query_from_file(
     params: Optional[Dict[str, Any]] = None,
     connection: str = 'TEST',
     database: Optional[str] = None
-) -> pd.DataFrame:
+) -> List[pd.DataFrame]:
     """
     Execute SELECT query from SQL file and return DataFrame.
 
@@ -789,27 +789,37 @@ def execute_query_from_file(
         if isinstance(params, dict):
             query = _substitute_named_parameters(query, params)
 
+        dataframes = []
+
         with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
             cursor.execute(query)
 
-            # Navigate to the last result set (which should be the SELECT)
-            # Skip over USE and other statements that don't return data
-            while cursor.description is None:
-                if not cursor.nextset():
-                    raise SQLServerQueryError(
-                        f"Query file does not return a result set: {file_path}"
-                    )
+            if cursor.description is not None:
+                # Now cursor.description is not None, so we can fetch results
+                columns = [column[0] for column in cursor.description]
+                rows = cursor.fetchall()
 
-            # Now cursor.description is not None, so we can fetch results
-            columns = [column[0] for column in cursor.description]
-            rows = cursor.fetchall()
+                # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
+                data = [tuple(row) for row in rows]
+                dataframes.append(pd.DataFrame.from_records(data, columns=columns))
 
-            # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
-            data = [tuple(row) for row in rows]
-            df = pd.DataFrame.from_records(data, columns=columns)
+            while cursor.nextset():
+                if cursor.description is not None:
+                    # Now cursor.description is not None, so we can fetch results
+                    columns = [column[0] for column in cursor.description]
+                    rows = cursor.fetchall()
 
-        return df
+                    # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
+                    data = [tuple(row) for row in rows]
+                    dataframes.append(pd.DataFrame.from_records(data, columns=columns))
+
+        if len(dataframes) == 0:
+            raise SQLServerQueryError(
+                f"Query file does not return a result set: {file_path}"
+            )
+
+        return dataframes
 
     except (SQLServerConnectionError, SQLServerConfigurationError):
         raise  # Re-raise connection/configuration errors as-is

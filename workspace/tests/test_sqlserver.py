@@ -457,12 +457,15 @@ def test_execute_command_delete(mssql_env, wait_for_sqlserver, clean_sqlserver_d
 
 def test_execute_query_from_file(mssql_env, wait_for_sqlserver, init_sqlserver_db, sample_sql_file):
     """Test executing query from SQL file"""
-    df = execute_query_from_file(
+    dataframes = execute_query_from_file(
         sample_sql_file,
         params={'portfolio_id': 1, 'risk_type': 'VaR_95'},
         connection='TEST', database='test_db'
     )
 
+    assert isinstance(dataframes, list)
+    assert len(dataframes) == 1
+    df = dataframes[0]
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 1
     assert df.iloc[0]['portfolio_name'] == 'Test Portfolio A'
@@ -471,12 +474,15 @@ def test_execute_query_from_file(mssql_env, wait_for_sqlserver, init_sqlserver_d
 
 def test_execute_query_from_file_relative_path(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test executing query from SQL file using relative path"""
-    df = execute_query_from_file(
+    dataframes = execute_query_from_file(
         'examples/sample_query.sql',
         params={'portfolio_id': 2, 'risk_type': 'VaR_99'},
         connection='TEST', database='test_db'
     )
 
+    assert isinstance(dataframes, list)
+    assert len(dataframes) == 1
+    df = dataframes[0]
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 1
     assert df.iloc[0]['portfolio_name'] == 'Test Portfolio B'
@@ -658,13 +664,16 @@ def test_execute_command_with_database_parameter(mssql_env, wait_for_sqlserver, 
 
 def test_execute_query_from_file_with_database_parameter(mssql_env, wait_for_sqlserver, clean_sqlserver_db, sample_sql_file):
     """Test that execute_query_from_file works with database parameter"""
-    df = execute_query_from_file(
+    dataframes = execute_query_from_file(
         sample_sql_file,
         params={'portfolio_id': 1, 'risk_type': 'VaR_95'},
         connection='TEST',
         database='test_db'
     )
 
+    assert isinstance(dataframes, list)
+    assert len(dataframes) == 1
+    df = dataframes[0]
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 1
 
