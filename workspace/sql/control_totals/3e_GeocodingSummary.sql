@@ -15,11 +15,11 @@ Instructions:	1. Update quarter for each Database name from 202306 to 202306.
 SQL Server: RMS SQL Server
 SQL Database: Various
 
-Input Tables:	All RMS Exposure Database tables except for Flood Solutions and Other Flood
+Input Tables:	All RMS Exposure Database tables
 Output Tables:  No output tables
 
 ******************************************************************************************************************************************************/
-Use [RMS_EDM_FocK]
+Use [{WORKSPACE_EDM}]
  -- Create the DB Schema if it doesn't exist
 IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'asu') --Rename the schema name as desired
 BEGIN
@@ -28,11 +28,11 @@ END
 
 
 --Step 1: Create list of EDMs 
-Drop Table RMS_EDM_FocK.asu.EDM_List_Quarterly_{DATE_VALUE}
-Create Table RMS_EDM_FocK.asu.EDM_List_Quarterly_{DATE_VALUE} (
+Drop Table {WORKSPACE_EDM}.asu.EDM_List_{CYCLE_TYPE}_{DATE_VALUE}
+Create Table {WORKSPACE_EDM}.asu.EDM_List_{CYCLE_TYPE}_{DATE_VALUE} (
 	DBName VARCHAR(50));
-Insert into RMS_EDM_FocK.asu.EDM_List_Quarterly_{DATE_VALUE}
-select name from sys.databases where name like '%EDM%' and name like '%{DATE_VALUE}%' and name like '%Quarterly%' and name not like '%{PERIL_VALUE}%' ----CHANGE 
+Insert into {WORKSPACE_EDM}.asu.EDM_List_{CYCLE_TYPE}_{DATE_VALUE}
+select name from sys.databases where name like '%EDM%' and name like '%{DATE_VALUE}%' and name like '%{CYCLE_TYPE}%' ----CHANGE 
 
 --Step 2: Update the table that you created in Step 1 below. Then select everthing below this line and execute.
 
@@ -43,7 +43,7 @@ DECLARE @DBList		VARCHAR(100)
 DECLARE	@SQL		VARCHAR(MAX)
 
 DECLARE Database_Cursor CURSOR LOCAL FOR
-Select * From RMS_EDM_fock.asu.EDM_List_Quarterly_{DATE_VALUE} --UPDATE
+Select * From {WORKSPACE_EDM}.asu.EDM_List_{CYCLE_TYPE}_{DATE_VALUE} --UPDATE
 
 OPEN Database_Cursor
 FETCH NEXT FROM Database_Cursor INTO @DBName
@@ -76,7 +76,7 @@ Join '+@DBName+'..accgrp c on c.ACCGRPID = a.ACCGRPID
 Join '+@DBName+'..portacct d on c.ACCGRPID = d.ACCGRPID
 Join '+@DBName+'..portinfo e on e.PORTINFOID = d.PORTINFOID
 JOIN '+@DBName+'..Address f on f.AddressID = a.AddressID
-where portname in (''USFF'',''USEQ'',''CBHU'',''CBEQ'',''USST'',''USOW'',''USWF'',''USHU_Full'',''USHU_Leak'')
+where portname in (''USFF'',''USEQ'',''CBHU'',''CBEQ'',''USST'',''USOW'',''USWF'',''USHU_Full'',''USHU_Leak'',''USFL_Other'',''USFL_Excess'',''USFL_Commercial'')
 Group by e.PORTNAME, f.GeoResolutionCode
 Order by 1, 2
 
@@ -89,141 +89,7 @@ CLOSE Database_Cursor
 DEALLOCATE Database_Cursor
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
---Step 1: Create list of EDMs 
-use [RMS_EDM_{DATE_VALUE}_QEM_CBHU_TMTest_xujl]
-
-/*Geocoding Summary */
-Select e.PORTNAME, f.GeoResolutionCode, 
-	CASE
-		WHEN f.GeoResolutionCode = '1' THEN 'Coordinate'
-		WHEN f.GeoResolutionCode = '2' THEN 'Street address'
-		WHEN f.GeoResolutionCode =  '3' Then 'High Resolution Postcode / Street Block'
-		WHEN f.GeoResolutionCode = '4' then 'Street Name'
-		WHEN f.GeoResolutionCode = '5' then 'Postcode'
-		WHEN f.GeoResolutionCode =  '6' then 'City District/ Admin4'
-		WHEN f.GeoResolutionCode =  '7' then 'City/Town'
-		WHEN f.GeoResolutionCode = '8' then 'District / Municipality/Admin3'
-		WHEN f.GeoResolutionCode = '9' then 'County/Admin2'
-		WHEN f.GeoResolutionCode = '10' then 'State/Province/Admin1'
-		ELSE 'Null'
-		END as GeocodeDescription,
-Count(distinct(a.LOCNUM)) RiskCount, SUM(b.LIMITAMT) TIV, SUM(b.VALUEAMT) TRV
-From [RMS_EDM_{DATE_VALUE}_QEM_CBHU_TMTest_xujl]..Property a 
-Join [RMS_EDM_{DATE_VALUE}_QEM_CBHU_TMTest_xujl]..loccvg b on a.LOCID = b.LOCID
-Join [RMS_EDM_{DATE_VALUE}_QEM_CBHU_TMTest_xujl]..accgrp c on c.ACCGRPID = a.ACCGRPID
-Join [RMS_EDM_{DATE_VALUE}_QEM_CBHU_TMTest_xujl]..portacct d on c.ACCGRPID = d.ACCGRPID
-Join [RMS_EDM_{DATE_VALUE}_QEM_CBHU_TMTest_xujl]..portinfo e on e.PORTINFOID = d.PORTINFOID
-JOIN [RMS_EDM_{DATE_VALUE}_QEM_CBHU_TMTest_xujl]..Address f on f.AddressID = a.AddressID
-Group by e.PORTNAME, f.GeoResolutionCode
-Order by 1, 2
-
-
-
 /********************************************************************
-
-
-/*	Location File Controls: Risk Count, TRV and TIV	*/
-Select e.PORTNAME, f.GeoResolutionCode, 
-	CASE
-		WHEN f.GeoResolutionCode = '1' THEN 'Coordinate'
-		WHEN f.GeoResolutionCode = '2' THEN 'Street address'
-		WHEN f.GeoResolutionCode =  '3' Then 'High Resolution Postcode / Street Block'
-		WHEN f.GeoResolutionCode = '4' then 'Street Name'
-		WHEN f.GeoResolutionCode = '5' then 'Postcode'
-		WHEN f.GeoResolutionCode =  '6' then 'City District/ Admin4'
-		WHEN f.GeoResolutionCode =  '7' then 'City/Town'
-		WHEN f.GeoResolutionCode = '8' then 'District / Municipality/Admin3'
-		WHEN f.GeoResolutionCode = '9' then 'County/Admin2'
-		WHEN f.GeoResolutionCode = '10' then 'State/Province/Admin1'
-		ELSE '999'
-		END as GeocodeDescription,
-Count(distinct(a.LOCNUM)) RiskCount, SUM(b.LIMITAMT) TIV, SUM(b.VALUEAMT) TRV
-From Property a 
-Join loccvg b on a.LOCID = b.LOCID
-Join accgrp c on c.ACCGRPID = a.ACCGRPID
-Join portacct d on c.ACCGRPID = d.ACCGRPID
-Join portinfo e on e.PORTINFOID = d.PORTINFOID
-JOIN Address f on f.AddressID = a.AddressID
-Group by e.PORTNAME, f.GeoResolutionCode
-Order by 1, 2
-
 0 = None
 
 1 = Coordinate

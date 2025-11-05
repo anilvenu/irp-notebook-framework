@@ -1,28 +1,24 @@
 /**********************************************************************************************************************************************
-Purpose:	This script creates the RiskLink import files for CB Hurricane exposures
-			Note: RiskLink does not support either storm surge or precip flood in their Atlantic Hurricane model. Therefore, 
-			we omit flood risks from the RiskLink import file since they would generate zero loss. This is contrary to the Touchstone
-			import files where precip flood is supported. For consistency purposes all exposure totals in result exhibits should
-			show the same totals. i.e. copy the AIR TIV and Risk Count totals into the RMS exhibits.
+Purpose: This script creates the RiskLink import files for US Severe Convective Storm exposures
 Author: Charlene Chia
 Edited by: Teryn Mueller-- Put the name of the person updating this script.
 Instructions: 
-				1. Update quarter e.g. 202209 to {DATE_VALUE}
+				1. Update quarter e.g. 202409 to {DATE_VALUE}
 				2. Execute the script
 
 SQL Server: vdbpdw-housing-secondary.database.cead.prd
 SQL Database: DW_EXP_MGMT_USER
 
-Input Table:	CombinedData_{DATE_VALUE}_Working
+Input Table:	 CombinedData_{DATE_VALUE}_Working
 Output Tables:
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Account
-				Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Location
+				 Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USOW_Account
+				 Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USOW_Location
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
 
--- CB HU Account File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Account
+-- US SCS Account File:
+DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USOW_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME --varchar(40), we are at the maximum limit. This was previously AccountNumber.
@@ -34,11 +30,9 @@ SELECT
 	,'ASST' AS CEDANTID
 	,'ASST' AS CEDANTNAME
 	,LocationID AS POLICYNUM
-	,CASE 
-		WHEN HU_Remetrica_RDMF_Bucket like '%Banco%' THEN 'Banco Popular'
-		WHEN HU_Remetrica_RDMF_Bucket like '%First%' THEN 'First Bank'
-		WHEN HU_Remetrica_RDMF_Bucket like '%Oriental%' THEN 'Oriental'
-		WHEN HU_Remetrica_RDMF_Bucket like '%lend%' THEN 'xScotia xLending'
+	,CASE
+		WHEN BusinessUnit = 'Lend' THEN 'Lend'
+		WHEN BusinessUnit = 'Prop' THEN 'Prop'
 		ELSE 'LOB'
 	END AS LOBNAME
 	,EffectiveDate AS INCEPTDATE
@@ -47,7 +41,7 @@ SELECT
 	,'USD' AS UNDCOVCUR
 	,PolicyLimit AS PARTOF
 	,'USD' AS PARTOFCUR
-	,2 AS POLICYTYPE -- Windstorm = 2
+	,3 AS POLICYTYPE -- Severe Convective Storm = 3
 	,1 AS POLICYSTRUCTURE -- 1 = Standard
 	,0 AS MINDEDAMT
 	,'USD' AS MINDEDCUR
@@ -67,7 +61,7 @@ SELECT
 	,'USD' AS COMBINEDPCUR
 	,0 AS COVBASE
 	,0 AS LIMITGU
-	,HU_Remetrica_RDMF_Bucket AS USERDEF1
+	,OW_Remetrica_RDMF_Bucket AS USERDEF1
 	,FHCFIndicator AS USERDEF2 
 	,QS_Indicator AS USERDEF3  
 	,ProductType AS USERDEF4 
@@ -77,16 +71,14 @@ SELECT
 	,AssurantGroupedLOB AS POLICYUSERTXT2 --varchar(20)
 	,NetLegalEntity AS POLICYUSERTXT3 --varchar(20)
 	,LegalEntity AS POLICYUSERTXT4 --varchar(20)
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Account
+INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USOW_Account
 FROM CombinedData_{DATE_VALUE}_Working
-WHERE State IN ('PR','VI')
-	and HurricaneCoverage = 'Y'  
-	and HU_Remetrica_RDMF_Bucket <> 'NULL'
-	and Main_BU <> 'Clay'
---(2723 rows affected)
+WHERE State NOT IN ('PR','VI','GU')
+	and THMODELED = 'Y'  
+--(3706526 rows affected)
 
--- CB HU Location File:
-DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Location
+-- US SCS Location File:
+DROP TABLE IF EXISTS dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USOW_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -98,7 +90,7 @@ SELECT
 	,City AS CITY
 	,'' AS CITYCODE
 	,'' AS STATE
-	,'' AS STATECODE
+	,State AS STATECODE
 	,ZIPCODE AS POSTALCODE
 	,County AS COUNTY
 	,CountyNBR AS COUNTYCODE
@@ -108,10 +100,7 @@ SELECT
 	,Model_SQF AS FLOORAREA
 	,'2' AS AREAUNIT
 	,'ISO3A' AS CNTRYSCHEME
-	,CASE
-		WHEN State IN ('PR') THEN 'PRI'
-		ELSE 'VIR'
-	END AS CNTRYCODE
+	,'USA' AS CNTRYCODE
 	,1 AS NUMBLDGS
 	,'RMS' AS BLDGSCHEME
 	,RMS_ConstCode_HU AS BLDGCLASS
@@ -123,38 +112,38 @@ SELECT
 		ELSE '12/31/'+Model_YearBuilt 
 	END AS YEARBUILT
 	,Model_NumberofStories AS NUMSTORIES
-	,CovAValue AS WSCV4VAL
-	,'USD' AS WSCV4VCUR
-	,CovBValue AS WSCV5VAL
-	,'USD' AS WSCV5VCUR
-	,CovCValue AS WSCV6VAL
-	,'USD' AS WSCV6VCUR
-	,CovDValue AS WSCV7VAL
-	,'USD' AS WSCV7VCUR
-	,CovAlimit_HU AS WSCV4LIMIT 
-	,'USD' AS WSCV4LCUR
-	,CovBlimit_HU AS WSCV5LIMIT 
-	,'USD' AS WSCV5LCUR
-	,CovClimit_HU AS WSCV6LIMIT 
-	,'USD' AS WSCV6LCUR
-	,CovDlimit_HU AS WSCV7LIMIT 
-	,'USD' AS WSCV7LCUR
-	,CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovA END AS WSCV4DED 
-	,'USD' AS WSCV4DCUR
-	,CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END AS WSCV5DED 
-	,'USD' AS WSCV5DCUR
-	,CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END AS WSCV6DED 
-	,'USD' AS WSCV6DCUR
-	,CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END AS WSCV7DED 
-	,'USD' AS WSCV7DCUR
-	,0 AS WSSITELIM
-	,'USD' AS WSSITELCUR
-	,CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDeductible ELSE 0 END AS WSSITEDED
-	,'USD' AS WSSITEDCUR
-	,0 AS WSCOMBINEDLIM
-	,'USD' AS WSCOMBINEDLCUR
-	,0 AS WSCOMBINEDDED
-	,'USD' AS WSCOMBINEDDCUR
+	,CovAValue AS TOCV4VAL
+	,'USD' AS TOCV4VCUR
+	,CovBValue AS TOCV5VAL
+	,'USD' AS TOCV5VCUR
+	,CovCValue AS TOCV6VAL
+	,'USD' AS TOCV6VCUR
+	,CovDValue AS TOCV7VAL
+	,'USD' AS TOCV7VCUR
+	,CovAlimit_TH AS TOCV4LIMIT 
+	,'USD' AS TOCV4LCUR
+	,CovBlimit_TH AS TOCV5LIMIT 
+	,'USD' AS TOCV5LCUR
+	,CovClimit_TH AS TOCV6LIMIT 
+	,'USD' AS TOCV6LCUR
+	,CovDlimit_TH AS TOCV7LIMIT 
+	,'USD' AS TOCV7LCUR	
+	,CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovA END AS TOCV4DED 
+	,'USD' AS TOCV4DCUR
+	,CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovB END AS TOCV5DED 
+	,'USD' AS TOCV5DCUR
+	,CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovC END AS TOCV6DED 
+	,'USD' AS TOCV6DCUR
+	,CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovD END AS TOCV7DED 
+	,'USD' AS TOCV7DCUR
+	,0 AS TOSITELIM
+	,'USD' AS TOSITELCUR
+	,CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN TornadoHailDeductible ELSE 0 END AS TOSITEDED 
+	,'USD' AS TOSITEDCUR
+	,0 AS TOCOMBINEDLIM
+	,'USD' AS TOCOMBINEDLCUR
+	,0 AS TOCOMBINEDDED
+	,'USD' AS TOCOMBINEDDCUR
 	,0 AS RESISTOPEN
 	,RMS_RoofAge_Code AS ROOFAGE
 	,0 AS ROOFANCH
@@ -167,15 +156,13 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Location
+INTO dbo.Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USOW_Location
 FROM CombinedData_{DATE_VALUE}_Working
-WHERE State IN ('PR','VI')
-	and HurricaneCoverage = 'Y'  
-	and HU_Remetrica_RDMF_Bucket <> 'NULL'
-	and Main_BU <> 'Clay'
---(2723 rows affected)
+WHERE State NOT IN ('PR','VI','GU')
+	and THMODELED = 'Y'  
+--(3706526 rows affected)
 
 
---Export import files to CSV
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Account --2579
---Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_CBHU_Location --2579
+--Export import files to CSV via export wizard
+--Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USOW_Account --3795604
+--Select * From Modeling_{DATE_VALUE}_Moodys_{CYCLE_TYPE}_USOW_Location --3795604
