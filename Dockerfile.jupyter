@@ -1,11 +1,18 @@
 FROM jupyter/base-notebook:latest
 USER root
-# Install system dependencies
+
+# Install system dependencies including Microsoft ODBC Driver 18 for SQL Server
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
+    lsb-release \
     unixodbc-dev \
+    && curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-archive-keyring.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/ubuntu/$(lsb_release -rs)/prod $(lsb_release -cs) main" > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
     && rm -rf /var/lib/apt/lists/*
+
 USER ${NB_UID}
 # Install Python packages
 COPY requirements.txt /tmp/
