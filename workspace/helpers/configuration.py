@@ -1394,7 +1394,7 @@ def get_transformer_list(include_test: bool = False) -> List[str]:
     for batch_type in BATCH_TYPE_TRANSFORMERS.keys():
         if include_test or not batch_type.startswith('test_'):
             transformers.append(batch_type)
-    return sorted(transformers)
+    return transformers
 
 
 def preview_transformer_jobs(
