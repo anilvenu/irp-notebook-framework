@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch 106 - Grouping</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Poppins', Roboto, Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 16px;
+        }
+
+        /* Breadcrumb Navigation */
+        .breadcrumb {
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .breadcrumb a {
+            color: #3b72a9;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb-separator {
+            margin: 0 8px;
+            color: #999;
+        }
+
+        .breadcrumb-current {
+            color: #666;
+        }
+
+        /* Page Header */
+        .page-header {
+            background: linear-gradient(135deg, #818282 0%, #3e3e3e 100%);
+            color: white;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .page-header h1 {
+            font-size: 16px;
+            margin-bottom: 4px;
+            font-weight: 500;
+            opacity: 0.9;
+        }
+
+        .page-header h2 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        /* Info Cards Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .info-card {
+            background: white;
+            padding: 16px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .info-card h3 {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-card .value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .info-card .sub-value {
+            font-size: 13px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* Status Badges */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-ACTIVE { background: #e3f2fd; color: #2b6197; }
+        .status-COMPLETED { background: #e8f5e9; color: #388e3c; }
+        .status-INITIATED { background: #fff3e0; color: #f57c00; }
+        .status-FAILED { background: #ffebee; color: #d32f2f; }
+        .status-CANCELLED { background: #f5f5f5; color: #757575; }
+        .status-ERROR { background: #ffebee; color: #c62828; }
+        .status-FINISHED { background: #e8f5e9; color: #2e7d32; }
+        .status-RUNNING { background: #e1f5fe; color: #0288d1; }
+        .status-QUEUED, .status-PENDING, .status-SUBMITTED { background: #ebe2ec; color: #775784; }
+        .status-SKIPPED { background: #fafafa; color: #616161; }
+        .status-UNSUBMITTED { background: #fff3e0; color: #f57c00; }
+        .status-FULFILLED { background: #e8f5e9; color: #2e7d32; }
+        .status-UNFULFILLED { background: #fff3e0; color: #f57c00; }
+        .status-INCOMPLETE { background: #fff3e0; color: #f57c00; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 0;
+            background: white;
+            border-radius: 6px 6px 0 0;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px 24px;
+            cursor: pointer;
+            background: white;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab.active {
+            color: #546e7a;
+            border-bottom-color: #546e7a;
+            background: #fafafa;
+        }
+
+        .tab:hover:not(.active) {
+            background: #f5f5f5;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            background: white;
+            padding: 16px;
+            border-radius: 0 0 6px 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Search Box */
+        .search-box {
+            width: 100%;
+            padding: 10px;
+            margin: 0 0 16px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 13px;
+            transition: border-color 0.2s;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #546e7a;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th {
+            background: #fafafa;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 11px;
+            color: #666;
+            border-bottom: 2px solid #e0e0e0;
+            cursor: pointer;
+            user-select: none;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        th:hover {
+            background: #f0f0f0;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+        }
+
+        tr:hover {
+            background: #fafafa;
+        }
+
+        /* Specialized cells */
+        .json-preview {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #2563eb;
+            cursor: pointer;
+            padding: 4px 8px;
+            background: #eff6ff;
+            border-radius: 3px;
+            position: relative;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .json-preview:hover {
+            background: #dbeafe;
+            border-color: #3b82f6;
+            color: #1d4ed8;
+        }
+
+        /* JSON Tooltip */
+        .json-tooltip {
+            position: fixed;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            max-width: 500px;
+            max-height: 400px;
+            overflow: auto;
+            display: none;
+        }
+
+        .json-tooltip-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .json-tooltip-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .json-tooltip-copy {
+            padding: 4px 8px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .json-tooltip-copy:hover {
+            background: #2563eb;
+        }
+
+        .json-tooltip-copy.copied {
+            background: #10b981;
+        }
+
+        .json-tooltip-content {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #333;
+        }
+
+        .age-badge {
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            background: #f5f5f5;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .needs-attention {
+            color: #d32f2f;
+            font-weight: 600;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 32px;
+            color: #999;
+        }
+
+        .batch-link {
+            color: #1976d2;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .batch-link:hover {
+            text-decoration: underline;
+        }
+
+        .alert-flag {
+            display: inline-block;
+            margin-right: 8px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="page-header">
+        <h1>Moody's Risk Modeling Dashboard</h1>
+        <h2>Batch 106: Grouping</h2>
+    </div>
+    
+    
+        <div class="breadcrumb">
+            <a href="../../index.html">Analysis-2025-Q1</a>
+            <span class="breadcrumb-separator">›</span>
+            <span class="breadcrumb-current">Batch 106 - Grouping</span>
+        </div>
+        
+    <div class="info-grid">
+    <div class="info-card">
+        <h3>Batch Status</h3>
+        <div class="value"><span class="status-badge status-ERROR">ERROR</span></div>
+        
+    </div>
+    
+    <div class="info-card">
+        <h3>Jobs Summary</h3>
+        <div class="value">3 Total</div>
+        <div class="sub-value">Finished: 0, Unfinished: 3, Skipped: 0</div>
+    </div>
+    
+    <div class="info-card">
+        <h3>Configurations</h3>
+        <div class="value">3</div>
+        <div class="sub-value">Fulfilled: 0, Unfulfilled: 3, Skipped: 0</div>
+    </div>
+    
+    <div class="info-card">
+        <h3>Created</h3>
+        <div class="value"><span style="font-size: 14px;">2025-10-18 00:00:00</span></div>
+        <div class="sub-value">Portfolio Analysis Stage › Initial Portfolio Analysis</div>
+    </div>
+    
+    <div class="info-card">
+        <h3>Completed</h3>
+        <div class="value"><span style="font-size: 14px;">N/A</span></div>
+        
+    </div>
+    </div>
+    
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('jobs', event)">Jobs (3)</button><button class="tab " onclick="switchTab('configurations', event)">Configurations (3)</button>
+    </div>
+    
+
+    <div id="jobs-content" class="tab-content active">
+        
+    <input type="text" class="search-box" id="jobSearch" placeholder="Search..." onkeyup="filterTable('jobSearch', 'jobsTable')">
+    <table id="jobsTable">
+        <thead>
+            <tr>
+                <th onclick="sortTable('jobsTable', 0)">ID ↕</th><th onclick="sortTable('jobsTable', 1)">Moody's Job ID ↕</th><th onclick="sortTable('jobsTable', 2)">Status ↕</th><th onclick="sortTable('jobsTable', 3)">Report Status ↕</th><th onclick="sortTable('jobsTable', 4)">Configuration ↕</th><th onclick="sortTable('jobsTable', 5)">Configuration Override ↕</th><th onclick="sortTable('jobsTable', 6)">Age (hrs) ↕</th><th onclick="sortTable('jobsTable', 7)">Next Action ↕</th><th onclick="sortTable('jobsTable', 8)">Parent Job ↕</th>
+            </tr>
+        </thead>
+        <tbody id="jobsTableBody">
+        </tbody>
+    </table>
+    
+    </div>
+
+    <div id="configurations-content" class="tab-content">
+        
+    <input type="text" class="search-box" id="configSearch" placeholder="Search..." onkeyup="filterTable('configSearch', 'configsTable')">
+    <table id="configsTable">
+        <thead>
+            <tr>
+                <th onclick="sortTable('configsTable', 0)">Config ID ↕</th><th onclick="sortTable('configsTable', 1)">Status ↕</th><th onclick="sortTable('configsTable', 2)">Configuration Data ↕</th><th onclick="sortTable('configsTable', 3)">Total Jobs ↕</th><th onclick="sortTable('configsTable', 4)">Active ↕</th><th onclick="sortTable('configsTable', 5)">Finished ↕</th><th onclick="sortTable('configsTable', 6)">Failed ↕</th><th onclick="sortTable('configsTable', 7)">Progress % ↕</th><th onclick="sortTable('configsTable', 8)">Job Alerts ↕</th>
+            </tr>
+        </thead>
+        <tbody id="configsTableBody">
+        </tbody>
+    </table>
+    
+    </div>
+
+    <script>
+    function switchTab(tabName, event) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+        event.target.classList.add('active');
+        document.getElementById(tabName + '-content').classList.add('active');
+    }
+
+    function sortTable(tableId, colIndex) {
+        const table = document.getElementById(tableId);
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+
+        if (rows.length === 0 || rows[0].cells.length === 1) return; // Skip if empty state
+
+        rows.sort((a, b) => {
+            const aVal = a.cells[colIndex].textContent.trim();
+            const bVal = b.cells[colIndex].textContent.trim();
+            return aVal.localeCompare(bVal, undefined, { numeric: true });
+        });
+
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    function filterTable(searchId, tableId) {
+        const input = document.getElementById(searchId);
+        const filter = input.value.toLowerCase();
+        const table = document.getElementById(tableId);
+        const rows = table.querySelectorAll('tbody tr');
+
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(filter) ? '' : 'none';
+        });
+    }
+
+    // JSON Tooltip Management
+    let currentTooltip = null;
+
+    function showJsonTooltip(element, jsonData) {
+        // Remove existing tooltip if any
+        hideJsonTooltip();
+
+        // Create tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'json-tooltip';
+        tooltip.innerHTML = `
+            <div class="json-tooltip-header">
+                <span class="json-tooltip-title">Configuration JSON</span>
+                <button class="json-tooltip-copy" onclick="copyJsonToClipboard(event)">Copy</button>
+            </div>
+            <div class="json-tooltip-content"></div>
+        `;
+
+        // Format and display JSON
+        const content = tooltip.querySelector('.json-tooltip-content');
+        try {
+            const formatted = JSON.stringify(jsonData, null, 2);
+            content.textContent = formatted;
+        } catch (e) {
+            content.textContent = JSON.stringify(jsonData);
+        }
+
+        document.body.appendChild(tooltip);
+
+        // Position tooltip near the element
+        const rect = element.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+
+        let top = rect.bottom + 5;
+        let left = rect.left;
+
+        // Adjust if tooltip goes off-screen
+        if (left + tooltipRect.width > window.innerWidth) {
+            left = window.innerWidth - tooltipRect.width - 10;
+        }
+        if (top + tooltipRect.height > window.innerHeight) {
+            top = rect.top - tooltipRect.height - 5;
+        }
+
+        tooltip.style.top = top + 'px';
+        tooltip.style.left = left + 'px';
+        tooltip.style.display = 'block';
+
+        currentTooltip = tooltip;
+    }
+
+    function hideJsonTooltip() {
+        if (currentTooltip) {
+            currentTooltip.remove();
+            currentTooltip = null;
+        }
+    }
+
+    function copyJsonToClipboard(event) {
+        event.stopPropagation();
+        const tooltip = event.target.closest('.json-tooltip');
+        const content = tooltip.querySelector('.json-tooltip-content').textContent;
+        const button = event.target;
+
+        navigator.clipboard.writeText(content).then(() => {
+            const originalText = button.textContent;
+            button.textContent = 'Copied!';
+            button.classList.add('copied');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('copied');
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            alert('Failed to copy to clipboard');
+        });
+    }
+
+    // Close tooltip when clicking outside
+    document.addEventListener('click', (event) => {
+        if (currentTooltip && !event.target.closest('.json-tooltip') && !event.target.closest('.json-preview')) {
+            hideJsonTooltip();
+        }
+    });
+
+    // Close tooltip on scroll
+    document.addEventListener('scroll', hideJsonTooltip, true);
+
+        const jobs = [{"id": 18, "moodys_workflow_id": "MW-GRP-2025001", "status": "ERROR", "skipped": false, "report_status": "ERROR", "next_best_action": "Resubmit OR Skip after Manual Operation on Moody's", "age_hours": 468.59284132722223, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 18, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:02:00+00:00", "job_configuration_data": {"items": ["EMEA_Property", "EMEA_Casualty", "EMEA_Combined"], "Metadata": {"Version": "2025.1"}, "Group_Name": "All_EMEA_Portfolios"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 19, "moodys_workflow_id": "MW-GRP-2025002", "status": "ERROR", "skipped": false, "report_status": "ERROR", "next_best_action": "Resubmit OR Skip after Manual Operation on Moody's", "age_hours": 468.5595079938889, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 19, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:04:00+00:00", "job_configuration_data": {"items": ["NA_Casualty", "NA_Property"], "Metadata": {"Version": "2025.1"}, "Group_Name": "All_NA_Portfolios"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 20, "moodys_workflow_id": null, "status": "INITIATED", "skipped": false, "report_status": "UNSUBMITTED", "next_best_action": "Submit Batch", "age_hours": 468.52639430166664, "is_successful": false, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 20, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:06:00+00:00", "job_configuration_data": {"items": ["All_EMEA_Portfolios", "All_NA_Portfolios", "APAC_Combined"], "Metadata": {"Version": "2025.1"}, "Group_Name": "Global_Portfolio"}, "parent_job_status": null, "parent_moodys_id": null}];
+        const configs = [{"config_id": 18, "job_configuration_data": {"items": ["EMEA_Property", "EMEA_Casualty", "EMEA_Combined"], "Metadata": {"Version": "2025.1"}, "Group_Name": "All_EMEA_Portfolios"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 1, "progress_percent": 0.0, "has_failures": false, "has_errors": true, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 19, "job_configuration_data": {"items": ["NA_Casualty", "NA_Property"], "Metadata": {"Version": "2025.1"}, "Group_Name": "All_NA_Portfolios"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 1, "progress_percent": 0.0, "has_failures": false, "has_errors": true, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 20, "job_configuration_data": {"items": ["All_EMEA_Portfolios", "All_NA_Portfolios", "APAC_Combined"], "Metadata": {"Version": "2025.1"}, "Group_Name": "Global_Portfolio"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 1, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": true, "active_jobs": 1}];
+
+        function renderJobs() {
+            const tbody = document.getElementById('jobsTableBody');
+            if (jobs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No jobs found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = jobs.map((job, idx) => `
+                <tr>
+                    <td>${job.id}</td>
+                    <td>${job.moodys_workflow_id || '-'}</td>
+                    <td><span class="status-badge status-${job.status}">${job.status}</span></td>
+                    <td><span class="status-badge status-${job.report_status}">${job.report_status || '-'}</span></td>
+                    <td><div class="json-preview" onclick="showJsonTooltip(this, jobs[${idx}].job_configuration_data)">${JSON.stringify(job.job_configuration_data)}</div></td>
+                    <td>${job.overridden ? '✓ ' + (job.override_reason_txt || '') : '-'}</td>
+                    <td>${job.age_hours ? '<span class="age-badge">' + Math.round(job.age_hours * 100) / 100 + 'h</span>' : '-'}</td>
+                    <td class="${job.needs_attention ? 'needs-attention' : ''}">${job.next_best_action || '-'}</td>
+                    <td>${job.parent_job_id || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderConfigs() {
+            const tbody = document.getElementById('configsTableBody');
+            if (configs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No configurations found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = configs.map((config, idx) => {
+                // Build alerts string with counts (Enhancement #8)
+                const alerts = [];
+                if (config.has_failures) {
+                    const count = config.failed_jobs || 0;
+                    alerts.push(`<span class="alert-flag" style="color: #d32f2f;">⚠ Failures (${count})</span>`);
+                }
+                if (config.has_errors) {
+                    const count = config.error_jobs || 0;
+                    alerts.push(`<span class="alert-flag" style="color: #c62828;">⚠ Errors (${count})</span>`);
+                }
+                if (config.has_unsubmitted) {
+                    // calculated in view based on INITIATED status
+                    const unsubmitted = config.unsubmitted_jobs || 0;
+                    alerts.push(`<span class="alert-flag" style="color: #f57f17;">⚠ Unsubmitted (${unsubmitted})</span>`);
+                }
+                const alertsHtml = alerts.length > 0 ? alerts.join('<br>') : '-';
+
+                return `
+                    <tr>
+                        <td>${config.config_id}</td>
+                        <td><span class="status-badge status-${config.config_report_status}">${config.config_report_status}</span></td>
+                        <td><div class="json-preview" onclick="showJsonTooltip(this, configs[${idx}].job_configuration_data)">${JSON.stringify(config.job_configuration_data)}</div></td>
+                        <td>${config.total_jobs || ''}</td>
+                        <td style="color: #0288d1; font-weight: 600;">${config.active_jobs || ''}</td>
+                        <td style="color: #2e7d32; font-weight: 600;">${config.finished_jobs || ''}</td>
+                        <td style="color: #d32f2f; font-weight: 600;">${config.failed_jobs || ''}</td>
+                        <td>${Math.round(config.progress_percent * 100) / 100}%</td>
+                        <td>${alertsHtml}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Initial render
+        renderJobs();
+        renderConfigs();
+    </script>
+</body>
+</html>

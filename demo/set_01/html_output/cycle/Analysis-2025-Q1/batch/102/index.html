@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Batch 104 - Create Reinsurance Treaties</title>
+    <title>Batch 102 - Analysis</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -340,14 +340,14 @@
     
     <div class="page-header">
         <h1>Moody's Risk Modeling Dashboard</h1>
-        <h2>Batch 104: Create Reinsurance Treaties</h2>
+        <h2>Batch 102: Analysis</h2>
     </div>
     
     
         <div class="breadcrumb">
             <a href="../../index.html">Analysis-2025-Q1</a>
             <span class="breadcrumb-separator">›</span>
-            <span class="breadcrumb-current">Batch 104 - Create Reinsurance Treaties</span>
+            <span class="breadcrumb-current">Batch 102 - Analysis</span>
         </div>
         
     <div class="info-grid">
@@ -359,19 +359,19 @@
     
     <div class="info-card">
         <h3>Jobs Summary</h3>
-        <div class="value">1 Total</div>
-        <div class="sub-value">Finished: 0, Unfinished: 1, Skipped: 0</div>
+        <div class="value">5 Total</div>
+        <div class="sub-value">Finished: 1, Unfinished: 4, Skipped: 0</div>
     </div>
     
     <div class="info-card">
         <h3>Configurations</h3>
-        <div class="value">2</div>
-        <div class="sub-value">Fulfilled: 0, Unfulfilled: 1, Skipped: 1</div>
+        <div class="value">5</div>
+        <div class="sub-value">Fulfilled: 1, Unfulfilled: 4, Skipped: 0</div>
     </div>
     
     <div class="info-card">
         <h3>Created</h3>
-        <div class="value"><span style="font-size: 14px;">2025-10-17 00:00:00</span></div>
+        <div class="value"><span style="font-size: 14px;">2025-10-15 00:00:00</span></div>
         <div class="sub-value">Portfolio Analysis Stage › Initial Portfolio Analysis</div>
     </div>
     
@@ -383,7 +383,7 @@
     </div>
     
     <div class="tabs">
-        <button class="tab active" onclick="switchTab('jobs', event)">Jobs (2)</button><button class="tab " onclick="switchTab('configurations', event)">Configurations (2)</button>
+        <button class="tab active" onclick="switchTab('jobs', event)">Jobs (5)</button><button class="tab " onclick="switchTab('configurations', event)">Configurations (5)</button>
     </div>
     
 
@@ -543,8 +543,8 @@
     // Close tooltip on scroll
     document.addEventListener('scroll', hideJsonTooltip, true);
 
-        const jobs = [{"id": 13, "moodys_workflow_id": "MW-RT-2025001", "status": "FAILED", "skipped": true, "report_status": "SKIPPED", "next_best_action": "Recon Batch OR Check for Manually Completed Job on Moody's", "age_hours": 483.7556819225, "is_successful": false, "needs_attention": true, "parent_job_id": NaN, "job_configuration_id": 13, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-17 01:00:00+00:00", "completed_ts": "2025-10-17 02:00:00+00:00", "created_ts": "2025-10-17 00:02:00+00:00", "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Treaty Name": "EMEA_QS_Treaty_2025", "Treaty Type": "QS", "Inception Date": "2025-01-01T00:00:00.000Z", "Expiration Date": "2025-12-31T00:00:00.000Z"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 14, "moodys_workflow_id": "MW-RT-2025002", "status": "RUNNING", "skipped": false, "report_status": "ACTIVE", "next_best_action": "Track Batch", "age_hours": 474.78926037916665, "is_successful": false, "needs_attention": false, "parent_job_id": 13.0, "job_configuration_id": 14, "overridden": true, "override_reason_txt": "Corrected treaty terms and participation percentages", "submitted_ts": "2025-10-17 09:00:00+00:00", "completed_ts": "NaT", "created_ts": "2025-10-17 08:00:00+00:00", "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Treaty Name": "EMEA_QS_Treaty_2025_v2", "Treaty Type": "QS", "Inception Date": "2025-01-01T00:00:00.000Z", "Expiration Date": "2025-12-31T00:00:00.000Z"}, "parent_job_status": "FAILED", "parent_moodys_id": "MW-RT-2025001"}];
-        const configs = [{"config_id": 13, "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Treaty Name": "EMEA_QS_Treaty_2025", "Treaty Type": "QS", "Inception Date": "2025-01-01T00:00:00.000Z", "Expiration Date": "2025-12-31T00:00:00.000Z"}, "skipped": true, "overridden": false, "config_report_status": "SKIPPED", "total_jobs": 0, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 14, "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Treaty Name": "EMEA_QS_Treaty_2025_v2", "Treaty Type": "QS", "Inception Date": "2025-01-01T00:00:00.000Z", "Expiration Date": "2025-12-31T00:00:00.000Z"}, "skipped": false, "overridden": true, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 1}];
+        const jobs = [{"id": 4, "moodys_workflow_id": "MW-AN-2025001", "status": "FINISHED", "skipped": false, "report_status": "FINISHED", "next_best_action": "", "age_hours": 13.0, "is_successful": true, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 4, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-15 01:00:00+00:00", "completed_ts": "2025-10-15 14:00:00+00:00", "created_ts": "2025-10-15 00:02:00+00:00", "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "EMEA_Property", "Analysis Name": "Base_Analysis", "Output Profile": "Detail_Full", "Analysis Profile": "Standard_EQ"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 5, "moodys_workflow_id": "MW-AN-2025002", "status": "RUNNING", "skipped": false, "report_status": "ACTIVE", "next_best_action": "Track Batch", "age_hours": 539.6263148194445, "is_successful": false, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 5, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-15 01:00:00+00:00", "completed_ts": "NaT", "created_ts": "2025-10-15 00:04:00+00:00", "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "EMEA_Property", "Analysis Name": "Sensitivity_High", "Output Profile": "Summary_Only", "Analysis Profile": "Standard_EQ"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 6, "moodys_workflow_id": "MW-AN-2025003", "status": "PENDING", "skipped": false, "report_status": "ACTIVE", "next_best_action": "Track Batch", "age_hours": 526.6263148194445, "is_successful": false, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 6, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-15 14:00:00+00:00", "completed_ts": "NaT", "created_ts": "2025-10-15 00:06:00+00:00", "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "NA_Casualty", "Analysis Name": "NA_BaseCase", "Output Profile": "Detail_Full", "Analysis Profile": "Standard_WS"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 7, "moodys_workflow_id": "MW-AN-2025004", "status": "QUEUED", "skipped": false, "report_status": "ACTIVE", "next_best_action": "Track Batch", "age_hours": 526.6263148194445, "is_successful": false, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 7, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-15 14:00:00+00:00", "completed_ts": "NaT", "created_ts": "2025-10-15 00:08:00+00:00", "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "NA_Casualty", "Analysis Name": "NA_Sensitivity", "Output Profile": "Summary_Only", "Analysis Profile": "Standard_WS"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 8, "moodys_workflow_id": "MW-AN-2025005", "status": "SUBMITTED", "skipped": false, "report_status": "ACTIVE", "next_best_action": "Track Batch", "age_hours": 526.6263148194445, "is_successful": false, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 8, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-15 14:00:00+00:00", "completed_ts": "NaT", "created_ts": "2025-10-15 00:10:00+00:00", "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "APAC_Combined", "Analysis Name": "APAC_Analysis", "Output Profile": "Detail_Full", "Analysis Profile": "Standard_TC"}, "parent_job_status": null, "parent_moodys_id": null}];
+        const configs = [{"config_id": 4, "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "EMEA_Property", "Analysis Name": "Base_Analysis", "Output Profile": "Detail_Full", "Analysis Profile": "Standard_EQ"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 1, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 5, "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "EMEA_Property", "Analysis Name": "Sensitivity_High", "Output Profile": "Summary_Only", "Analysis Profile": "Standard_EQ"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 6, "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "NA_Casualty", "Analysis Name": "NA_BaseCase", "Output Profile": "Detail_Full", "Analysis Profile": "Standard_WS"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 7, "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "NA_Casualty", "Analysis Name": "NA_Sensitivity", "Output Profile": "Summary_Only", "Analysis Profile": "Standard_WS"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 8, "job_configuration_data": {"Metadata": {"Version": "2025.1"}, "Portfolio": "APAC_Combined", "Analysis Name": "APAC_Analysis", "Output Profile": "Detail_Full", "Analysis Profile": "Standard_TC"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 1}];
 
         function renderJobs() {
             const tbody = document.getElementById('jobsTableBody');
