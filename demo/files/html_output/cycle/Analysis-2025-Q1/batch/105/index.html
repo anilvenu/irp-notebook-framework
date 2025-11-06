@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Batch 105 - Cancelled Batch</title>
+    <title>Batch 105 - EDM Creation</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -340,14 +340,14 @@
     
     <div class="page-header">
         <h1>Moody's Risk Modeling Dashboard</h1>
-        <h2>Batch 105: Cancelled Batch</h2>
+        <h2>Batch 105: EDM Creation</h2>
     </div>
     
     
         <div class="breadcrumb">
             <a href="../../index.html">Analysis-2025-Q1</a>
             <span class="breadcrumb-separator">›</span>
-            <span class="breadcrumb-current">Batch 105 - Cancelled Batch</span>
+            <span class="breadcrumb-current">Batch 105 - EDM Creation</span>
         </div>
         
     <div class="info-grid">
@@ -543,8 +543,8 @@
     // Close tooltip on scroll
     document.addEventListener('scroll', hideJsonTooltip, true);
 
-        const jobs = [{"id": 15, "moodys_workflow_id": "MW-1050001", "status": "FINISHED", "skipped": false, "report_status": "FINISHED", "next_best_action": "", "age_hours": 3.0, "is_successful": true, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 15, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-20 15:00:00+00:00", "completed_ts": "2025-10-20 18:00:00+00:00", "created_ts": "2025-10-18 00:02:00+00:00", "job_configuration_data": {"portfolio": "PF001"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 16, "moodys_workflow_id": "MW-1050002", "status": "CANCELLED", "skipped": false, "report_status": "CANCELLED", "next_best_action": "Skip Configuration OR Resubmit", "age_hours": -1.0, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 16, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-20 15:00:00+00:00", "completed_ts": "2025-10-20 14:00:00+00:00", "created_ts": "2025-10-18 00:04:00+00:00", "job_configuration_data": {"portfolio": "PF002"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 17, "moodys_workflow_id": "MW-1050003", "status": "CANCELLED", "skipped": false, "report_status": "CANCELLED", "next_best_action": "Skip Configuration OR Resubmit", "age_hours": -1.0, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 17, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-20 15:00:00+00:00", "completed_ts": "2025-10-20 14:00:00+00:00", "created_ts": "2025-10-18 00:06:00+00:00", "job_configuration_data": {"portfolio": "PF003"}, "parent_job_status": null, "parent_moodys_id": null}];
-        const configs = [{"config_id": 15, "job_configuration_data": {"portfolio": "PF001"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 1, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 16, "job_configuration_data": {"portfolio": "PF002"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 1, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 17, "job_configuration_data": {"portfolio": "PF003"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 1, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}];
+        const jobs = [{"id": 15, "moodys_workflow_id": "MW-EDM-2025001", "status": "FINISHED", "skipped": false, "report_status": "FINISHED", "next_best_action": "", "age_hours": 5.0, "is_successful": true, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 15, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-18 01:00:00+00:00", "completed_ts": "2025-10-18 06:00:00+00:00", "created_ts": "2025-10-18 00:02:00+00:00", "job_configuration_data": {"Database": "IRP_2025Q1_DEV", "Metadata": {"Version": "2025.1"}, "Import File": "IRP_SCHEMA.sql"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 16, "moodys_workflow_id": "MW-EDM-2025002", "status": "CANCELLED", "skipped": false, "report_status": "CANCELLED", "next_best_action": "Skip Configuration OR Resubmit", "age_hours": 1.0, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 16, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-18 01:00:00+00:00", "completed_ts": "2025-10-18 02:00:00+00:00", "created_ts": "2025-10-18 00:04:00+00:00", "job_configuration_data": {"Database": "IRP_2025Q1_UAT", "Metadata": {"Version": "2025.1"}, "Import File": "IRP_SCHEMA.sql"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 17, "moodys_workflow_id": "MW-EDM-2025003", "status": "CANCELLED", "skipped": false, "report_status": "CANCELLED", "next_best_action": "Skip Configuration OR Resubmit", "age_hours": 1.0, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 17, "overridden": false, "override_reason_txt": null, "submitted_ts": "2025-10-18 01:00:00+00:00", "completed_ts": "2025-10-18 02:00:00+00:00", "created_ts": "2025-10-18 00:06:00+00:00", "job_configuration_data": {"Database": "IRP_2025Q1_PROD", "Metadata": {"Version": "2025.1"}, "Import File": "IRP_SCHEMA.sql"}, "parent_job_status": null, "parent_moodys_id": null}];
+        const configs = [{"config_id": 15, "job_configuration_data": {"Database": "IRP_2025Q1_DEV", "Metadata": {"Version": "2025.1"}, "Import File": "IRP_SCHEMA.sql"}, "skipped": false, "overridden": false, "config_report_status": "FULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 1, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 100.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 16, "job_configuration_data": {"Database": "IRP_2025Q1_UAT", "Metadata": {"Version": "2025.1"}, "Import File": "IRP_SCHEMA.sql"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 1, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}, {"config_id": 17, "job_configuration_data": {"Database": "IRP_2025Q1_PROD", "Metadata": {"Version": "2025.1"}, "Import File": "IRP_SCHEMA.sql"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 1, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": false, "active_jobs": 0}];
 
         function renderJobs() {
             const tbody = document.getElementById('jobsTableBody');

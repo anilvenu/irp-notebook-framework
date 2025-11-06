@@ -1,28 +1,28 @@
 id,batch_id,configuration_id,job_configuration_data,skipped,overridden,override_reason_txt,parent_job_configuration_id,skipped_reason_txt,override_job_configuration_id
-1,101,1,"{""portfolio"":""PF001"",""risk_model"":""standard""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-2,101,1,"{""portfolio"":""PF002"",""risk_model"":""standard""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-3,101,1,"{""portfolio"":""PF003"",""risk_model"":""standard""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-4,102,1,"{""portfolio"":""PF001""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-5,102,1,"{""portfolio"":""PF002""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-6,102,1,"{""portfolio"":""PF003""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-7,102,1,"{""portfolio"":""PF004""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-8,102,1,"{""portfolio"":""PF005""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-9,103,1,"{""portfolio"":""PF001""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-10,103,1,"{""portfolio"":""PF002""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-11,103,1,"{""portfolio"":""PF003""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-12,103,1,"{""portfolio"":""PF004""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-13,104,1,"{""portfolio"":""PF001"",""risk_model"":""v1""}",TRUE,FALSE,NULL,NULL,Replaced with override configuration,14
-14,104,1,"{""portfolio"":""PF001"",""risk_model"":""v2_corrected""}",FALSE,TRUE,Fixed data issue - using v2 model,13,NULL,NULL
-15,105,1,"{""portfolio"":""PF001""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-16,105,1,"{""portfolio"":""PF002""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-17,105,1,"{""portfolio"":""PF003""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-18,106,1,"{""portfolio"":""PF001""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-19,106,1,"{""portfolio"":""PF002""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-20,106,1,"{""portfolio"":""PF003""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-21,107,1,"{""portfolio"":""PF001""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-22,107,1,"{""portfolio"":""PF002""}",TRUE,FALSE,NULL,NULL,NULL,NULL
-23,107,1,"{""portfolio"":""PF003""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-24,108,1,"{""portfolio"":""PF001""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-25,108,1,"{""portfolio"":""PF002""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-26,108,1,"{""portfolio"":""PF003""}",FALSE,FALSE,NULL,NULL,NULL,NULL
-27,108,1,"{""portfolio"":""PF004""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+1,101,1,"{""Metadata"":{""Version"":""2025.1"",""Database"":""IRP_2025Q1""},""Portfolio"":""EMEA_Property"",""Database"":""IRP_2025Q1"",""Import File"":""EMEA_Property.xlsx"",""Base Portfolio?"":""Y""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+2,101,1,"{""Metadata"":{""Version"":""2025.1"",""Database"":""IRP_2025Q1""},""Portfolio"":""NA_Casualty"",""Database"":""IRP_2025Q1"",""Import File"":""NA_Casualty.xlsx"",""Base Portfolio?"":""N""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+3,101,1,"{""Metadata"":{""Version"":""2025.1"",""Database"":""IRP_2025Q1""},""Portfolio"":""APAC_Combined"",""Database"":""IRP_2025Q1"",""Import File"":""APAC_Combined.xlsx"",""Base Portfolio?"":""N""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+4,102,1,"{""Metadata"":{""Version"":""2025.1""},""Analysis Name"":""Base_Analysis"",""Portfolio"":""EMEA_Property"",""Analysis Profile"":""Standard_EQ"",""Output Profile"":""Detail_Full""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+5,102,1,"{""Metadata"":{""Version"":""2025.1""},""Analysis Name"":""Sensitivity_High"",""Portfolio"":""EMEA_Property"",""Analysis Profile"":""Standard_EQ"",""Output Profile"":""Summary_Only""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+6,102,1,"{""Metadata"":{""Version"":""2025.1""},""Analysis Name"":""NA_BaseCase"",""Portfolio"":""NA_Casualty"",""Analysis Profile"":""Standard_WS"",""Output Profile"":""Detail_Full""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+7,102,1,"{""Metadata"":{""Version"":""2025.1""},""Analysis Name"":""NA_Sensitivity"",""Portfolio"":""NA_Casualty"",""Analysis Profile"":""Standard_WS"",""Output Profile"":""Summary_Only""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+8,102,1,"{""Metadata"":{""Version"":""2025.1""},""Analysis Name"":""APAC_Analysis"",""Portfolio"":""APAC_Combined"",""Analysis Profile"":""Standard_TC"",""Output Profile"":""Detail_Full""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+9,103,1,"{""Metadata"":{""Version"":""2025.1""},""Portfolio"":""EMEA_Property"",""Database"":""IRP_2025Q1"",""Import File"":""EMEA_MRI_2025.xlsx""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+10,103,1,"{""Metadata"":{""Version"":""2025.1""},""Portfolio"":""NA_Casualty"",""Database"":""IRP_2025Q1"",""Import File"":""NA_MRI_2025.xlsx""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+11,103,1,"{""Metadata"":{""Version"":""2025.1""},""Portfolio"":""APAC_Combined"",""Database"":""IRP_2025Q1"",""Import File"":""APAC_MRI_2025.xlsx""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+12,103,1,"{""Metadata"":{""Version"":""2025.1""},""Portfolio"":""LATAM_Property"",""Database"":""IRP_2025Q1"",""Import File"":""LATAM_MRI_2025.xlsx""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+13,104,1,"{""Metadata"":{""Version"":""2025.1""},""Treaty Name"":""EMEA_QS_Treaty_2025"",""Treaty Type"":""QS"",""Inception Date"":""2025-01-01T00:00:00.000Z"",""Expiration Date"":""2025-12-31T00:00:00.000Z""}",TRUE,FALSE,NULL,NULL,Replaced with corrected treaty terms,14
+14,104,1,"{""Metadata"":{""Version"":""2025.1""},""Treaty Name"":""EMEA_QS_Treaty_2025_v2"",""Treaty Type"":""QS"",""Inception Date"":""2025-01-01T00:00:00.000Z"",""Expiration Date"":""2025-12-31T00:00:00.000Z""}",FALSE,TRUE,Corrected treaty terms and participation percentages,13,NULL,NULL
+15,105,1,"{""Metadata"":{""Version"":""2025.1""},""Database"":""IRP_2025Q1_DEV"",""Import File"":""IRP_SCHEMA.sql""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+16,105,1,"{""Metadata"":{""Version"":""2025.1""},""Database"":""IRP_2025Q1_UAT"",""Import File"":""IRP_SCHEMA.sql""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+17,105,1,"{""Metadata"":{""Version"":""2025.1""},""Database"":""IRP_2025Q1_PROD"",""Import File"":""IRP_SCHEMA.sql""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+18,106,1,"{""Metadata"":{""Version"":""2025.1""},""Group_Name"":""All_EMEA_Portfolios"",""items"":[""EMEA_Property"",""EMEA_Casualty"",""EMEA_Combined""]}",FALSE,FALSE,NULL,NULL,NULL,NULL
+19,106,1,"{""Metadata"":{""Version"":""2025.1""},""Group_Name"":""All_NA_Portfolios"",""items"":[""NA_Casualty"",""NA_Property""]}",FALSE,FALSE,NULL,NULL,NULL,NULL
+20,106,1,"{""Metadata"":{""Version"":""2025.1""},""Group_Name"":""Global_Portfolio"",""items"":[""All_EMEA_Portfolios"",""All_NA_Portfolios"",""APAC_Combined""]}",FALSE,FALSE,NULL,NULL,NULL,NULL
+21,107,1,"{""Metadata"":{""Version"":""2025.1"",""RDM_Name"":""IRP_PROD""},""Group_Name"":""All_EMEA_Portfolios""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+22,107,1,"{""Metadata"":{""Version"":""2025.1"",""RDM_Name"":""IRP_PROD""},""Group_Name"":""All_NA_Portfolios""}",TRUE,FALSE,NULL,NULL,Data validation issues - exports skipped,NULL
+23,107,1,"{""Metadata"":{""Version"":""2025.1"",""RDM_Name"":""IRP_PROD""},""Group_Name"":""Global_Portfolio""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+24,108,1,"{""Metadata"":{""Version"":""2025.1""},""Portfolio"":""EMEA_Property"",""Mapping File"":""EMEA_Mapping_v2.xlsx""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+25,108,1,"{""Metadata"":{""Version"":""2025.1""},""Portfolio"":""NA_Casualty"",""Mapping File"":""NA_Mapping_v2.xlsx""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+26,108,1,"{""Metadata"":{""Version"":""2025.1""},""Portfolio"":""APAC_Combined"",""Mapping File"":""APAC_Mapping_v2.xlsx""}",FALSE,FALSE,NULL,NULL,NULL,NULL
+27,108,1,"{""Metadata"":{""Version"":""2025.1""},""Portfolio"":""LATAM_Property"",""Mapping File"":""LATAM_Mapping_v2.xlsx""}",FALSE,FALSE,NULL,NULL,NULL,NULL

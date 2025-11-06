@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Batch 106 - Submission Errors</title>
+    <title>Batch 106 - Grouping</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -340,14 +340,14 @@
     
     <div class="page-header">
         <h1>Moody's Risk Modeling Dashboard</h1>
-        <h2>Batch 106: Submission Errors</h2>
+        <h2>Batch 106: Grouping</h2>
     </div>
     
     
         <div class="breadcrumb">
             <a href="../../index.html">Analysis-2025-Q1</a>
             <span class="breadcrumb-separator">›</span>
-            <span class="breadcrumb-current">Batch 106 - Submission Errors</span>
+            <span class="breadcrumb-current">Batch 106 - Grouping</span>
         </div>
         
     <div class="info-grid">
@@ -543,8 +543,8 @@
     // Close tooltip on scroll
     document.addEventListener('scroll', hideJsonTooltip, true);
 
-        const jobs = [{"id": 18, "moodys_workflow_id": "MW-1060001", "status": "ERROR", "skipped": false, "report_status": "ERROR", "next_best_action": "Resubmit OR Skip after Manual Operation on Moody's", "age_hours": 76.07725437083333, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 18, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:02:00+00:00", "job_configuration_data": {"portfolio": "PF001"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 19, "moodys_workflow_id": "MW-1060002", "status": "ERROR", "skipped": false, "report_status": "ERROR", "next_best_action": "Resubmit OR Skip after Manual Operation on Moody's", "age_hours": 76.0439210375, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 19, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:04:00+00:00", "job_configuration_data": {"portfolio": "PF002"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 20, "moodys_workflow_id": null, "status": "INITIATED", "skipped": false, "report_status": "UNSUBMITTED", "next_best_action": "Submit Batch", "age_hours": 76.01083245083333, "is_successful": false, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 20, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:06:00+00:00", "job_configuration_data": {"portfolio": "PF003"}, "parent_job_status": null, "parent_moodys_id": null}];
-        const configs = [{"config_id": 18, "job_configuration_data": {"portfolio": "PF001"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 1, "progress_percent": 0.0, "has_failures": false, "has_errors": true, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 19, "job_configuration_data": {"portfolio": "PF002"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 1, "progress_percent": 0.0, "has_failures": false, "has_errors": true, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 20, "job_configuration_data": {"portfolio": "PF003"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 1, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": true, "active_jobs": 1}];
+        const jobs = [{"id": 18, "moodys_workflow_id": "MW-GRP-2025001", "status": "ERROR", "skipped": false, "report_status": "ERROR", "next_best_action": "Resubmit OR Skip after Manual Operation on Moody's", "age_hours": 459.7556819225, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 18, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:02:00+00:00", "job_configuration_data": {"items": ["EMEA_Property", "EMEA_Casualty", "EMEA_Combined"], "Metadata": {"Version": "2025.1"}, "Group_Name": "All_EMEA_Portfolios"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 19, "moodys_workflow_id": "MW-GRP-2025002", "status": "ERROR", "skipped": false, "report_status": "ERROR", "next_best_action": "Resubmit OR Skip after Manual Operation on Moody's", "age_hours": 459.72234858916664, "is_successful": false, "needs_attention": true, "parent_job_id": null, "job_configuration_id": 19, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:04:00+00:00", "job_configuration_data": {"items": ["NA_Casualty", "NA_Property"], "Metadata": {"Version": "2025.1"}, "Group_Name": "All_NA_Portfolios"}, "parent_job_status": null, "parent_moodys_id": null}, {"id": 20, "moodys_workflow_id": null, "status": "INITIATED", "skipped": false, "report_status": "UNSUBMITTED", "next_best_action": "Submit Batch", "age_hours": 459.68931676444447, "is_successful": false, "needs_attention": false, "parent_job_id": null, "job_configuration_id": 20, "overridden": false, "override_reason_txt": null, "submitted_ts": null, "completed_ts": null, "created_ts": "2025-10-18 00:06:00+00:00", "job_configuration_data": {"items": ["All_EMEA_Portfolios", "All_NA_Portfolios", "APAC_Combined"], "Metadata": {"Version": "2025.1"}, "Group_Name": "Global_Portfolio"}, "parent_job_status": null, "parent_moodys_id": null}];
+        const configs = [{"config_id": 18, "job_configuration_data": {"items": ["EMEA_Property", "EMEA_Casualty", "EMEA_Combined"], "Metadata": {"Version": "2025.1"}, "Group_Name": "All_EMEA_Portfolios"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 1, "progress_percent": 0.0, "has_failures": false, "has_errors": true, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 19, "job_configuration_data": {"items": ["NA_Casualty", "NA_Property"], "Metadata": {"Version": "2025.1"}, "Group_Name": "All_NA_Portfolios"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 0, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 1, "progress_percent": 0.0, "has_failures": false, "has_errors": true, "has_unsubmitted": false, "active_jobs": 1}, {"config_id": 20, "job_configuration_data": {"items": ["All_EMEA_Portfolios", "All_NA_Portfolios", "APAC_Combined"], "Metadata": {"Version": "2025.1"}, "Group_Name": "Global_Portfolio"}, "skipped": false, "overridden": false, "config_report_status": "UNFULFILLED", "total_jobs": 1, "unsubmitted_jobs": 1, "finished_jobs": 0, "failed_jobs": 0, "cancelled_jobs": 0, "error_jobs": 0, "progress_percent": 0.0, "has_failures": false, "has_errors": false, "has_unsubmitted": true, "active_jobs": 1}];
 
         function renderJobs() {
             const tbody = document.getElementById('jobsTableBody');
