@@ -26,6 +26,7 @@ from helpers.sqlserver import (
     SQLServerError,
     SQLServerConfigurationError,
     SQLServerQueryError,
+    ScriptResult,
     get_connection_config,
     build_connection_string,
     get_connection,
@@ -506,13 +507,17 @@ def test_execute_script_file_single_statement(mssql_env, wait_for_sqlserver, ini
     """
     script_path = temp_sql_file(script_content)
 
-    rows = execute_script_file(
+    result = execute_script_file(
         script_path,
         params={'new_status': 'UPDATED', 'min_value': 1000000},
         connection='TEST', database='test_db'
     )
 
-    assert rows == 3
+    assert isinstance(result, ScriptResult)
+    assert result.success is True
+    assert result.rows_affected == 3
+    assert result.statements_executed == 1
+    assert result.result_sets == 0
 
     # Verify update
     count = execute_scalar(
@@ -530,7 +535,13 @@ def test_execute_script_file_multi_statement(mssql_env, wait_for_sqlserver, init
     """
     script_path = temp_sql_file(script_content)
 
-    rows = execute_script_file(script_path, connection='TEST', database='test_db')
+    result = execute_script_file(script_path, connection='TEST', database='test_db')
+
+    assert isinstance(result, ScriptResult)
+    assert result.success is True
+    assert result.rows_affected == 2  # 1 row per UPDATE
+    assert result.statements_executed == 2
+    assert result.result_sets == 0
 
     # Verify both updates
     df = execute_query(
@@ -683,13 +694,16 @@ def test_execute_script_file_with_database_parameter(mssql_env, wait_for_sqlserv
     script_content = "UPDATE test_portfolios SET status = 'SCRIPTED' WHERE id IN (1, 2)"
     script_path = temp_sql_file(script_content)
 
-    rows = execute_script_file(
+    result = execute_script_file(
         script_path,
         connection='TEST',
         database='test_db'
     )
 
-    assert rows == 2
+    assert isinstance(result, ScriptResult)
+    assert result.success is True
+    assert result.rows_affected == 2
+    assert result.statements_executed == 1
 
     # Verify the updates
     count = execute_scalar(
@@ -701,7 +715,7 @@ def test_execute_script_file_with_database_parameter(mssql_env, wait_for_sqlserv
 
 
 def test_execute_script_file_ignores_select_statements(mssql_env, wait_for_sqlserver, clean_sqlserver_db, temp_sql_file):
-    """Test that execute_script_file ignores SELECT statements when counting rows"""
+    """Test that execute_script_file tracks DML and SELECT statements separately"""
     # Script with mixed DML and SELECT statements
     script_content = """
     UPDATE test_portfolios SET status = 'UPDATED' WHERE id = 1;
@@ -711,14 +725,17 @@ def test_execute_script_file_ignores_select_statements(mssql_env, wait_for_sqlse
     """
     script_path = temp_sql_file(script_content)
 
-    rows = execute_script_file(
+    result = execute_script_file(
         script_path,
         connection='TEST',
         database='test_db'
     )
 
-    # Should only count the 2 UPDATE statements, not the SELECT statements
-    assert rows == 2
+    assert isinstance(result, ScriptResult)
+    assert result.success is True
+    assert result.rows_affected == 2  # Only 2 UPDATE statements
+    assert result.result_sets == 2     # 2 SELECT statements
+    assert result.statements_executed == 4  # Total statements
 
 
 def test_parameterized_database_in_brackets(mssql_env, wait_for_sqlserver, clean_sqlserver_db):

@@ -112,6 +112,8 @@ from pathlib import Path
 from contextlib import contextmanager
 from typing import List, Optional, Dict, Any, Union, Tuple
 from string import Template
+from dataclasses import dataclass
+from helpers.constants import WORKSPACE_PATH
 import pandas as pd
 import numpy as np
 
@@ -148,6 +150,37 @@ class ExpressionTemplate(Template):
     (?P<invalid>)
     )
     ''' # type: ignore
+
+
+# ============================================================================
+# DATA CLASSES
+# ============================================================================
+
+@dataclass
+class ScriptResult:
+    """Result from executing a SQL script file.
+
+    Attributes:
+        rows_affected: Total rows affected by DML statements (INSERT/UPDATE/DELETE)
+        statements_executed: Total number of statements executed
+        result_sets: Number of SELECT statements that returned result sets
+        success: Whether the script executed successfully
+    """
+    rows_affected: int = 0
+    statements_executed: int = 0
+    result_sets: int = 0
+    success: bool = True
+
+    def __str__(self) -> str:
+        """Return a formatted string representation for notebook display."""
+        status = "✓ SUCCESS" if self.success else "✗ FAILED"
+        lines = [
+            f"Script Execution Result: {status}",
+            f"  Statements executed: {self.statements_executed}",
+            f"  Rows affected:       {self.rows_affected}",
+            f"  Result sets:         {self.result_sets}"
+        ]
+        return "\n".join(lines)
 
 
 # ============================================================================
@@ -494,6 +527,7 @@ def _substitute_named_parameters(query: str, params: Optional[Dict[str, Any]] = 
         params = {'date_val': '202501'}
         # Returns: "SELECT 'Modeling_202501_Moodys' as table_name"
     """
+    print ('Parameterizing ...')
     if not params:
         return query
 
@@ -719,8 +753,7 @@ def _read_sql_file(file_path: Union[str, Path]) -> str:
     Raises:
         SQLServerQueryError: If file not found or cannot be read
     """
-    from helpers.constants import WORKSPACE_PATH
-
+    print('Reading SQL script ...')
     file_path = Path(file_path)
 
     # If relative path, try workspace/sql/ directory
@@ -832,7 +865,7 @@ def execute_script_file(
     params: Optional[Dict[str, Any]] = None,
     connection: str = 'TEST',
     database: Optional[str] = None
-) -> int:
+) -> ScriptResult:
     """
     Execute SQL script from file (supports multi-statement scripts).
 
@@ -843,22 +876,27 @@ def execute_script_file(
         database: Optional database name to connect to (overrides connection config)
 
     Returns:
-        Total number of rows affected by DML statements (INSERT/UPDATE/DELETE).
-        SELECT statements are ignored when counting rows.
+        ScriptResult object with execution summary:
+        - rows_affected: Total rows from INSERT/UPDATE/DELETE
+        - statements_executed: Total statements processed
+        - result_sets: Number of SELECT queries executed
+        - success: Whether execution succeeded
 
     Example:
         # Create workspace/sql/update_portfolios.sql with content:
         # UPDATE portfolios SET status = {{ status }} WHERE value < {{ min_value }};
         # DELETE FROM portfolios WHERE status = 'CLOSED';
 
-        rows = execute_script_file(
+        result = execute_script_file(
             'update_portfolios.sql',
             params={'status': 'INACTIVE', 'min_value': 100000},
             connection='AWS_DW',
             database='DataWarehouse'
         )
-        print(f"Total rows affected: {rows}")
+        print(f"Executed {result.statements_executed} statements")
+        print(f"Rows affected: {result.rows_affected}")
     """
+    
     script = _read_sql_file(file_path)
 
     try:
@@ -866,26 +904,35 @@ def execute_script_file(
         if isinstance(params, dict):
             script = _substitute_named_parameters(script, params)
 
-        total_rows = 0
+        result = ScriptResult()
 
         with get_connection(connection, database=database) as conn:
+            print('Executing SQL ...')
             cursor = conn.cursor()
             cursor.execute(script)
 
-            # Count rows from DML statements only (skip SELECT statements)
-            # SELECT statements have cursor.description, DML statements don't
-            if cursor.description is None and cursor.rowcount > 0:
-                total_rows += cursor.rowcount
+            # Process first result set
+            result.statements_executed += 1
+            if cursor.description is not None:
+                # SELECT statement
+                result.result_sets += 1
+            elif cursor.rowcount >= 0:
+                # DML statement (INSERT/UPDATE/DELETE)
+                result.rows_affected += cursor.rowcount
 
-            # If there are multiple result sets, iterate through them
+            # Process additional result sets
             while cursor.nextset():
-                # Only count rowcount from non-SELECT statements (DML)
-                if cursor.description is None and cursor.rowcount > 0:
-                    total_rows += cursor.rowcount
+                result.statements_executed += 1
+                if cursor.description is not None:
+                    # SELECT statement
+                    result.result_sets += 1
+                elif cursor.rowcount >= 0:
+                    # DML statement
+                    result.rows_affected += cursor.rowcount
 
             conn.commit()
 
-        return total_rows
+        return result
 
     except (SQLServerConnectionError, SQLServerConfigurationError):
         raise  # Re-raise connection/configuration errors as-is
@@ -973,6 +1020,9 @@ def initialize_database(sql_file_path: Union[str, Path], connection: str = 'TEST
 # ============================================================================
 
 __all__ = [
+    # Data classes
+    'ScriptResult',
+
     # Exceptions
     'SQLServerError',
     'SQLServerConnectionError',
