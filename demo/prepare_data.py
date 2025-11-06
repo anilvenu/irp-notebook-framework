@@ -70,12 +70,12 @@ def initialize_schema():
     return True
 
 
-def load_csv_data(csv_file, table_name):
+def load_csv_data(csv_file, table_name, set_name='files'):
     """Load data from CSV file into table"""
-    csv_path = Path(__file__).parent / csv_file
+    csv_path = Path(__file__).parent / set_name / csv_file
 
     if not csv_path.exists():
-        print(f"✗ CSV file not found: {csv_file}")
+        print(f"✗ CSV file not found: {csv_file} in {set_name}")
         return False
 
     try:
@@ -149,25 +149,25 @@ def clear_existing_data():
         return False
 
 
-def load_test_data():
+def load_test_data(set_name='files'):
     """Load all test data from CSV files"""
     print("\n" + "="*60)
-    print("LOADING TEST DATA FROM CSV FILES")
+    print(f"LOADING TEST DATA FROM {set_name.upper()}")
     print("="*60)
 
     # Load in dependency order
     tables = [
-        ('files/csv_data/cycles.csv', 'irp_cycle'),
-        ('files/csv_data/stages.csv', 'irp_stage'),
-        ('files/csv_data/steps.csv', 'irp_step'),
-        ('files/csv_data/configurations.csv', 'irp_configuration'),
-        ('files/csv_data/batches.csv', 'irp_batch'),
-        ('files/csv_data/job_configurations.csv', 'irp_job_configuration'),
-        ('files/csv_data/jobs.csv', 'irp_job'),
+        ('csv_data/cycles.csv', 'irp_cycle'),
+        ('csv_data/stages.csv', 'irp_stage'),
+        ('csv_data/steps.csv', 'irp_step'),
+        ('csv_data/configurations.csv', 'irp_configuration'),
+        ('csv_data/batches.csv', 'irp_batch'),
+        ('csv_data/job_configurations.csv', 'irp_job_configuration'),
+        ('csv_data/jobs.csv', 'irp_job'),
     ]
 
     for csv_file, table_name in tables:
-        if not load_csv_data(csv_file, table_name):
+        if not load_csv_data(csv_file, table_name, set_name):
             return False
 
     print("\n✓ All test data loaded successfully")
@@ -176,8 +176,11 @@ def load_test_data():
 
 def main():
     """Main execution"""
+    # Get set name from command line argument (default to 'files' for backward compatibility)
+    set_name = sys.argv[1] if len(sys.argv) > 1 else 'files'
+
     print("="*60)
-    print("DATA PREPARATION FOR BATCH VIEWER DEMO")
+    print(f"DATA PREPARATION FOR BATCH VIEWER DEMO - {set_name.upper()}")
     print("="*60)
 
     # Initialize schema
@@ -191,16 +194,16 @@ def main():
         return 1
 
     # Load test data from CSV
-    if not load_test_data():
+    if not load_test_data(set_name):
         print("\n✗ Failed to load test data")
         return 1
 
     print("\n" + "="*60)
-    print("DATA PREPARATION COMPLETE")
+    print(f"DATA PREPARATION COMPLETE - {set_name.upper()}")
     print("="*60)
     print("✓ Schema initialized")
     print("✓ Test data loaded")
-    print("\nYou can now run generate_dashboards.py")
+    print(f"\nYou can now run generate_dashboards.py {set_name}")
 
     return 0
 

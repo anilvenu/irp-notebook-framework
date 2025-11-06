@@ -135,8 +135,11 @@ def query_batch_data(batch_id):
 
 def main():
     """Main execution"""
+    # Get set name from command line argument (default to 'files' for backward compatibility)
+    set_name = sys.argv[1] if len(sys.argv) > 1 else 'files'
+
     print("="*60)
-    print("DASHBOARD GENERATION FOR BATCH VIEWER DEMO")
+    print(f"DASHBOARD GENERATION FOR BATCH VIEWER DEMO - {set_name.upper()}")
     print("="*60)
 
     # Get list of all batches
@@ -147,13 +150,13 @@ def main():
         return 1
 
     batches = batches_df.to_dict('records')
-    output_dir = Path(__file__).parent / 'files' / 'html_output'
+    output_dir = Path(__file__).parent / set_name / 'html_output'
 
     # Clean existing cycle directories for sanity (before generating anything)
     cycle_dir = output_dir / 'cycle'
     if cycle_dir.exists():
         shutil.rmtree(cycle_dir)
-        print("✓ Cleaned existing cycle output folder")
+        print(f"✓ Cleaned existing cycle output folder for {set_name}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -251,18 +254,18 @@ def main():
 
     # Summary
     print("\n" + "="*60)
-    print("DASHBOARD GENERATION COMPLETE")
+    print(f"DASHBOARD GENERATION COMPLETE - {set_name.upper()}")
     print("="*60)
     print(f"✓ Generated {len(generated_files)} batch HTML files")
     print(f"✓ Generated {len(cycles_data)} cycle dashboards")
-    print(f"\nDirectory structure:")
+    print(f"\nDirectory structure in {set_name}:")
     for cycle_name in cycles_data.keys():
         print(f"  cycle/{cycle_name}/")
         print(f"    ├── index.html (Cycle Dashboard)")
         print(f"    └── batch/")
         for batch in cycles_data[cycle_name]:
             print(f"        └── {batch['batch_id']}/index.html")
-    print(f"\nOpen cycle/{list(cycles_data.keys())[0]}/index.html to start")
+    print(f"\nOpen {set_name}/html_output/cycle/{list(cycles_data.keys())[0]}/index.html to start")
 
     return 0
 
