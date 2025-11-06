@@ -7,6 +7,7 @@ to AWS S3 and import execution via Moody's Risk Modeler API.
 
 from typing import Dict, Any, List, Optional
 import boto3
+from boto3.s3.transfer import TransferConfig
 import requests
 import json
 import os
@@ -307,6 +308,7 @@ class MRIImportManager:
             )
 
         try:
+            print(f'Uploading file {file_path} to s3...')
             session = boto3.Session(
                 aws_access_key_id=credentials['aws_access_key_id'],
                 aws_secret_access_key=credentials['aws_secret_access_key'],
@@ -321,13 +323,24 @@ class MRIImportManager:
             prefix = s3_path_parts[1] if len(s3_path_parts) > 1 else ""
             key = f"{prefix}/{credentials['file_id']}-{credentials['filename']}"
 
-            with open(file_path, 'rb') as file:
-                s3.put_object(
-                    Bucket=bucket,
-                    Key=key,
-                    Body=file,
-                    ContentType='text/csv'
-                )
+            # Configure transfer settings for optimized multipart uploads
+            # Automatically handles multipart uploads for files > 8MB
+            config = TransferConfig(
+                multipart_threshold=8 * 1024 * 1024,  # 8MB threshold
+                max_concurrency=10,                    # 10 concurrent threads
+                multipart_chunksize=8 * 1024 * 1024,   # 8MB chunks
+                use_threads=True
+            )
+
+            # Use upload_file for automatic multipart handling and better performance
+            s3.upload_file(
+                file_path,
+                bucket,
+                key,
+                ExtraArgs={'ContentType': 'text/csv'},
+                Config=config
+            )
+            print('File uploaded!')
         except FileNotFoundError:
             raise IRPFileError(f"File not found: {file_path}")
         except Exception as e:
@@ -531,7 +544,9 @@ class MRIImportManager:
             raise IRPFileError("Failed to determine file sizes")
 
         # Create AWS bucket
+        print('Creating AWS bucket...')
         bucket_response = self.create_aws_bucket()
+        print('AWS bucket created!')
         bucket_url = get_location_header(bucket_response, "AWS bucket creation response")
         bucket_id = extract_id_from_location_header(bucket_response, "AWS bucket creation response")
 
@@ -542,6 +557,7 @@ class MRIImportManager:
             accounts_size_kb,
             "account"
         )
+        print('Access credentials received')
         self.upload_file_to_s3(accounts_credentials, accounts_file_path)
 
         # Upload locations file
