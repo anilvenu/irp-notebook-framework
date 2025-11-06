@@ -700,6 +700,27 @@ def test_execute_script_file_with_database_parameter(mssql_env, wait_for_sqlserv
     assert count == 2
 
 
+def test_execute_script_file_ignores_select_statements(mssql_env, wait_for_sqlserver, clean_sqlserver_db, temp_sql_file):
+    """Test that execute_script_file ignores SELECT statements when counting rows"""
+    # Script with mixed DML and SELECT statements
+    script_content = """
+    UPDATE test_portfolios SET status = 'UPDATED' WHERE id = 1;
+    SELECT * FROM test_portfolios WHERE id = 1;
+    UPDATE test_portfolios SET status = 'UPDATED2' WHERE id = 2;
+    SELECT COUNT(*) FROM test_portfolios;
+    """
+    script_path = temp_sql_file(script_content)
+
+    rows = execute_script_file(
+        script_path,
+        connection='TEST',
+        database='test_db'
+    )
+
+    # Should only count the 2 UPDATE statements, not the SELECT statements
+    assert rows == 2
+
+
 def test_parameterized_database_in_brackets(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
     """Test that database names in brackets can be parameterized (like USE [{{ db_name }}])"""
     # Note: pd.read_sql doesn't support multi-statement queries (USE + SELECT)

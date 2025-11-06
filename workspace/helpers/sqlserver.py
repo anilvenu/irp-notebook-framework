@@ -796,7 +796,6 @@ def execute_query_from_file(
             cursor.execute(query)
 
             if cursor.description is not None:
-                # Now cursor.description is not None, so we can fetch results
                 columns = [column[0] for column in cursor.description]
                 rows = cursor.fetchall()
 
@@ -806,7 +805,6 @@ def execute_query_from_file(
 
             while cursor.nextset():
                 if cursor.description is not None:
-                    # Now cursor.description is not None, so we can fetch results
                     columns = [column[0] for column in cursor.description]
                     rows = cursor.fetchall()
 
@@ -845,7 +843,8 @@ def execute_script_file(
         database: Optional database name to connect to (overrides connection config)
 
     Returns:
-        Total number of rows affected (sum across all statements)
+        Total number of rows affected by DML statements (INSERT/UPDATE/DELETE).
+        SELECT statements are ignored when counting rows.
 
     Example:
         # Create workspace/sql/update_portfolios.sql with content:
@@ -873,12 +872,16 @@ def execute_script_file(
             cursor = conn.cursor()
             cursor.execute(script)
 
-            # Sum up rows affected across all statements
-            total_rows = cursor.rowcount
+            # Count rows from DML statements only (skip SELECT statements)
+            # SELECT statements have cursor.description, DML statements don't
+            if cursor.description is None and cursor.rowcount > 0:
+                total_rows += cursor.rowcount
 
             # If there are multiple result sets, iterate through them
             while cursor.nextset():
-                total_rows += cursor.rowcount
+                # Only count rowcount from non-SELECT statements (DML)
+                if cursor.description is None and cursor.rowcount > 0:
+                    total_rows += cursor.rowcount
 
             conn.commit()
 
