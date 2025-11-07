@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}IRP Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation Bar -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                <h1>IRP Dashboard</h1>
+            </div>
+            <div class="navbar-menu">
+                <a href="/{{ schema }}/" class="nav-link">Home</a>
+                <span class="nav-schema">Schema: <strong>{{ schema }}</strong></span>
+                <button id="refresh-btn" class="btn btn-small" onclick="location.reload()">Refresh</button>
+            </div>
+        </nav>
+
+        <!-- Breadcrumb Navigation -->
+        {% block breadcrumb %}{% endblock %}
+
+        <!-- Error Display (if present) -->
+        {% if error %}
+        <div class="error-banner">
+            <h3>⚠️ Error</h3>
+            <p class="error-summary">{{ error.summary }}</p>
+
+            {% if error.hints %}
+            <div class="error-hints">
+                {% for hint in error.hints %}
+                <p class="error-hint">{{ hint }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <details class="error-details-container">
+                <summary>Show full error details</summary>
+                <pre class="error-details">{{ error.details }}</pre>
+            </details>
+        </div>
+        {% endif %}
+
+        <!-- Main Content -->
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <p>IRP Notebook Framework Dashboard | <a href="/health" target="_blank">Health Check</a></p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', path='/js/scripts.js') }}"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
