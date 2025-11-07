@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Cycle Selection - IRP Dashboard{% endblock %}
+
+{% block breadcrumb %}
+{% endblock %}
+
+{% block content %}
+<p>Choose a cycle to view its dashboard and batch details</p>
+
+{% if not error %}
+    {% if cycles %}
+        <div class="cycle-list">
+            {% for cycle in cycles %}
+            <div class="cycle-card {% if current_cycle and cycle.id == current_cycle.id %}cycle-current{% endif %}">
+                <div class="cycle-card-header">
+                    <h3>
+                        <a href="/{{ schema }}/cycle/{{ cycle.cycle_name }}">
+                            {{ cycle.cycle_name }}
+                        </a>
+                    </h3>
+                    <span class="badge badge-{{ 'success' if cycle.status == 'ACTIVE' else 'secondary' }}">
+                        {{ cycle.status }}
+                    </span>
+                    {% if current_cycle and cycle.id == current_cycle.id %}
+                    <span class="badge badge-primary">CURRENT</span>
+                    {% endif %}
+                </div>
+                <div class="cycle-card-body">
+                    <p><strong>Created:</strong> {{ cycle.created_ts }}</p>
+                    {% if cycle.archived_ts and cycle.archived_ts != 'N/A' %}
+                    <p><strong>Archived:</strong> {{ cycle.archived_ts }}</p>
+                    {% endif %}
+                </div>
+                <div class="cycle-card-footer">
+                    <a href="/{{ schema }}/cycle/{{ cycle.cycle_name }}" class="btn btn-primary">
+                        View Dashboard →
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <h3>No Cycles Found</h3>
+            <p>No cycles exist in schema '<strong>{{ schema }}</strong>'.</p>
+            <div class="empty-state-hint">
+                <p>💡 To create a cycle, use the <strong>New Cycle</strong> notebook in the IRP Notebook Framework:</p>
+                <pre>workspace/workflows/_Tools/Cycle Management/New Cycle.ipynb</pre>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Schema Selector -->
+    {% if available_schemas|length > 1 %}
+    <div class="schema-selector">
+        <h4>Switch Schema</h4>
+        <div class="schema-list">
+            {% for s in available_schemas %}
+            <a href="/{{ s }}/" class="schema-link {% if s == schema %}active{% endif %}">
+                {{ s }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.cycle-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.cycle-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    transition: box-shadow 0.2s;
+}
+
+.cycle-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.cycle-current {
+    border: 2px solid #007bff;
+    background: #f8f9ff;
+}
+
+.cycle-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.cycle-card-header h3 {
+    margin: 0;
+    flex: 1;
+}
+
+.cycle-card-header h3 a {
+    color: #333;
+    text-decoration: none;
+}
+
+.cycle-card-header h3 a:hover {
+    color: #007bff;
+}
+
+.cycle-card-body {
+    margin-bottom: 15px;
+    color: #666;
+}
+
+.cycle-card-body p {
+    margin: 5px 0;
+}
+
+.cycle-card-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.empty-state h3 {
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.empty-state-hint {
+    margin-top: 30px;
+    text-align: left;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 4px;
+    border-left: 4px solid #007bff;
+}
+
+.empty-state-hint pre {
+    background: #f4f4f4;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.schema-selector {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 2px solid #eee;
+}
+
+.schema-selector h4 {
+    margin-bottom: 15px;
+    color: #666;
+}
+
+.schema-list {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.schema-link {
+    padding: 8px 16px;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #333;
+    transition: all 0.2s;
+}
+
+.schema-link:hover {
+    background: #e0e0e0;
+}
+
+.schema-link.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: #28a745;
+    color: white;
+}
+
+.badge-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.badge-primary {
+    background: #007bff;
+    color: white;
+}
+</style>
+{% endblock %}
