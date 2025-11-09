@@ -6,6 +6,7 @@ python-multipart==0.0.6
 
 # Database (already in main requirements.txt, but listed here for clarity)
 psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
 pandas==2.1.4
 
 # Environment variables (already in main requirements.txt)
