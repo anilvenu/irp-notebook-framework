@@ -48,6 +48,36 @@ services:
       --NotebookApp.password='' 
       --NotebookApp.notebook_dir='${NOTEBOOK_HOME_DIR:-/home/jovyan}'   
 
+  # FastAPI Application Service
+  # This service runs the IRP Dashboard FastAPI application in Docker
+  # and connects to the PostgreSQL database service. It uses the production
+  # database configuration (irp_db, public schema) and exposes port 8001.
+  # The workspace directory is mounted read-only for shared helpers module.
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: irp-fastapi
+    ports:
+      - "8001:8001"
+    environment:
+      # Production database configuration (from .env file)
+      - DB_SERVER=postgres
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SCHEMA=public
+      - PORT=8001
+    volumes:
+      - ./workspace:/app/workspace:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - irp-network
+    restart: unless-stopped
+
   postgres:
     # PostgreSQL Database Service
     # This service runs a PostgreSQL database using the official postgres:15-alpine image.

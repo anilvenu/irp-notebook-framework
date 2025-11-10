@@ -54,6 +54,43 @@ echo ""
 echo "Waiting for services to start..."
 sleep 10
 
+# Initialize database metastore if needed
+echo ""
+echo "Initializing database metastore..."
+docker exec irp-notebook python3 -c "
+import sys
+import os
+sys.path.insert(0, '/home/jovyan/workspace')
+from helpers import database as db
+
+schema = os.getenv('DB_SCHEMA', 'public')
+print(f'Schema: {schema}')
+
+# Check and initialize schema
+if not db.table_exists('irp_cycle', schema):
+    print(f'⚠  Initializing database schema...')
+    if not db.init_database(schema):
+        sys.exit(1)
+else:
+    print(f'✓ Database schema exists')
+
+# Check and create reporting views
+if not db.view_exists('v_irp_job', schema):
+    print(f'⚠  Creating reporting views...')
+    db.create_reporting_views(schema)
+else:
+    print(f'✓ Reporting views exist')
+"
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "ERROR: Database initialization failed"
+    echo "Fix the issue and run ./start.sh again"
+    echo ""
+else
+    echo "✓ Database metastore ready"
+fi
+echo ""
+
 # Check if services are running
 if docker ps | grep -q irp-notebook && docker ps | grep -q irp-postgres; then
     echo ""
@@ -61,6 +98,7 @@ if docker ps | grep -q irp-notebook && docker ps | grep -q irp-postgres; then
     echo ""
     echo "=========================================="
     echo "   JupyterLab: http://localhost:8888"
+    echo "   FastAPI Dashboard: http://localhost:8001"
     echo "   "
     echo "   PostgreSQL Server: localhost:5432"
     echo "=========================================="

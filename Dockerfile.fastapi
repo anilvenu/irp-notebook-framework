@@ -1,0 +1,35 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies for PostgreSQL
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY demo/requirements-api.txt /tmp/requirements-api.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-api.txt
+
+# Create workspace directory structure
+RUN mkdir -p /app/workspace/helpers
+
+# Copy shared helpers module (database.py, constants.py, etc.)
+COPY workspace/helpers /app/workspace/helpers
+
+# Copy the FastAPI application
+COPY demo/app /app/app
+
+# Set PYTHONPATH to include workspace for imports
+ENV PYTHONPATH=/app/workspace
+
+# Expose port 8001 for the FastAPI application
+EXPOSE 8001
+
+# Change to app directory
+WORKDIR /app/app
+
+# Run the FastAPI application
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]

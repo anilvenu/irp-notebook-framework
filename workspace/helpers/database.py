@@ -896,6 +896,40 @@ def test_connection(schema: str = 'public') -> bool:
         return False 
 
 
+def table_exists(table_name: str, schema: str = 'public') -> bool:
+    """Check if a table exists in the specified schema"""
+    try:
+        query = f"""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = '{schema}'
+                AND table_name = '{table_name}'
+            )
+        """
+        result = execute_query(query, schema=schema)
+        return result.iloc[0, 0] if not result.empty else False
+    except Exception as e:
+        print(f"✗ Error checking table existence: {e}")
+        return False
+
+
+def view_exists(view_name: str, schema: str = 'public') -> bool:
+    """Check if a view exists in the specified schema"""
+    try:
+        query = f"""
+            SELECT EXISTS (
+                SELECT FROM information_schema.views
+                WHERE table_schema = '{schema}'
+                AND table_name = '{view_name}'
+            )
+        """
+        result = execute_query(query, schema=schema)
+        return result.iloc[0, 0] if not result.empty else False
+    except Exception as e:
+        print(f"✗ Error checking view existence: {e}")
+        return False
+
+
 def execute_query(query: str, params: tuple = None, schema: str = None) -> pd.DataFrame:
     """
     Execute SELECT query and return results as DataFrame
@@ -938,7 +972,7 @@ def execute_query(query: str, params: tuple = None, schema: str = None) -> pd.Da
                 df = pd.read_sql_query(text(converted_query), conn, params=param_dict)
             return df
     except Exception as e:
-        raise DatabaseError(f"Query failed: {str(e)}") # pragma: no cover
+        raise DatabaseError(f"✗ Query failed: {str(e)}") # pragma: no cover
 
 
 def execute_scalar(query: str, params: tuple = None, schema: str = None) -> Any:
@@ -985,7 +1019,7 @@ def execute_scalar(query: str, params: tuple = None, schema: str = None) -> Any:
                 row = result.fetchone()
                 return row[0] if row else None
     except Exception as e:
-        raise DatabaseError(f"Scalar query failed: {str(e)}") # paragma: no cover
+        raise DatabaseError(f"✗ Scalar query failed: {str(e)}") # pragma: no cover
 
 
 def execute_command(query: str, params: tuple = None, schema: str = None) -> int:
@@ -1037,7 +1071,7 @@ def execute_command(query: str, params: tuple = None, schema: str = None) -> int
                 conn.commit()
                 return result.rowcount
     except Exception as e:
-        raise DatabaseError(f"Command failed: {str(e)}") # pragma: no cover
+        raise DatabaseError(f"✗ Command failed: {str(e)}") # pragma: no cover
 
 
 def execute_insert(query: str, params: tuple = None, schema: str = None) -> int:
@@ -1095,7 +1129,7 @@ def execute_insert(query: str, params: tuple = None, schema: str = None) -> int:
                 row = result.fetchone()
                 return row[0] if row else None
     except Exception as e:
-        raise DatabaseError(f"Insert failed: {str(e)}") # pragma: no cover
+        raise DatabaseError(f"✗ Insert failed: {str(e)}") # pragma: no cover
 
 
 def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] = None, schema: str = None) -> List[int]:
@@ -1175,7 +1209,7 @@ def bulk_insert(query: str, params_list: List[tuple], jsonb_columns: List[int] =
         return inserted_ids
 
     except Exception as e:
-        raise DatabaseError(f"Bulk insert failed: {str(e)}")
+        raise DatabaseError(f"✗ Bulk insert failed: {str(e)}")
 
 
 def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sql') -> bool:
@@ -1217,8 +1251,42 @@ def init_database(schema: str = 'public', sql_file_name: str = 'init_database.sq
         return True
 
     except Exception as e:
-        print(f"Database initialization failed: {str(e)}")
+        print(f"✗ Database initialization failed: {str(e)}")
         return False
+
+
+
+def create_reporting_views(schema: str = 'public') -> bool:
+    """Create reporting views by running reporting_views.sql"""
+    try:
+        from pathlib import Path
+
+        sql_file = Path(__file__).parent / 'db' / 'reporting_views.sql'
+
+        if not sql_file.exists():
+            raise DatabaseError(f"SQL file not found: {sql_file}")
+
+        with open(sql_file, 'r') as f:
+            sql_script = f.read()
+
+        # Execute script
+        engine = get_engine()
+        with engine.connect() as conn:
+            # Set search path for schema
+            if schema != 'public':
+                conn.execute(text(f"SET search_path TO {schema}, public"))
+
+            # Execute the SQL script
+            conn.execute(text(sql_script))
+            conn.commit()
+
+        print(f"✓ Reporting views created successfully (schema: {schema})")
+        return True
+
+    except Exception as e:
+        print(f"✗ Failed to create reporting views: {str(e)}")
+        return False
+
 
 # ============================================================================
 # STAGE OPERATIONS
