@@ -870,6 +870,8 @@ def execute_query_from_file(
                     logger.debug(f"Statement {stmt_num}: Retrieved {len(df)} rows")
                     stmt_num += 1
 
+            conn.commit()
+
         if not dataframes:
             logger.warning(f"No result sets returned from {file_path}")
             print("⚠ Warning: No result sets returned. This may occur if:")
@@ -892,107 +894,107 @@ def execute_query_from_file(
         ) from e
 
 
-def execute_script_file(
-    file_path: Union[str, Path],
-    params: Optional[Dict[str, Any]] = None,
-    connection: str = 'TEST',
-    database: Optional[str] = None
-) -> ScriptResult:
-    """
-    Execute SQL script from file (supports multi-statement scripts).
+# def execute_script_file(
+#     file_path: Union[str, Path],
+#     params: Optional[Dict[str, Any]] = None,
+#     connection: str = 'TEST',
+#     database: Optional[str] = None
+# ) -> ScriptResult:
+#     """
+#     Execute SQL script from file (supports multi-statement scripts).
 
-    Args:
-        file_path: Path to SQL file (absolute or relative to workspace/sql/)
-        params: Script parameters (supports {{ param_name }} placeholders)
-        connection: Name of the SQL Server connection to use
-        database: Optional database name to connect to (overrides connection config)
+#     Args:
+#         file_path: Path to SQL file (absolute or relative to workspace/sql/)
+#         params: Script parameters (supports {{ param_name }} placeholders)
+#         connection: Name of the SQL Server connection to use
+#         database: Optional database name to connect to (overrides connection config)
 
-    Returns:
-        ScriptResult object with execution summary:
-        - rows_affected: Total rows from INSERT/UPDATE/DELETE
-        - statements_executed: Total statements processed
-        - result_sets: Number of SELECT queries executed
-        - success: Whether execution succeeded
+#     Returns:
+#         ScriptResult object with execution summary:
+#         - rows_affected: Total rows from INSERT/UPDATE/DELETE
+#         - statements_executed: Total statements processed
+#         - result_sets: Number of SELECT queries executed
+#         - success: Whether execution succeeded
 
-    Example:
-        # Create workspace/sql/update_portfolios.sql with content:
-        # UPDATE portfolios SET status = {{ status }} WHERE value < {{ min_value }};
-        # DELETE FROM portfolios WHERE status = 'CLOSED';
+#     Example:
+#         # Create workspace/sql/update_portfolios.sql with content:
+#         # UPDATE portfolios SET status = {{ status }} WHERE value < {{ min_value }};
+#         # DELETE FROM portfolios WHERE status = 'CLOSED';
 
-        result = execute_script_file(
-            'update_portfolios.sql',
-            params={'status': 'INACTIVE', 'min_value': 100000},
-            connection='AWS_DW',
-            database='DataWarehouse'
-        )
-        print(f"Executed {result.statements_executed} statements")
-        print(f"Rows affected: {result.rows_affected}")
-    """
+#         result = execute_script_file(
+#             'update_portfolios.sql',
+#             params={'status': 'INACTIVE', 'min_value': 100000},
+#             connection='AWS_DW',
+#             database='DataWarehouse'
+#         )
+#         print(f"Executed {result.statements_executed} statements")
+#         print(f"Rows affected: {result.rows_affected}")
+#     """
     
-    script = _read_sql_file(file_path)
+#     script = _read_sql_file(file_path)
 
-    try:
-        # Substitute named parameters if dict provided
-        if isinstance(params, dict):
-            script = _substitute_named_parameters(script, params)
+#     try:
+#         # Substitute named parameters if dict provided
+#         if isinstance(params, dict):
+#             script = _substitute_named_parameters(script, params)
 
-        result = ScriptResult(messages=[])
+#         result = ScriptResult(messages=[])
 
-        logger.info(f"Executing script file: {file_path}")
-        print(f"Executing SQL script: {Path(file_path).name}")
+#         logger.info(f"Executing script file: {file_path}")
+#         print(f"Executing SQL script: {Path(file_path).name}")
 
-        with get_connection(connection, database=database) as conn:
-            cursor = conn.cursor()
-            cursor.execute(script)
+#         with get_connection(connection, database=database) as conn:
+#             cursor = conn.cursor()
+#             cursor.execute(script)
 
-            # Process first result set
-            result.statements_executed += 1
-            if cursor.description is not None:
-                # SELECT statement
-                result.result_sets += 1
-                row_count = len(cursor.fetchall())
-                logger.debug(f"Statement 1: SELECT returned {row_count} rows")
-            elif cursor.rowcount >= 0:
-                # DML statement (INSERT/UPDATE/DELETE)
-                result.rows_affected += cursor.rowcount
-                logger.debug(f"Statement 1: DML affected {cursor.rowcount} rows")
+#             # Process first result set
+#             result.statements_executed += 1
+#             if cursor.description is not None:
+#                 # SELECT statement
+#                 result.result_sets += 1
+#                 row_count = len(cursor.fetchall())
+#                 logger.debug(f"Statement 1: SELECT returned {row_count} rows")
+#             elif cursor.rowcount >= 0:
+#                 # DML statement (INSERT/UPDATE/DELETE)
+#                 result.rows_affected += cursor.rowcount
+#                 logger.debug(f"Statement 1: DML affected {cursor.rowcount} rows")
 
-            # Process additional result sets
-            stmt_num = 2
-            while cursor.nextset():
-                result.statements_executed += 1
-                if cursor.description is not None:
-                    # SELECT statement
-                    result.result_sets += 1
-                    row_count = len(cursor.fetchall())
-                    logger.debug(f"Statement {stmt_num}: SELECT returned {row_count} rows")
-                elif cursor.rowcount >= 0:
-                    # DML statement
-                    result.rows_affected += cursor.rowcount
-                    logger.debug(f"Statement {stmt_num}: DML affected {cursor.rowcount} rows")
-                stmt_num += 1
+#             # Process additional result sets
+#             stmt_num = 2
+#             while cursor.nextset():
+#                 result.statements_executed += 1
+#                 if cursor.description is not None:
+#                     # SELECT statement
+#                     result.result_sets += 1
+#                     row_count = len(cursor.fetchall())
+#                     logger.debug(f"Statement {stmt_num}: SELECT returned {row_count} rows")
+#                 elif cursor.rowcount >= 0:
+#                     # DML statement
+#                     result.rows_affected += cursor.rowcount
+#                     logger.debug(f"Statement {stmt_num}: DML affected {cursor.rowcount} rows")
+#                 stmt_num += 1
 
-            conn.commit()
+#             conn.commit()
 
-        # Add informational messages
-        if result.result_sets == 0 and result.rows_affected == 0:
-            result.messages.append(
-                "No data modifications or result sets detected. "
-                "Script may contain DDL (CREATE/DROP), dynamic SQL (EXEC), or statements with no output."
-            )
+#         # Add informational messages
+#         if result.result_sets == 0 and result.rows_affected == 0:
+#             result.messages.append(
+#                 "No data modifications or result sets detected. "
+#                 "Script may contain DDL (CREATE/DROP), dynamic SQL (EXEC), or statements with no output."
+#             )
 
-        logger.info(f"Script completed: {result.statements_executed} statements, "
-                   f"{result.rows_affected} rows affected, {result.result_sets} result sets")
-        print(f"✓ Script completed successfully")
+#         logger.info(f"Script completed: {result.statements_executed} statements, "
+#                    f"{result.rows_affected} rows affected, {result.result_sets} result sets")
+#         print(f"✓ Script completed successfully")
 
-        return result
+#         return result
 
-    except (SQLServerConnectionError, SQLServerConfigurationError):
-        raise  # Re-raise connection/configuration errors as-is
-    except Exception as e:
-        raise SQLServerQueryError(
-            f"Script execution failed (connection: {connection}, file: {file_path}): {e}"
-        ) from e
+#     except (SQLServerConnectionError, SQLServerConfigurationError):
+#         raise  # Re-raise connection/configuration errors as-is
+#     except Exception as e:
+#         raise SQLServerQueryError(
+#             f"Script execution failed (connection: {connection}, file: {file_path}): {e}"
+#         ) from e
 
 
 # ============================================================================

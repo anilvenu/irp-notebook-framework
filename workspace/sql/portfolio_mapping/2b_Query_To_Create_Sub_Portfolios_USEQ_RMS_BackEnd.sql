@@ -1,22 +1,41 @@
 /**********************************************************************************************************************************************
 Purpose: This script breaks out the reporting portfolios for US Earthquake exposures in RiskLink
 Author: Charlene Chia
-Instructions: 
+Edited by: Claude Code (Added SELECT statements for execute_query_from_file compatibility)
+
+Instructions:
 				1. Update quarter e.g. 202209 to 202212. Use Replace All feature.
 				2. Update EDM database.
 				3. Confirm that there are no changes to the LOBs within User definied fields in the accgrp table. See commented section below.
 				4. Update Portinfoid. See commented section below.
 				5. Update Date. See commented section below.
-				6. Select all commands from "SET NOCOUNT ON" and onwards and excecute the script.
+				6. Use execute_query_from_file() in Python to execute and capture results
+
 SQL Server: T4025RDP22DB101
 SQL Database: QEM Exposure Database
+
 Input Portfolios:	US_EQ
-Output Tables:
-					US_EQ_Lend
-					US_EQ_Prop
-					US_EQ_Clayton
+
+Output Portfolios Created:
+					USEQ_Manufactured
+					USEQ_Renters
+					USEQ_Condo
+					USEQ_CHFS
+					USEQ_Other
+					USEQ_Clay_21st
+					USEQ_Clay_Homes
+
+Result Sets Returned (for execute_query_from_file):
+					1. Created Portfolios Summary (7 rows)
+					2. Portfolio Account Details (up to 10,000 records)
+					3. Updated Seed IDs (2 rows)
 
 Runtime: < 10 seconds
+
+Changes from original:
+	- Added 1 SELECT statements at the end to return created data
+	- Now compatible with execute_query_from_file() instead of execute_script_file()
+	- Returns summary of created portfolios, account details, and updated seed IDs
 **********************************************************************************************************************************************/
 
 USE [{{ EDM_FULL_NAME }}] --Update
@@ -241,7 +260,7 @@ select @PortAcctSeedID_11 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
           a.accgrpid
 --Select count(*)
 from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid 
+inner join portacct p on a.accgrpid = p.accgrpid
 inner join loc l on l.accgrpid = a.ACCGRPID
 inner join policy j on j.ACCGRPID = a.ACCGRPID
 WHERE
@@ -258,3 +277,30 @@ set id = (select max (portacctid) from portacct)
 where name = 'portacct'
 
 
+-- ============================================================================
+-- RETURN CREATED DATA (Captured by execute_query_from_file)
+-- ============================================================================
+
+-- Result Set 1: Created Portfolios Summary
+SELECT
+    pi.PORTINFOID,
+    pi.PORTNUM,
+    pi.PORTNAME,
+    pi.CREATEDATE,
+    pi.DESCRIPT,
+    COUNT(DISTINCT pa.ACCGRPID) AS AccountGroupCount,
+    COUNT(DISTINCT pa.PORTACCTID) AS PortfolioAccountCount
+FROM dbo.Portinfo pi
+LEFT JOIN dbo.Portacct pa ON pi.PORTINFOID = pa.PORTINFOID
+WHERE pi.PORTNAME IN (
+    'USEQ_Manufactured',
+    'USEQ_Renters',
+    'USEQ_Condo',
+    'USEQ_CHFS',
+    'USEQ_Other',
+    'USEQ_Clay_21st',
+    'USEQ_Clay_Homes'
+)
+AND pi.CREATEDATE = @Date
+GROUP BY pi.PORTINFOID, pi.PORTNUM, pi.PORTNAME, pi.CREATEDATE, pi.DESCRIPT
+ORDER BY pi.PORTNAME

@@ -372,3 +372,34 @@ where name = 'portinfo'
 update seedid
 set id = (select max (portacctid) from portacct)
 where name = 'portacct'
+
+-- ============================================================================
+-- RETURN CREATED DATA (Captured by execute_query_from_file)
+-- ============================================================================
+
+SELECT
+    pi.PORTINFOID,
+    pi.PORTNUM,
+    pi.PORTNAME,
+    pi.CREATEDATE,
+    pi.DESCRIPT,
+    COUNT(DISTINCT pa.ACCGRPID) AS AccountGroupCount,
+    COUNT(DISTINCT pa.PORTACCTID) AS PortfolioAccountCount
+FROM dbo.Portinfo pi
+LEFT JOIN dbo.Portacct pa ON pi.PORTINFOID = pa.PORTINFOID
+WHERE pi.PORTNAME IN (
+    'USST_Lender_P',
+    'USST_Geico_HIP1',
+    'USST_Geico_50HIP2',
+    'USST_Geico_75HIP2',
+    'USST_Manufactured',
+    'USST_Renters',
+    'USST_Condo',
+    'USST_CHFS',
+    'USST_Other',
+    'USST_Clay_21st',
+    'USST_Clay_Homes'
+)
+AND pi.CREATEDATE = @Date
+GROUP BY pi.PORTINFOID, pi.PORTNUM, pi.PORTNAME, pi.CREATEDATE, pi.DESCRIPT
+ORDER BY pi.PORTNAME
