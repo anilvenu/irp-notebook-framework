@@ -108,6 +108,7 @@ Differences from PostgreSQL integration (database.py):
 """
 
 import os
+import logging
 from pathlib import Path
 from contextlib import contextmanager
 from typing import List, Optional, Dict, Any, Union, Tuple
@@ -116,6 +117,9 @@ from dataclasses import dataclass
 from helpers.constants import WORKSPACE_PATH
 import pandas as pd
 import numpy as np
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 try:
     import pyodbc
@@ -165,11 +169,18 @@ class ScriptResult:
         statements_executed: Total number of statements executed
         result_sets: Number of SELECT statements that returned result sets
         success: Whether the script executed successfully
+        messages: List of informational messages/warnings
     """
     rows_affected: int = 0
     statements_executed: int = 0
     result_sets: int = 0
     success: bool = True
+    messages: Optional[List[str]] = None
+
+    def __post_init__(self):
+        """Initialize messages list if None."""
+        if self.messages is None:
+            self.messages = []
 
     def __str__(self) -> str:
         """Return a formatted string representation for notebook display."""
@@ -180,6 +191,10 @@ class ScriptResult:
             f"  Rows affected:       {self.rows_affected}",
             f"  Result sets:         {self.result_sets}"
         ]
+        if self.messages:
+            lines.append("\nMessages:")
+            for msg in self.messages:
+                lines.append(f"  • {msg}")
         return "\n".join(lines)
 
 
@@ -824,17 +839,24 @@ def execute_query_from_file(
 
         dataframes = []
 
+        logger.info(f"Executing query from file: {file_path}")
+        print(f"Executing SQL query: {Path(file_path).name}")
+
         with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
             cursor.execute(query)
 
+            stmt_num = 1
             if cursor.description is not None:
                 columns = [column[0] for column in cursor.description]
                 rows = cursor.fetchall()
 
                 # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
                 data = [tuple(row) for row in rows]
-                dataframes.append(pd.DataFrame.from_records(data, columns=columns))
+                df = pd.DataFrame.from_records(data, columns=columns)
+                dataframes.append(df)
+                logger.debug(f"Statement {stmt_num}: Retrieved {len(df)} rows")
+                stmt_num += 1
 
             while cursor.nextset():
                 if cursor.description is not None:
@@ -843,12 +865,22 @@ def execute_query_from_file(
 
                     # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
                     data = [tuple(row) for row in rows]
-                    dataframes.append(pd.DataFrame.from_records(data, columns=columns))
+                    df = pd.DataFrame.from_records(data, columns=columns)
+                    dataframes.append(df)
+                    logger.debug(f"Statement {stmt_num}: Retrieved {len(df)} rows")
+                    stmt_num += 1
 
-        if len(dataframes) == 0:
-            raise SQLServerQueryError(
-                f"Query file does not return a result set: {file_path}"
-            )
+        if not dataframes:
+            logger.warning(f"No result sets returned from {file_path}")
+            print("⚠ Warning: No result sets returned. This may occur if:")
+            print("  • Script contains only DDL (CREATE/DROP/ALTER)")
+            print("  • Script contains only DML (INSERT/UPDATE/DELETE)")
+            print("  • Script uses dynamic SQL (EXEC) that returns results to client, not cursor")
+            print("  → Consider using execute_script_file() for scripts without SELECT statements")
+
+        logger.info(f"Query completed: {len(dataframes)} result sets returned")
+        if dataframes:
+            print(f"✓ Retrieved {len(dataframes)} result set(s)")
 
         return dataframes
 
@@ -904,10 +936,12 @@ def execute_script_file(
         if isinstance(params, dict):
             script = _substitute_named_parameters(script, params)
 
-        result = ScriptResult()
+        result = ScriptResult(messages=[])
+
+        logger.info(f"Executing script file: {file_path}")
+        print(f"Executing SQL script: {Path(file_path).name}")
 
         with get_connection(connection, database=database) as conn:
-            print('Executing SQL ...')
             cursor = conn.cursor()
             cursor.execute(script)
 
@@ -916,21 +950,40 @@ def execute_script_file(
             if cursor.description is not None:
                 # SELECT statement
                 result.result_sets += 1
+                row_count = len(cursor.fetchall())
+                logger.debug(f"Statement 1: SELECT returned {row_count} rows")
             elif cursor.rowcount >= 0:
                 # DML statement (INSERT/UPDATE/DELETE)
                 result.rows_affected += cursor.rowcount
+                logger.debug(f"Statement 1: DML affected {cursor.rowcount} rows")
 
             # Process additional result sets
+            stmt_num = 2
             while cursor.nextset():
                 result.statements_executed += 1
                 if cursor.description is not None:
                     # SELECT statement
                     result.result_sets += 1
+                    row_count = len(cursor.fetchall())
+                    logger.debug(f"Statement {stmt_num}: SELECT returned {row_count} rows")
                 elif cursor.rowcount >= 0:
                     # DML statement
                     result.rows_affected += cursor.rowcount
+                    logger.debug(f"Statement {stmt_num}: DML affected {cursor.rowcount} rows")
+                stmt_num += 1
 
             conn.commit()
+
+        # Add informational messages
+        if result.result_sets == 0 and result.rows_affected == 0:
+            result.messages.append(
+                "No data modifications or result sets detected. "
+                "Script may contain DDL (CREATE/DROP), dynamic SQL (EXEC), or statements with no output."
+            )
+
+        logger.info(f"Script completed: {result.statements_executed} statements, "
+                   f"{result.rows_affected} rows affected, {result.result_sets} result sets")
+        print(f"✓ Script completed successfully")
 
         return result
 
@@ -1016,6 +1069,58 @@ def initialize_database(sql_file_path: Union[str, Path], connection: str = 'TEST
 
 
 # ============================================================================
+# DISPLAY UTILITIES
+# ============================================================================
+
+def display_result_sets(dataframes: List[pd.DataFrame], max_rows: int = 10) -> None:
+    """
+    Display multiple result sets in a clean, readable format for Jupyter notebooks.
+
+    This function provides a much cleaner output than print(dataframes) which shows
+    the messy Python list representation across multiple lines.
+
+    Args:
+        dataframes: List of DataFrames returned from execute_query_from_file()
+        max_rows: Maximum number of rows to display per DataFrame (default: 10)
+
+    Example:
+        # Instead of: print(result)
+        result = execute_query_from_file('control_totals.sql', ...)
+        display_result_sets(result)
+    """
+    from IPython.display import display
+
+    if not dataframes:
+        print("No result sets to display")
+        return
+
+    print(f"\n{'='*80}")
+    print(f"QUERY RESULTS: {len(dataframes)} result set(s)")
+    print(f"{'='*80}\n")
+
+    for i, df in enumerate(dataframes, 1):
+        print(f"\n{'-'*80}")
+        print(f"Result Set {i} of {len(dataframes)}")
+        print(f"{'-'*80}")
+
+        if df.empty:
+            print(f"Empty DataFrame")
+            print(f"Columns: {list(df.columns)}")
+        else:
+            print(f"Rows: {len(df):,} | Columns: {len(df.columns)}")
+            print()
+
+            # Display the DataFrame (uses pandas default display settings)
+            if len(df) > max_rows:
+                display(df.head(max_rows))
+                print(f"\n... ({len(df) - max_rows:,} more rows not shown)")
+            else:
+                display(df)
+
+    print(f"\n{'='*80}\n")
+
+
+# ============================================================================
 # MODULE EXPORTS
 # ============================================================================
 
@@ -1043,6 +1148,9 @@ __all__ = [
     # File-based operations
     'execute_query_from_file',
     'execute_script_file',
+
+    # Display utilities
+    'display_result_sets',
 
     # Database initialization
     'initialize_database',
