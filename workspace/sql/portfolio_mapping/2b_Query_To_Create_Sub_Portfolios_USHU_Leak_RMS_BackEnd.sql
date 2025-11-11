@@ -12,12 +12,6 @@ SQL Server: T4025RDP22DB101
 SQL Database: QEM Exposure Database
 Input Portfolios:	US_HU
 Output Tables:
-					ABIC_subjFHCF_Full
-					ASIC_subjFHCF_Full
-					GH_FLxFHCF_Full
-					GH_xFL_Full
-					GS_FLxFHCF_Full
-					GS_xFL_Full
 					ABIC_subjFHCF_Leak
 					ASIC_subjFHCF_Leak
 					GH_FLxFHCF_Leak
@@ -25,7 +19,6 @@ Output Tables:
 					GH_xFL_Geico_HO_Leak -- The Geico product does not cover Flood. Hence, no corresponding Full portfolio.
 					GS_FLxFHCF_Leak
 					GS_xFL_Leak
-					Clayton_Full
 					Clayton_Leak
 Runtime: < 10 seconds
 **********************************************************************************************************************************************/
@@ -54,15 +47,11 @@ Specialty Property
 SET NOCOUNT ON;
 
 DECLARE @Date		VARCHAR(MAX)
-DECLARE @portinfoidFull	INT
 DECLARE @portinfoidLeak	INT
 DECLARE @SQL		VARCHAR(MAX)
 
-SET @portinfoidFull = {{ PORTFOLIO_ID_FULL }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
 SET @portinfoidLeak = {{ PORTFOLIO_ID_LEAK }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
 SET @Date = {{ DATETIME_VALUE }} --Update by running (Select getdate())
-
-
 
 
 --Lender Placed Leak
@@ -385,211 +374,6 @@ update seedid
 set id = (select max (portacctid) from portacct)
 where name = 'portacct'
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
---Lender Placed full
-insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USHU_full_Lender_P','USHU_full_Lender_P',@Date,'USHU_full_Lender_P'
- from dbo. Portinfo
-
-DECLARE @PortAcctSeedID_12 INT
-SET     @PortAcctSeedID_12 = ( SELECT MAX(ID) FROM seedid where name = 'portacct' )
-
-insert into dbo.Portacct (PORTACCTID,PORTINFOID,ACCGRPID)
-select @PortAcctSeedID_12 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
-       (Select max(portinfoid) from portinfo),
-          a.accgrpid
-		 -- Select count(*)
-from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid 
-inner join loc l on l.accgrpid = a.ACCGRPID
-WHERE a.accgrpid in (select distinct accgrpid from portacct where portinfoid in (@portinfoidfull))
-and a.accgrpid in (select distinct accgrpid from accgrp where USERTXT1 like ('%lender%'))
-
-update seedid
-set id = (select max (portinfoid) from portacct)
-where name = 'portinfo'
-
-update seedid
-set id = (select max (portacctid) from portacct)
-where name = 'portacct'
-
-
---Manufactured Housing full
-
-insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USHU_full_Manufact','USHU_full_Manufactured',@Date,'USHU_full_Manufact'
- from dbo. Portinfo
-
-DECLARE @PortAcctSeedID_13 INT
-SET     @PortAcctSeedID_13 = ( SELECT MAX(ID) FROM seedid where name = 'portacct' )
-
-insert into dbo.Portacct (PORTACCTID,PORTINFOID,ACCGRPID)
-select @PortAcctSeedID_13 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
-       (Select max(portinfoid) from portinfo),
-          a.accgrpid
-		  --Select count(*)
-from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid 
-inner join loc l on l.accgrpid = a.ACCGRPID
-WHERE a.accgrpid in (select distinct accgrpid from portacct where portinfoid in (@portinfoidfull))
-and a.accgrpid in (select distinct accgrpid from accgrp where USERTXT1 like ('%mobile%'))
-
-update seedid
-set id = (select max (portinfoid) from portacct)
-where name = 'portinfo'
-
-update seedid
-set id = (select max (portacctid) from portacct)
-where name = 'portacct'
-
-
---Renters full
-insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USHU_full_Renters','USHU_full_Renters',@Date,'USHU_full_Renters'
- from dbo. Portinfo
-
-DECLARE @PortAcctSeedID_14 INT
-SET     @PortAcctSeedID_14 = ( SELECT MAX(ID) FROM seedid where name = 'portacct' )
-
-insert into dbo.Portacct (PORTACCTID,PORTINFOID,ACCGRPID)
-select @PortAcctSeedID_14 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
-       (Select max(portinfoid) from portinfo),
-          a.accgrpid
---Select count(*)
-from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid 
-inner join loc l on l.accgrpid = a.ACCGRPID
-WHERE
- a.accgrpid in (select distinct accgrpid from portacct where portinfoid in (@portinfoidfull))
-and a.accgrpid in (select distinct accgrpid from accgrp where USERTXT1 like ('%renter%'))
-
-update seedid
-set id = (select max (portinfoid) from portacct)
-where name = 'portinfo'
-
-update seedid
-set id = (select max (portacctid) from portacct)
-where name = 'portacct'
-
-
---Other full
-insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USHU_full_Other','USHU_full_Other',@Date,'USHU_full_Other'
- from dbo. Portinfo
-
-DECLARE @PortAcctSeedID_15 INT
-SET     @PortAcctSeedID_15 = ( SELECT MAX(ID) FROM seedid where name = 'portacct' )
-
-insert into dbo.Portacct (PORTACCTID,PORTINFOID,ACCGRPID)
-select @PortAcctSeedID_15 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
-       (Select max(portinfoid) from portinfo),
-          a.accgrpid
---Select count(*)
-from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid 
-inner join loc l on l.accgrpid = a.ACCGRPID
-WHERE
- a.accgrpid in (select distinct accgrpid from portacct where portinfoid in (@portinfoidfull))
-and a.accgrpid in (select distinct accgrpid from accgrp where USERTXT1 like ('%Other%') and USERTXT2 not like ('%clay%'))
-
-update seedid
-set id = (select max (portinfoid) from portacct)
-where name = 'portinfo'
-
-update seedid
-set id = (select max (portacctid) from portacct)
-where name = 'portacct'
-
-
---Clay 21st full
-insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USHU_full_Clay_21st','USHU_full_Clay_21st',@Date,'USHU_full_Clay_21st'
- from dbo. Portinfo
-
-DECLARE @PortAcctSeedID_16 INT
-SET     @PortAcctSeedID_16 = ( SELECT MAX(ID) FROM seedid where name = 'portacct' )
-
-insert into dbo.Portacct (PORTACCTID,PORTINFOID,ACCGRPID)
-select @PortAcctSeedID_16 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
-       (Select max(portinfoid) from portinfo),
-          a.accgrpid
---Select count(*)
-from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid 
-inner join loc l on l.accgrpid = a.ACCGRPID
-inner join policy j on j.ACCGRPID = a.ACCGRPID
-WHERE
- a.accgrpid in (select distinct accgrpid from portacct where portinfoid in (@portinfoidfull))
-and a.accgrpid in (select distinct accgrpid from accgrp where USERTXT2 like ('%clay%'))
-and j.USERIDTXT1 like ('%21st Mort%')
-
-update seedid
-set id = (select max (portinfoid) from portacct)
-where name = 'portinfo'
-
-update seedid
-set id = (select max (portacctid) from portacct)
-where name = 'portacct'
-
-
---Clay Homes full
-insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USHU_full_Clay_Homes','USHU_full_Clay_Homes',@Date,'USHU_full_Clay_Homes'
- from dbo. Portinfo
-
-DECLARE @PortAcctSeedID_17 INT
-SET     @PortAcctSeedID_17 = ( SELECT MAX(ID) FROM seedid where name = 'portacct' )
-
-insert into dbo.Portacct (PORTACCTID,PORTINFOID,ACCGRPID)
-select @PortAcctSeedID_17 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
-       (Select max(portinfoid) from portinfo),
-          a.accgrpid
---Select count(*)
-from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid
-inner join loc l on l.accgrpid = a.ACCGRPID
-inner join policy j on j.ACCGRPID = a.ACCGRPID
-WHERE
- a.accgrpid in (select distinct accgrpid from portacct where portinfoid in (@portinfoidfull))
-and a.accgrpid in (select distinct accgrpid from accgrp where USERTXT2 like ('%clay%'))
-and j.USERIDTXT1 like ('%Homes%')
-
-update seedid
-set id = (select max (portinfoid) from portacct)
-where name = 'portinfo'
-
-update seedid
-set id = (select max (portacctid) from portacct)
-where name = 'portacct'
-
-
 -- ============================================================================
 -- RETURN CREATED DATA (Captured by execute_query_from_file)
 -- ============================================================================
@@ -615,13 +399,7 @@ WHERE pi.PORTNAME IN (
     'USHU_Leak_CHFS',
     'USHU_Leak_Other',
     'USHU_Leak_Clay_21st',
-    'USHU_Leak_Clay_Homes',
-    'USHU_full_Lender_P',
-    'USHU_full_Manufact',
-    'USHU_full_Renters',
-    'USHU_full_Other',
-    'USHU_full_Clay_21st',
-    'USHU_full_Clay_Homes'
+    'USHU_Leak_Clay_Homes'
 )
 AND pi.CREATEDATE = @Date
 GROUP BY pi.PORTINFOID, pi.PORTNUM, pi.PORTNAME, pi.CREATEDATE, pi.DESCRIPT
