@@ -158,7 +158,7 @@ WHERE State NOT IN ('PR','VI','GU')
 --(3816610 rows affected)
 
 --Export import files to CSV via export wizard
---Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account--3816610
---Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location--3816610
+Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account--3816610
+Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location--3816610
 	  
 	
