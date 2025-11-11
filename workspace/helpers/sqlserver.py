@@ -31,9 +31,9 @@ Example Configuration:
     MSSQL_ANALYTICS_PASSWORD=secretpassword
 
 Usage in Notebooks:
-    from helpers.sqlserver import execute_query, execute_script_file
+    from helpers.sqlserver import execute_query, execute_query_from_file
 
-    # Option 1: Specify database via connection parameter
+    # Option 1: Execute inline query with database parameter
     df = execute_query(
         "SELECT * FROM portfolios WHERE value > {{ min_value }}",
         params={'min_value': 1000000},
@@ -45,9 +45,9 @@ Usage in Notebooks:
     query = "USE DataWarehouse; SELECT * FROM portfolios WHERE value > {{ min_value }}"
     df = execute_query(query, params={'min_value': 1000000}, connection='AWS_DW')
 
-    # Execute SQL script from file with database parameter
-    rows_affected = execute_script_file(
-        'workspace/sql/extract_policies.sql',
+    # Option 3: Execute SQL script from file (returns list of DataFrames)
+    dataframes = execute_query_from_file(
+        'extract_policies.sql',
         params={'cycle_name': 'Q1-2025', 'run_date': '2025-01-15'},
         connection='ANALYTICS',
         database='AnalyticsDB'
@@ -113,7 +113,6 @@ from pathlib import Path
 from contextlib import contextmanager
 from typing import List, Optional, Dict, Any, Union, Tuple
 from string import Template
-from dataclasses import dataclass
 from helpers.constants import WORKSPACE_PATH
 import pandas as pd
 import numpy as np
@@ -154,48 +153,6 @@ class ExpressionTemplate(Template):
     (?P<invalid>)
     )
     ''' # type: ignore
-
-
-# ============================================================================
-# DATA CLASSES
-# ============================================================================
-
-@dataclass
-class ScriptResult:
-    """Result from executing a SQL script file.
-
-    Attributes:
-        rows_affected: Total rows affected by DML statements (INSERT/UPDATE/DELETE)
-        statements_executed: Total number of statements executed
-        result_sets: Number of SELECT statements that returned result sets
-        success: Whether the script executed successfully
-        messages: List of informational messages/warnings
-    """
-    rows_affected: int = 0
-    statements_executed: int = 0
-    result_sets: int = 0
-    success: bool = True
-    messages: Optional[List[str]] = None
-
-    def __post_init__(self):
-        """Initialize messages list if None."""
-        if self.messages is None:
-            self.messages = []
-
-    def __str__(self) -> str:
-        """Return a formatted string representation for notebook display."""
-        status = "✓ SUCCESS" if self.success else "✗ FAILED"
-        lines = [
-            f"Script Execution Result: {status}",
-            f"  Statements executed: {self.statements_executed}",
-            f"  Rows affected:       {self.rows_affected}",
-            f"  Result sets:         {self.result_sets}"
-        ]
-        if self.messages:
-            lines.append("\nMessages:")
-            for msg in self.messages:
-                lines.append(f"  • {msg}")
-        return "\n".join(lines)
 
 
 # ============================================================================
@@ -906,7 +863,7 @@ def execute_query_from_file(
             print("  • Script contains only DDL (CREATE/DROP/ALTER)")
             print("  • Script contains only DML (INSERT/UPDATE/DELETE)")
             print("  • Script uses dynamic SQL (EXEC) that returns results to client, not cursor")
-            print("  → Consider using execute_script_file() for scripts without SELECT statements")
+            print("  → Note: This function is designed for SELECT queries that return data")
 
         logger.info(f"Query completed: {len(dataframes)} result sets returned")
         if dataframes:
@@ -1052,9 +1009,6 @@ def display_result_sets(dataframes: List[pd.DataFrame], max_rows: int = 10) -> N
 # ============================================================================
 
 __all__ = [
-    # Data classes
-    'ScriptResult',
-
     # Exceptions
     'SQLServerError',
     'SQLServerConnectionError',

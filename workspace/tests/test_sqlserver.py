@@ -9,12 +9,12 @@ Test Coverage:
 - Query execution with parameters
 - Scalar queries
 - Command execution (INSERT/UPDATE/DELETE)
-- File-based query execution
-- File-based script execution
-- Parameter substitution ({{ param_name }} style with Template system)
+- File-based query execution (returns DataFrames)
+- Parameter substitution ({{ param_name }} style with context-aware escaping)
 - Type conversions (numpy/pandas to native Python)
 - Error handling
 - Configuration validation
+- Database parameter handling
 """
 
 import pytest
@@ -26,7 +26,6 @@ from helpers.sqlserver import (
     SQLServerError,
     SQLServerConfigurationError,
     SQLServerQueryError,
-    ScriptResult,
     get_connection_config,
     build_connection_string,
     get_connection,
@@ -34,8 +33,8 @@ from helpers.sqlserver import (
     execute_query,
     execute_scalar,
     execute_command,
+    sql_file_exists,
     execute_query_from_file,
-    execute_script_file,
     _convert_param_value,
     _convert_params_to_native_types,
     _substitute_named_parameters,
@@ -456,6 +455,30 @@ def test_execute_command_delete(mssql_env, wait_for_sqlserver, clean_sqlserver_d
 # FILE-BASED OPERATION TESTS
 # ==============================================================================
 
+def test_sql_file_exists():
+    """Test checking if SQL files exist"""
+    # Test with existing file (relative path)
+    assert sql_file_exists('examples/sample_query.sql') == True
+
+    # Test with non-existent file
+    assert sql_file_exists('nonexistent/missing.sql') == False
+
+    # Test with absolute path to existing file
+    from helpers.constants import WORKSPACE_PATH
+    absolute_path = WORKSPACE_PATH / 'sql' / 'examples' / 'sample_query.sql'
+    assert sql_file_exists(absolute_path) == True
+
+    # Test with absolute path to non-existent file
+    absolute_path = WORKSPACE_PATH / 'sql' / 'missing.sql'
+    assert sql_file_exists(absolute_path) == False
+
+    # Test that it returns False for directory (not a file)
+    from pathlib import Path
+    dir_path = WORKSPACE_PATH / 'sql' / 'examples'
+    if dir_path.exists():
+        assert sql_file_exists('examples') == False
+
+
 def test_execute_query_from_file(mssql_env, wait_for_sqlserver, init_sqlserver_db, sample_sql_file):
     """Test executing query from SQL file"""
     dataframes = execute_query_from_file(
@@ -497,59 +520,6 @@ def test_execute_query_from_file_not_found(mssql_env):
     assert 'not found' in str(exc_info.value)
 
 
-def test_execute_script_file_single_statement(mssql_env, wait_for_sqlserver, init_sqlserver_db, temp_sql_file):
-    """Test executing single-statement script from file"""
-    # Create a simple UPDATE script
-    script_content = """
-    UPDATE test_portfolios
-    SET status = {{ new_status }}
-    WHERE portfolio_value < {{ min_value }}
-    """
-    script_path = temp_sql_file(script_content)
-
-    result = execute_script_file(
-        script_path,
-        params={'new_status': 'UPDATED', 'min_value': 1000000},
-        connection='TEST', database='test_db'
-    )
-
-    assert isinstance(result, ScriptResult)
-    assert result.success is True
-    assert result.rows_affected == 3
-    assert result.statements_executed == 1
-    assert result.result_sets == 0
-
-    # Verify update
-    count = execute_scalar(
-        "SELECT COUNT(*) FROM test_portfolios WHERE status = 'UPDATED'",
-        connection='TEST', database='test_db'
-    )
-    assert count == 3
-
-
-def test_execute_script_file_multi_statement(mssql_env, wait_for_sqlserver, init_sqlserver_db, temp_sql_file):
-    """Test executing multi-statement script from file"""
-    script_content = """
-    UPDATE test_portfolios SET status = 'STAGE1' WHERE id = 1;
-    UPDATE test_portfolios SET status = 'STAGE2' WHERE id = 2;
-    """
-    script_path = temp_sql_file(script_content)
-
-    result = execute_script_file(script_path, connection='TEST', database='test_db')
-
-    assert isinstance(result, ScriptResult)
-    assert result.success is True
-    assert result.rows_affected == 2  # 1 row per UPDATE
-    assert result.statements_executed == 2
-    assert result.result_sets == 0
-
-    # Verify both updates
-    df = execute_query(
-        "SELECT * FROM test_portfolios WHERE id IN (1, 2)",
-        connection='TEST', database='test_db'
-    )
-    assert df[df['id'] == 1]['status'].iloc[0] == 'STAGE1'
-    assert df[df['id'] == 2]['status'].iloc[0] == 'STAGE2'
 
 
 # ==============================================================================
@@ -612,12 +582,6 @@ def test_execute_query_from_file_nonexistent():
     assert 'SQL script file not found' in str(exc_info.value)
 
 
-def test_execute_script_file_connection_error(temp_sql_file):
-    """Test execute_script_file with invalid connection"""
-    script = temp_sql_file("SELECT 1;")
-
-    with pytest.raises(SQLServerConfigurationError):
-        execute_script_file(script, connection='INVALID_CONNECTION_NAME')
 
 
 # ==============================================================================
@@ -689,53 +653,6 @@ def test_execute_query_from_file_with_database_parameter(mssql_env, wait_for_sql
     assert len(df) == 1
 
 
-def test_execute_script_file_with_database_parameter(mssql_env, wait_for_sqlserver, clean_sqlserver_db, temp_sql_file):
-    """Test that execute_script_file works with database parameter"""
-    script_content = "UPDATE test_portfolios SET status = 'SCRIPTED' WHERE id IN (1, 2)"
-    script_path = temp_sql_file(script_content)
-
-    result = execute_script_file(
-        script_path,
-        connection='TEST',
-        database='test_db'
-    )
-
-    assert isinstance(result, ScriptResult)
-    assert result.success is True
-    assert result.rows_affected == 2
-    assert result.statements_executed == 1
-
-    # Verify the updates
-    count = execute_scalar(
-        "SELECT COUNT(*) FROM test_portfolios WHERE status = 'SCRIPTED'",
-        connection='TEST',
-        database='test_db'
-    )
-    assert count == 2
-
-
-def test_execute_script_file_ignores_select_statements(mssql_env, wait_for_sqlserver, clean_sqlserver_db, temp_sql_file):
-    """Test that execute_script_file tracks DML and SELECT statements separately"""
-    # Script with mixed DML and SELECT statements
-    script_content = """
-    UPDATE test_portfolios SET status = 'UPDATED' WHERE id = 1;
-    SELECT * FROM test_portfolios WHERE id = 1;
-    UPDATE test_portfolios SET status = 'UPDATED2' WHERE id = 2;
-    SELECT COUNT(*) FROM test_portfolios;
-    """
-    script_path = temp_sql_file(script_content)
-
-    result = execute_script_file(
-        script_path,
-        connection='TEST',
-        database='test_db'
-    )
-
-    assert isinstance(result, ScriptResult)
-    assert result.success is True
-    assert result.rows_affected == 2  # Only 2 UPDATE statements
-    assert result.result_sets == 2     # 2 SELECT statements
-    assert result.statements_executed == 4  # Total statements
 
 
 def test_parameterized_database_in_brackets(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
@@ -822,3 +739,336 @@ def test_connection_without_database_parameter(mssql_env, wait_for_sqlserver):
         db_name = cursor.fetchone()[0]
         # When no database is specified, DB_NAME() returns NULL or master
         # This is expected behavior - no default database
+
+
+# ==============================================================================
+# ESCAPE VALUE TESTS (for better coverage)
+# ==============================================================================
+
+def test_escape_sql_value_bool_true():
+    """Test escaping boolean True value"""
+    from helpers.sqlserver import _escape_sql_value
+    result = _escape_sql_value(True)
+    assert result == '1'
+
+
+def test_escape_sql_value_bool_false():
+    """Test escaping boolean False value"""
+    from helpers.sqlserver import _escape_sql_value
+    result = _escape_sql_value(False)
+    assert result == '0'
+
+
+def test_escape_sql_value_datetime():
+    """Test escaping datetime object (falls through to else clause)"""
+    from helpers.sqlserver import _escape_sql_value
+    from datetime import datetime
+
+    dt = datetime(2025, 1, 15, 12, 30, 0)
+    result = _escape_sql_value(dt)
+
+    # Should be quoted and any quotes escaped
+    assert result.startswith("'")
+    assert result.endswith("'")
+    assert '2025' in result
+
+
+def test_escape_sql_value_with_quotes_in_object():
+    """Test escaping non-string object that contains quotes when converted to string"""
+    from helpers.sqlserver import _escape_sql_value
+
+    class CustomObj:
+        def __str__(self):
+            return "Object's value"
+
+    result = _escape_sql_value(CustomObj())
+    # Single quotes should be doubled
+    assert "Object''s value" in result
+
+
+# ==============================================================================
+# IDENTIFIER VALIDATION TESTS
+# ==============================================================================
+
+def test_substitute_parameters_identifier_validation_invalid_chars():
+    """Test that invalid characters in identifiers raise error"""
+    from helpers.sqlserver import _substitute_named_parameters
+
+    # Identifier with SQL injection attempt
+    query = "SELECT * FROM table_{{ table_suffix }}"
+    params = {'table_suffix': "'; DROP TABLE users--"}
+
+    with pytest.raises(ValueError) as exc_info:
+        _substitute_named_parameters(query, params)
+
+    assert 'Invalid identifier value' in str(exc_info.value)
+
+
+def test_substitute_parameters_identifier_in_brackets_valid():
+    """Test that valid identifier in brackets works"""
+    from helpers.sqlserver import _substitute_named_parameters
+
+    query = "USE [{{ db_name }}]"
+    params = {'db_name': 'my_database'}
+
+    result = _substitute_named_parameters(query, params)
+    assert result == "USE [my_database]"
+
+
+def test_substitute_parameters_identifier_as_table_prefix():
+    """Test that identifier as table prefix works"""
+    from helpers.sqlserver import _substitute_named_parameters
+
+    query = "SELECT * FROM {{ prefix }}_table"
+    params = {'prefix': 'test'}
+
+    result = _substitute_named_parameters(query, params)
+    assert result == "SELECT * FROM test_table"
+
+
+def test_substitute_parameters_value_context_escaping():
+    """Test that value context properly escapes and quotes"""
+    from helpers.sqlserver import _substitute_named_parameters
+
+    query = "SELECT * FROM table WHERE name = {{ name }} AND id = {{ id }}"
+    params = {'name': "O'Brien", 'id': 123}
+
+    result = _substitute_named_parameters(query, params)
+    assert "'O''Brien'" in result  # Quoted and escaped
+    assert "id = 123" in result  # Not quoted (no extra spaces around it)
+
+
+# ==============================================================================
+# DISPLAY UTILITIES TESTS
+# ==============================================================================
+
+def test_display_result_sets_empty_list():
+    """Test display_result_sets with empty list"""
+    from helpers.sqlserver import display_result_sets
+    import io
+    import sys
+
+    # Capture stdout
+    captured_output = io.StringIO()
+    sys.stdout = captured_output
+
+    try:
+        display_result_sets([])
+        output = captured_output.getvalue()
+        assert "No result sets to display" in output
+    finally:
+        sys.stdout = sys.__stdout__
+
+
+def test_display_result_sets_single_dataframe(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
+    """Test display_result_sets with single DataFrame"""
+    from helpers.sqlserver import display_result_sets
+    import io
+    import sys
+
+    # Get a dataframe
+    dataframes = execute_query_from_file(
+        'examples/sample_query.sql',
+        params={'portfolio_id': 1, 'risk_type': 'VaR_95'},
+        connection='TEST',
+        database='test_db'
+    )
+
+    # Capture stdout
+    captured_output = io.StringIO()
+    sys.stdout = captured_output
+
+    try:
+        display_result_sets(dataframes)
+        output = captured_output.getvalue()
+        assert "QUERY RESULTS:" in output
+        assert "Result Set 1 of 1" in output
+        assert "Rows:" in output
+    finally:
+        sys.stdout = sys.__stdout__
+
+
+def test_display_result_sets_empty_dataframe():
+    """Test display_result_sets with empty DataFrame"""
+    from helpers.sqlserver import display_result_sets
+    import io
+    import sys
+
+    # Create empty DataFrame with columns
+    empty_df = pd.DataFrame(columns=['id', 'name', 'value'])
+
+    # Capture stdout
+    captured_output = io.StringIO()
+    sys.stdout = captured_output
+
+    try:
+        display_result_sets([empty_df])
+        output = captured_output.getvalue()
+        assert "Empty DataFrame" in output
+        assert "Columns:" in output
+    finally:
+        sys.stdout = sys.__stdout__
+
+
+def test_display_result_sets_large_dataframe(mssql_env, wait_for_sqlserver, clean_sqlserver_db):
+    """Test display_result_sets with DataFrame larger than max_rows"""
+    from helpers.sqlserver import display_result_sets
+    import io
+    import sys
+
+    # Get all risks (10 rows)
+    df = execute_query(
+        "SELECT * FROM test_risks",
+        connection='TEST',
+        database='test_db'
+    )
+
+    # Capture stdout
+    captured_output = io.StringIO()
+    sys.stdout = captured_output
+
+    try:
+        # Display with max_rows=5
+        display_result_sets([df], max_rows=5)
+        output = captured_output.getvalue()
+        assert "more rows not shown" in output
+    finally:
+        sys.stdout = sys.__stdout__
+
+
+# ==============================================================================
+# INITIALIZE DATABASE TESTS
+# ==============================================================================
+
+def test_initialize_database_success(mssql_env, wait_for_sqlserver, temp_sql_file):
+    """Test initialize_database with valid SQL script"""
+    from helpers.sqlserver import initialize_database
+    import pyodbc
+
+    # Create a simple database initialization script
+    script_content = """
+    IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'test_init_db')
+    BEGIN
+        CREATE DATABASE test_init_db
+    END
+    GO
+    USE test_init_db
+    GO
+    CREATE TABLE test_table (id INT, name VARCHAR(50))
+    GO
+    """
+
+    script_path = temp_sql_file(script_content)
+
+    # Should succeed
+    result = initialize_database(script_path, connection='TEST')
+    assert result is True
+
+    # Verify database was created
+    with get_connection('TEST', database='test_init_db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DB_NAME()")
+        db_name = cursor.fetchone()[0]
+        assert db_name == 'test_init_db'
+    # Connection is now closed after exiting the with block
+
+    # Cleanup - need to use raw connection with autocommit for DROP DATABASE
+    config = get_connection_config('TEST')
+    master_conn_str = (
+        f"DRIVER={{{config['driver']}}};"
+        f"SERVER={config['server']},{config['port']};"
+        f"DATABASE=master;"
+        f"UID={config['user']};"
+        f"PWD={config['password']};"
+        f"TrustServerCertificate={config['trust_cert']};"
+    )
+    conn = pyodbc.connect(master_conn_str)
+    conn.autocommit = True
+    cursor = conn.cursor()
+    # Kill any active connections before dropping database
+    cursor.execute("ALTER DATABASE test_init_db SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+    cursor.execute("DROP DATABASE test_init_db")
+    cursor.close()
+    conn.close()
+
+
+def test_initialize_database_with_existing_objects(mssql_env, wait_for_sqlserver, temp_sql_file):
+    """Test initialize_database handles existing objects gracefully"""
+    from helpers.sqlserver import initialize_database
+    import pyodbc
+    import io
+    import sys
+
+    # Create database first using raw connection with autocommit
+    config = get_connection_config('TEST')
+    master_conn_str = (
+        f"DRIVER={{{config['driver']}}};"
+        f"SERVER={config['server']},{config['port']};"
+        f"DATABASE=master;"
+        f"UID={config['user']};"
+        f"PWD={config['password']};"
+        f"TrustServerCertificate={config['trust_cert']};"
+    )
+    conn = pyodbc.connect(master_conn_str)
+    conn.autocommit = True
+    cursor = conn.cursor()
+    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'test_init_db2') CREATE DATABASE test_init_db2")
+    cursor.close()
+    conn.close()
+
+    # Script that tries to create existing database
+    script_content = """
+    CREATE DATABASE test_init_db2
+    GO
+    """
+
+    script_path = temp_sql_file(script_content)
+
+    # Capture stdout to check warning message
+    captured_output = io.StringIO()
+    sys.stdout = captured_output
+
+    try:
+        # Should succeed but print warning
+        result = initialize_database(script_path, connection='TEST')
+        assert result is True
+    finally:
+        sys.stdout = sys.__stdout__
+
+    # Cleanup - use raw connection with autocommit for DROP DATABASE
+    conn = pyodbc.connect(master_conn_str)
+    conn.autocommit = True
+    cursor = conn.cursor()
+    # Kill any active connections before dropping database
+    cursor.execute("IF EXISTS (SELECT * FROM sys.databases WHERE name = 'test_init_db2') ALTER DATABASE test_init_db2 SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+    cursor.execute("DROP DATABASE IF EXISTS test_init_db2")
+    cursor.close()
+    conn.close()
+
+
+def test_initialize_database_file_not_found():
+    """Test initialize_database with non-existent file"""
+    from helpers.sqlserver import initialize_database, SQLServerError
+
+    with pytest.raises(SQLServerError) as exc_info:
+        initialize_database('nonexistent_file.sql', connection='TEST')
+
+    assert 'Failed to initialize database' in str(exc_info.value)
+
+
+# ==============================================================================
+# CONNECTION ERROR PATH TESTS
+# ==============================================================================
+
+def test_get_connection_closes_on_error(mssql_env, wait_for_sqlserver):
+    """Test that get_connection properly closes connection on error"""
+    # This tests the finally block in get_connection
+    try:
+        with get_connection('TEST', database='test_db') as conn:
+            cursor = conn.cursor()
+            # Cause an error after connection is established
+            cursor.execute("INVALID SQL SYNTAX")
+    except Exception:
+        # Error is expected
+        pass
+    # If we get here without hanging, the connection was closed properly
