@@ -105,6 +105,14 @@
             "destination": "BLANLIMCUR"
         },
         {
+            "source": "COV1LIMIT",
+            "destination": "COV1LIMIT"
+        },
+        {
+            "source": "COV2LIMIT",
+            "destination": "COV2LIMIT"
+        },
+        {
             "source": "BLANPREAMT",
             "destination": "BLANPREAMT"
         },
@@ -135,6 +143,18 @@
         {
             "source": "COMBINEDPCUR",
             "destination": "COMBINEDPCUR"
+        },
+        {
+            "source": "COND1TYPE",
+            "destination": "COND1TYPE"
+        },
+        {
+            "source": "COND1NAME",
+            "destination": "COND1NAME"
+        },
+        {
+            "source": "COND1LIMIT",
+            "destination": "COND1LIMIT"
         },
         {
             "source": "COVBASE",
@@ -199,8 +219,16 @@
             "destination": "LOCNAME"
         },
         {
+            "source": "SITENAME",
+            "destination": "SITENAME"
+        },
+        {
             "source": "ADDRESSNUM",
             "destination": "ADDRESSNUM"
+        },
+        {
+            "source": "ADDRMATCH",
+            "destination": "ADDRMATCH"
         },
         {
             "source": "STREETNAME",
@@ -443,6 +471,102 @@
             "destination": "EQCOMBINEDDCUR"
         },
         {
+            "source": "WSCV4VAL",
+            "destination": "WSCV4VAL"
+        },
+        {
+            "source": "WSCV4VCUR",
+            "destination": "WSCV4VCUR"
+        },
+        {
+            "source": "WSCV5VAL",
+            "destination": "WSCV5VAL"
+        },
+        {
+            "source": "WSCV5VCUR",
+            "destination": "WSCV5VCUR"
+        },
+        {
+            "source": "WSCV6VAL",
+            "destination": "WSCV6VAL"
+        },
+        {
+            "source": "WSCV6VCUR",
+            "destination": "WSCV6VCUR"
+        },
+        {
+            "source": "WSCV7VAL",
+            "destination": "WSCV7VAL"
+        },
+        {
+            "source": "WSCV7VCUR",
+            "destination": "WSCV7VCUR"
+        },
+        {
+            "source": "WSCV4LIMIT",
+            "destination": "WSCV4LIMIT"
+        },
+        {
+            "source": "WSCV4LCUR",
+            "destination": "WSCV4LCUR"
+        },
+        {
+            "source": "WSCV5LIMIT",
+            "destination": "WSCV5LIMIT"
+        },
+        {
+            "source": "WSCV5LCUR",
+            "destination": "WSCV5LCUR"
+        },
+        {
+            "source": "WSCV6LIMIT",
+            "destination": "WSCV6LIMIT"
+        },
+        {
+            "source": "WSCV6LCUR",
+            "destination": "WSCV6LCUR"
+        },
+        {
+            "source": "WSCV7LIMIT",
+            "destination": "WSCV7LIMIT"
+        },
+        {
+            "source": "WSCV7LCUR",
+            "destination": "WSCV7LCUR"
+        },
+        {
+            "source": "WSCV4DED",
+            "destination": "WSCV4DED"
+        },
+        {
+            "source": "WSCV4DCUR",
+            "destination": "WSCV4DCUR"
+        },
+        {
+            "source": "WSCV5DED",
+            "destination": "WSCV5DED"
+        },
+        {
+            "source": "WSCV5DCUR",
+            "destination": "WSCV5DCUR"
+        },
+        {
+            "source": "WSCV6DED",
+            "destination": "WSCV6DED"
+        },
+        {
+            "source": "WSCV6DCUR",
+            "destination": "WSCV6DCUR"
+        },
+        {
+            "source": "WSCV7DED",
+            "destination": "WSCV7DED"
+        },
+        {
+            "source": "WSCV7DCUR",
+            "destination": "WSCV7DCUR"
+        },
+        {
             "source": "WSCOMBINEDLIM",
             "destination": "WSCOMBINEDLIM"
         },
@@ -477,6 +601,10 @@
         {
             "source": "CLADRATE",
             "destination": "CLADRATE"
+        },
+        {
+            "source": "CLADDING",
+            "destination": "CLADDING"
         },
         {
             "source": "ROOFGEOM",
