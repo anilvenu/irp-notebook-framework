@@ -411,6 +411,22 @@
             "destination": "EQSITEDCUR"
         },
         {
+            "source": "WSSITELIM",
+            "destination": "WSSITELIM"
+        },
+        {
+            "source": "WSSITELCUR",
+            "destination": "WSSITELCUR"
+        },
+        {
+            "source": "WSSITEDED",
+            "destination": "WSSITEDED"
+        },
+        {
+            "source": "WSSITEDCUR",
+            "destination": "WSSITEDCUR"
+        },
+        {
             "source": "EQCOMBINEDLIM",
             "destination": "EQCOMBINEDLIM"
         },
@@ -427,8 +443,48 @@
             "destination": "EQCOMBINEDDCUR"
         },
         {
-            "source": "CLADDING",
-            "destination": "CLADDING"
+            "source": "WSCOMBINEDLIM",
+            "destination": "WSCOMBINEDLIM"
+        },
+        {
+            "source": "WSCOMBINEDLCUR",
+            "destination": "WSCOMBINEDLCUR"
+        },
+        {
+            "source": "WSCOMBINEDDED",
+            "destination": "WSCOMBINEDDED"
+        },
+        {
+            "source": "WSCOMBINEDDCUR",
+            "destination": "WSCOMBINEDDCUR"
+        },
+        {
+            "source": "RESISTOPEN",
+            "destination": "RESISTOPEN"
+        },
+        {
+            "source": "ROOFAGE",
+            "destination": "ROOFAGE"
+        },
+        {
+            "source": "ROOFANCH",
+            "destination": "ROOFANCH"
+        },
+        {
+            "source": "ROOFSYS",
+            "destination": "ROOFSYS"
+        },
+        {
+            "source": "CLADRATE",
+            "destination": "CLADRATE"
+        },
+        {
+            "source": "ROOFGEOM",
+            "destination": "ROOFGEOM"
+        },
+        {
+            "source": "CLADSYS",
+            "destination": "CLADSYS"
         },
         {
             "source": "USERTXT1",
