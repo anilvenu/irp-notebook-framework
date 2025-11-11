@@ -1,24 +1,24 @@
 /**********************************************************************************************************************************************
-Purpose: This script creates the RiskLink import files for CB Earthquake exposures
+Purpose: This script creates the RiskLink import files for US Fire Following exposures
 Author: Charlene Chia
 Edited by: Teryn Mueller-- Put the name of the person updating this script.
 Instructions: 
-				1. Update quarter e.g. 202212 to {{ DATE_VALUE }}
+				1. Update quarter e.g. 202212 to 202409
 				2. Execute the script
 
 SQL Server: vdbpdw-housing-secondary.database.cead.prd
 SQL Database: DW_EXP_MGMT_USER
 
-Input Table:	CombinedData_202209_Working
+Input Table:	CombinedData_{{ DATE_VALUE }}_Working
 Output Tables:
-				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account
-				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location
+				 Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account
+				 Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location
 
 Runtime: 00:00:25
 **********************************************************************************************************************************************/
 
--- CB EQ Account File:
-DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account
+-- US FF Account File:
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account
 SELECT
 	LocationID AS ACCNTNUM
 	,Product_Group_ROE AS ACCNTNAME --varchar(40), we are at the maximum limit. This was previously AccountNumber.
@@ -30,11 +30,9 @@ SELECT
 	,'ASST' AS CEDANTID
 	,'ASST' AS CEDANTNAME
 	,LocationID AS POLICYNUM
-	,CASE 
-		WHEN EQ_Remetrica_RDMF_Bucket like '%Banco%' THEN 'Banco Popular'
-		WHEN EQ_Remetrica_RDMF_Bucket like '%First%' THEN 'First Bank'
-		WHEN EQ_Remetrica_RDMF_Bucket like '%Oriental%' THEN 'Oriental'
-		WHEN EQ_Remetrica_RDMF_Bucket like '%lend%' THEN 'xScotia xLending'
+	,CASE
+		WHEN BusinessUnit = 'Lend' THEN 'Lend'
+		WHEN BusinessUnit = 'Prop' THEN 'Prop'
 		ELSE 'LOB'
 	END AS LOBNAME
 	,EffectiveDate AS INCEPTDATE
@@ -63,7 +61,7 @@ SELECT
 	,'USD' AS COMBINEDPCUR
 	,0 AS COVBASE
 	,0 AS LIMITGU
-	,EQ_Remetrica_RDMF_Bucket AS USERDEF1
+	,FF_Remetrica_RDMF_Bucket AS USERDEF1
 	,FHCFIndicator AS USERDEF2 
 	,QS_Indicator AS USERDEF3  
 	,ProductType AS USERDEF4 
@@ -73,16 +71,15 @@ SELECT
 	,AssurantGroupedLOB AS POLICYUSERTXT2 --varchar(20)
 	,NetLegalEntity AS POLICYUSERTXT3 --varchar(20)
 	,LegalEntity AS POLICYUSERTXT4 --varchar(20)
-INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account
 FROM CombinedData_{{ DATE_VALUE }}_Working
-WHERE State IN ('PR','VI')
-	and EarthquakeCoverage = 'Y'  
-	and EQ_Remetrica_RDMF_Bucket <> 'NULL'
-	and Main_BU <> 'Clay'
---(9 rows affected)
+WHERE State NOT IN ('PR','VI','GU')
+	and FFMODELED = 'Y'
+--(3816610 rows affected)
 
--- CB EQ Location File:
-DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location
+
+-- US FF Location File:
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location
 SELECT
 	LocationID AS ACCNTNUM
 	,LocationID AS LOCNUM
@@ -94,7 +91,7 @@ SELECT
 	,City AS CITY
 	,'' AS CITYCODE
 	,'' AS STATE
-	,'' AS STATECODE
+	,State AS STATECODE
 	,ZIPCODE AS POSTALCODE
 	,County AS COUNTY
 	,CountyNBR AS COUNTYCODE
@@ -104,10 +101,7 @@ SELECT
 	,Model_SQF AS FLOORAREA
 	,'2' AS AREAUNIT
 	,'ISO3A' AS CNTRYSCHEME
-	,CASE
-		WHEN State IN ('PR') THEN 'PRI'
-		ELSE 'VIR'
-	END AS CNTRYCODE
+	,'USA' AS CNTRYCODE
 	,1 AS NUMBLDGS
 	,'RMS' AS BLDGSCHEME
 	,RMS_ConstCode_EQ AS BLDGCLASS
@@ -127,25 +121,25 @@ SELECT
 	,'USD' AS EQCV6VCUR
 	,CovDValue AS EQCV7VAL
 	,'USD' AS EQCV7VCUR
-	,CovAlimit_EQ AS EQCV4LIMIT 
+	,CovAlimit_FF AS EQCV4LIMIT
 	,'USD' AS EQCV4LCUR
-	,CovBlimit_EQ AS EQCV5LIMIT
+	,CovBlimit_FF AS EQCV5LIMIT 
 	,'USD' AS EQCV5LCUR
-	,CovClimit_EQ AS EQCV6LIMIT 
+	,CovClimit_FF AS EQCV6LIMIT 
 	,'USD' AS EQCV6LCUR
-	,CovDlimit_EQ AS EQCV7LIMIT 
-	,'USD' AS EQCV7LCUR	
-	,CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovA END AS EQCV4DED 
+	,CovDlimit_FF AS EQCV7LIMIT
+	,'USD' AS EQCV7LCUR
+	,CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovA END AS EQCV4DED 
 	,'USD' AS EQCV4DCUR
-	,CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovB END AS EQCV5DED 
+	,CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END AS EQCV5DED
 	,'USD' AS EQCV5DCUR
-	,CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovC END AS EQCV6DED 
+	,CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END AS EQCV6DED 
 	,'USD' AS EQCV6DCUR
-	,CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovD END AS EQCV7DED 
+	,CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END AS EQCV7DED
 	,'USD' AS EQCV7DCUR
 	,0 AS EQSITELIM
 	,'USD' AS EQSITELCUR
-	,CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN EarthquakeDeductible ELSE 0 END AS EQSITEDED 
+	,CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowingDeductible ELSE 0 END AS EQSITEDED
 	,'USD' AS EQSITEDCUR
 	,0 AS EQCOMBINEDLIM
 	,'USD' AS EQCOMBINEDLCUR
@@ -157,15 +151,14 @@ SELECT
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
-INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location
 FROM CombinedData_{{ DATE_VALUE }}_Working
-WHERE State IN ('PR','VI')
-	and EarthquakeCoverage = 'Y' 
-	and EQ_Remetrica_RDMF_Bucket <> 'NULL'
-	and Main_BU <> 'Clay'
---(9 rows affected)
+WHERE State NOT IN ('PR','VI','GU')
+	and FFMODELED = 'Y'
+--(3816610 rows affected)
 
-
---Export import files to CSV
---Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account --4
---Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location --4
+--Export import files to CSV via export wizard
+Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account--3816610
+Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location--3816610
+	  
+	

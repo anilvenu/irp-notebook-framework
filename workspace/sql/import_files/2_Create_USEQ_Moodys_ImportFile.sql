@@ -158,5 +158,5 @@ WHERE State NOT IN ('PR','VI','GU')
 --(486879 rows affected)
 
 --Export import files to CSV
-Select count(*) From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Account --516777
+Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Account --516777
 Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Location --516777

@@ -164,5 +164,5 @@ WHERE State NOT IN ('PR','VI','GU')
 
 
 --Export import files to CSV via export wizard
---Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account --3795604
---Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Location --3795604
+Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account --3795604
+Select * From Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Location --3795604

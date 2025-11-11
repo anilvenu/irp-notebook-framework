@@ -8,7 +8,7 @@ import json
 import time
 from typing import Dict, Any, List, Optional
 from .client import Client
-from .constants import CREATE_PORTFOLIO, GET_GEOHAZ_JOB, SEARCH_PORTFOLIOS, GEOHAZ_PORTFOLIO, WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES
+from .constants import CREATE_PORTFOLIO, GET_GEOHAZ_JOB, SEARCH_PORTFOLIOS, GEOHAZ_PORTFOLIO, WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES, SEARCH_ACCOUNTS_BY_PORTFOLIO
 from .exceptions import IRPAPIError, IRPJobError
 from .validators import validate_list_not_empty, validate_non_empty_string, validate_positive_int
 from .utils import extract_id_from_location_header
@@ -61,6 +61,27 @@ class PortfolioManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to search portfolios for exposure ID '{exposure_id}': {e}")
+
+
+    def search_accounts_by_portfolio(self, exposure_id: int, portfolio_id: int) -> List[Dict[str, Any]]:
+        """
+        Search portfolios within an exposure.
+
+        Args:
+            exposure_id: Exposure ID
+            portfolio_id: Portfolio ID
+
+        Returns:
+            Dict containing list of accounts
+        """
+        validate_positive_int(exposure_id, "exposure_id")
+        validate_positive_int(portfolio_id, "portfolio_id")
+
+        try:
+            response = self.client.request('GET', SEARCH_ACCOUNTS_BY_PORTFOLIO.format(exposureId=exposure_id, id=portfolio_id))
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to search portfolio accounts for exposure ID '{exposure_id}' and portfolio ID '{portfolio_id}': {e}")
 
 
     def create_portfolios(self, portfolio_data_list: List[Dict[str, Any]]) -> List[int]:
@@ -209,17 +230,39 @@ class PortfolioManager:
                 raise IRPAPIError(f"Expected 1 portfolio with name {portfolio_name}, found {len(portfolios)}")
             try:
                 portfolio_uri = portfolios[0]['uri']
+                portfolio_id = portfolios[0]['portfolioId']
             except (KeyError, TypeError, IndexError) as e:
                 raise IRPAPIError(
-                    f"Failed to extract portfolio URI: {e}"
+                    f"Failed to extract portfolio details: {e}"
                 ) from e
             
-            job_ids.append(self.submit_geohaz_job(
-                portfolio_uri=portfolio_uri,
-                version=version,
-                hazard_eq=hazard_eq,
-                hazard_ws=hazard_ws
-            ))
+            # Before GeoHaz, check if the portfolio has location data to GeoHaz
+            # Get the location's accounts
+            accounts = self.search_accounts_by_portfolio(exposure_id=exposure_id, portfolio_id=portfolio_id)
+            if (len(accounts) == 0):
+                print(f"Portfolio {portfolio_name} does not have any Accounts / Locations to be GeoHaz'd; skipping...")
+                continue
+            
+            # Validate locations count
+            try:
+                locations_count = 0
+                for account in accounts:
+                    locations_count += account['locationsCount']
+                    # If there is at least one location, stop checking for existence of locations
+                    if locations_count > 0:
+                        break
+            except(KeyError, TypeError, IndexError) as e:
+                raise IRPAPIError(
+                    f"Failed to validate locations count for portfolio {portfolio_name}"
+                )
+            
+            if locations_count > 0:
+                job_ids.append(self.submit_geohaz_job(
+                    portfolio_uri=portfolio_uri,
+                    version=version,
+                    hazard_eq=hazard_eq,
+                    hazard_ws=hazard_ws
+                ))
 
         return job_ids
         

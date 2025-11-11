@@ -573,7 +573,7 @@ select @PortAcctSeedID_17 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
           a.accgrpid
 --Select count(*)
 from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid 
+inner join portacct p on a.accgrpid = p.accgrpid
 inner join loc l on l.accgrpid = a.ACCGRPID
 inner join policy j on j.ACCGRPID = a.ACCGRPID
 WHERE
@@ -588,3 +588,41 @@ where name = 'portinfo'
 update seedid
 set id = (select max (portacctid) from portacct)
 where name = 'portacct'
+
+
+-- ============================================================================
+-- RETURN CREATED DATA (Captured by execute_query_from_file)
+-- ============================================================================
+
+SELECT
+    pi.PORTINFOID,
+    pi.PORTNUM,
+    pi.PORTNAME,
+    pi.CREATEDATE,
+    pi.DESCRIPT,
+    COUNT(DISTINCT pa.ACCGRPID) AS AccountGroupCount,
+    COUNT(DISTINCT pa.PORTACCTID) AS PortfolioAccountCount
+FROM dbo.Portinfo pi
+LEFT JOIN dbo.Portacct pa ON pi.PORTINFOID = pa.PORTINFOID
+WHERE pi.PORTNAME IN (
+    'USHU_Leak_Lender_P',
+    'USHU_Leak_Geico_HIP1',
+    'USHU_Leak_Geico_50H2',
+    'USHU_Leak_Geico_75H2',
+    'USHU_Leak_Manufact',
+    'USHU_Leak_Renters',
+    'USHU_Leak_Condo',
+    'USHU_Leak_CHFS',
+    'USHU_Leak_Other',
+    'USHU_Leak_Clay_21st',
+    'USHU_Leak_Clay_Homes',
+    'USHU_full_Lender_P',
+    'USHU_full_Manufact',
+    'USHU_full_Renters',
+    'USHU_full_Other',
+    'USHU_full_Clay_21st',
+    'USHU_full_Clay_Homes'
+)
+AND pi.CREATEDATE = @Date
+GROUP BY pi.PORTINFOID, pi.PORTNUM, pi.PORTNAME, pi.CREATEDATE, pi.DESCRIPT
+ORDER BY pi.PORTNAME

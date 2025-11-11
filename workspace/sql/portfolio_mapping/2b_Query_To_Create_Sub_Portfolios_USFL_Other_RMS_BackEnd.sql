@@ -15,7 +15,7 @@ SQL Database: QEM Exposure Database
 Runtime: < 10 seconds
 **********************************************************************************************************************************************/
 
-USE {{ EDM_FULL_NAME }}
+USE [{{ EDM_FULL_NAME }}]
 
 /*--Portfolios:
 Select * from portinfo
@@ -253,7 +253,7 @@ select @PortAcctSeedID_11 + ROW_NUMBER() OVER(ORDER BY PORTACCTID),
           a.accgrpid
 --Select count(*)
 from   ACCGRP a
-inner join portacct p on a.accgrpid = p.accgrpid 
+inner join portacct p on a.accgrpid = p.accgrpid
 inner join loc l on l.accgrpid = a.ACCGRPID
 inner join policy j on j.ACCGRPID = a.ACCGRPID
 WHERE
@@ -268,3 +268,31 @@ where name = 'portinfo'
 update seedid
 set id = (select max (portacctid) from portacct)
 where name = 'portacct'
+
+
+-- ============================================================================
+-- RETURN CREATED DATA (Captured by execute_query_from_file)
+-- ============================================================================
+
+SELECT
+    pi.PORTINFOID,
+    pi.PORTNUM,
+    pi.PORTNAME,
+    pi.CREATEDATE,
+    pi.DESCRIPT,
+    COUNT(DISTINCT pa.ACCGRPID) AS AccountGroupCount,
+    COUNT(DISTINCT pa.PORTACCTID) AS PortfolioAccountCount
+FROM dbo.Portinfo pi
+LEFT JOIN dbo.Portacct pa ON pi.PORTINFOID = pa.PORTINFOID
+WHERE pi.PORTNAME IN (
+    'USFL_Other_Lender_P',
+    'USFL_Other_CB',
+    'USFL_Other_Manufactu',
+    'USFL_Other_Renters',
+    'USFL_Other_Other',
+    'USFL_Other_Clay_21st',
+    'USFL_Other_Clay_Home'
+)
+AND pi.CREATEDATE = @Date
+GROUP BY pi.PORTINFOID, pi.PORTNUM, pi.PORTNAME, pi.CREATEDATE, pi.DESCRIPT
+ORDER BY pi.PORTNAME

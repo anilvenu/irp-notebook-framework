@@ -31,9 +31,9 @@ Example Configuration:
     MSSQL_ANALYTICS_PASSWORD=secretpassword
 
 Usage in Notebooks:
-    from helpers.sqlserver import execute_query, execute_script_file
+    from helpers.sqlserver import execute_query, execute_query_from_file
 
-    # Option 1: Specify database via connection parameter
+    # Option 1: Execute inline query with database parameter
     df = execute_query(
         "SELECT * FROM portfolios WHERE value > {{ min_value }}",
         params={'min_value': 1000000},
@@ -45,9 +45,9 @@ Usage in Notebooks:
     query = "USE DataWarehouse; SELECT * FROM portfolios WHERE value > {{ min_value }}"
     df = execute_query(query, params={'min_value': 1000000}, connection='AWS_DW')
 
-    # Execute SQL script from file with database parameter
-    rows_affected = execute_script_file(
-        'workspace/sql/extract_policies.sql',
+    # Option 3: Execute SQL script from file (returns list of DataFrames)
+    dataframes = execute_query_from_file(
+        'extract_policies.sql',
         params={'cycle_name': 'Q1-2025', 'run_date': '2025-01-15'},
         connection='ANALYTICS',
         database='AnalyticsDB'
@@ -108,12 +108,17 @@ Differences from PostgreSQL integration (database.py):
 """
 
 import os
+import logging
 from pathlib import Path
 from contextlib import contextmanager
-from typing import Optional, Dict, Any, Union, Tuple
+from typing import List, Optional, Dict, Any, Union, Tuple
 from string import Template
+from helpers.constants import WORKSPACE_PATH
 import pandas as pd
 import numpy as np
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 try:
     import pyodbc
@@ -494,6 +499,7 @@ def _substitute_named_parameters(query: str, params: Optional[Dict[str, Any]] = 
         params = {'date_val': '202501'}
         # Returns: "SELECT 'Modeling_202501_Moodys' as table_name"
     """
+    print ('Parameterizing ...')
     if not params:
         return query
 
@@ -513,11 +519,11 @@ def _substitute_named_parameters(query: str, params: Optional[Dict[str, Any]] = 
     for key, value in converted_params.items():
         # Check if this parameter appears in an identifier context (no quoting needed)
         # Pattern 1: Inside square brackets: [{{ param }}]
-        # Pattern 2: Inside string literals: '...{{ param }}...'
+        # Pattern 2: Inside string literals: '...{{ param }}...' (single line only)
         # Pattern 3: As part of a table/column name: word_{{ param }}_word or word_{{ param }} or {{ param }}_word
         identifier_patterns = [
             rf'\[\s*\{{\{{\s*{re.escape(key)}\s*\}}\}}\s*\]',  # [{{ param }}]
-            rf"'[^']*\{{\{{\s*{re.escape(key)}\s*\}}\}}[^']*'",  # '...{{ param }}...' (inside string literal)
+            rf"'[^'\n\r]*\{{\{{\s*{re.escape(key)}\s*\}}\}}[^'\n\r]*'",  # '...{{ param }}...' (inside string literal, single line only)
             rf'\w+_\{{\{{\s*{re.escape(key)}\s*\}}\}}',  # word_{{ param }}
             rf'\{{\{{\s*{re.escape(key)}\s*\}}\}}_\w+',  # {{ param }}_word
         ]
@@ -719,8 +725,7 @@ def _read_sql_file(file_path: Union[str, Path]) -> str:
     Raises:
         SQLServerQueryError: If file not found or cannot be read
     """
-    from helpers.constants import WORKSPACE_PATH
-
+    print('Reading SQL script ...')
     file_path = Path(file_path)
 
     # If relative path, try workspace/sql/ directory
@@ -743,6 +748,34 @@ def _read_sql_file(file_path: Union[str, Path]) -> str:
         ) from e
 
 
+def sql_file_exists(file_path: Union[str, Path]) -> bool:
+    """
+    Check if a SQL script file exists.
+
+    Args:
+        file_path: Path to SQL file (absolute or relative to workspace/sql/)
+
+    Returns:
+        True if file exists, False otherwise
+
+    Example:
+        # Check if optional SQL script exists before executing
+        sql_script = f'portfolio_mapping/{portfolio_name}.sql'
+        if sql_file_exists(sql_script):
+            result = execute_query_from_file(sql_script, params=params)
+        else:
+            print(f"Skipping - script not found: {sql_script}")
+    """
+    file_path = Path(file_path)
+
+    # If relative path, try workspace/sql/ directory
+    if not file_path.is_absolute():
+        sql_dir = WORKSPACE_PATH / 'sql'
+        file_path = sql_dir / file_path
+
+    return file_path.exists() and file_path.is_file()
+
+
 
 
 def execute_query_from_file(
@@ -750,7 +783,7 @@ def execute_query_from_file(
     params: Optional[Dict[str, Any]] = None,
     connection: str = 'TEST',
     database: Optional[str] = None
-) -> pd.DataFrame:
+) -> List[pd.DataFrame]:
     """
     Execute SELECT query from SQL file and return DataFrame.
 
@@ -789,96 +822,60 @@ def execute_query_from_file(
         if isinstance(params, dict):
             query = _substitute_named_parameters(query, params)
 
+        dataframes = []
+
+        logger.info(f"Executing query from file: {file_path}")
+        print(f"Executing SQL query: {Path(file_path).name}")
+
         with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()
             cursor.execute(query)
 
-            # Navigate to the last result set (which should be the SELECT)
-            # Skip over USE and other statements that don't return data
-            while cursor.description is None:
-                if not cursor.nextset():
-                    raise SQLServerQueryError(
-                        f"Query file does not return a result set: {file_path}"
-                    )
+            stmt_num = 1
+            if cursor.description is not None:
+                columns = [column[0] for column in cursor.description]
+                rows = cursor.fetchall()
 
-            # Now cursor.description is not None, so we can fetch results
-            columns = [column[0] for column in cursor.description]
-            rows = cursor.fetchall()
+                # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
+                data = [tuple(row) for row in rows]
+                df = pd.DataFrame.from_records(data, columns=columns)
+                dataframes.append(df)
+                logger.debug(f"Statement {stmt_num}: Retrieved {len(df)} rows")
+                stmt_num += 1
 
-            # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
-            data = [tuple(row) for row in rows]
-            df = pd.DataFrame.from_records(data, columns=columns)
+            while cursor.nextset():
+                if cursor.description is not None:
+                    columns = [column[0] for column in cursor.description]
+                    rows = cursor.fetchall()
 
-        return df
+                    # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
+                    data = [tuple(row) for row in rows]
+                    df = pd.DataFrame.from_records(data, columns=columns)
+                    dataframes.append(df)
+                    logger.debug(f"Statement {stmt_num}: Retrieved {len(df)} rows")
+                    stmt_num += 1
+
+            conn.commit()
+
+        if not dataframes:
+            logger.warning(f"No result sets returned from {file_path}")
+            print("⚠ Warning: No result sets returned. This may occur if:")
+            print("  • Script contains only DDL (CREATE/DROP/ALTER)")
+            print("  • Script contains only DML (INSERT/UPDATE/DELETE)")
+            print("  • Script uses dynamic SQL (EXEC) that returns results to client, not cursor")
+            print("  → Note: This function is designed for SELECT queries that return data")
+
+        logger.info(f"Query completed: {len(dataframes)} result sets returned")
+        if dataframes:
+            print(f"✓ Retrieved {len(dataframes)} result set(s)")
+
+        return dataframes
 
     except (SQLServerConnectionError, SQLServerConfigurationError):
         raise  # Re-raise connection/configuration errors as-is
     except Exception as e:
         raise SQLServerQueryError(
             f"Query execution failed (connection: {connection}, file: {file_path}): {e}"
-        ) from e
-
-
-def execute_script_file(
-    file_path: Union[str, Path],
-    params: Optional[Dict[str, Any]] = None,
-    connection: str = 'TEST',
-    database: Optional[str] = None
-) -> int:
-    """
-    Execute SQL script from file (supports multi-statement scripts).
-
-    Args:
-        file_path: Path to SQL file (absolute or relative to workspace/sql/)
-        params: Script parameters (supports {{ param_name }} placeholders)
-        connection: Name of the SQL Server connection to use
-        database: Optional database name to connect to (overrides connection config)
-
-    Returns:
-        Total number of rows affected (sum across all statements)
-
-    Example:
-        # Create workspace/sql/update_portfolios.sql with content:
-        # UPDATE portfolios SET status = {{ status }} WHERE value < {{ min_value }};
-        # DELETE FROM portfolios WHERE status = 'CLOSED';
-
-        rows = execute_script_file(
-            'update_portfolios.sql',
-            params={'status': 'INACTIVE', 'min_value': 100000},
-            connection='AWS_DW',
-            database='DataWarehouse'
-        )
-        print(f"Total rows affected: {rows}")
-    """
-    script = _read_sql_file(file_path)
-
-    try:
-        # Substitute named parameters if dict provided
-        if isinstance(params, dict):
-            script = _substitute_named_parameters(script, params)
-
-        total_rows = 0
-
-        with get_connection(connection, database=database) as conn:
-            cursor = conn.cursor()
-            cursor.execute(script)
-
-            # Sum up rows affected across all statements
-            total_rows = cursor.rowcount
-
-            # If there are multiple result sets, iterate through them
-            while cursor.nextset():
-                total_rows += cursor.rowcount
-
-            conn.commit()
-
-        return total_rows
-
-    except (SQLServerConnectionError, SQLServerConfigurationError):
-        raise  # Re-raise connection/configuration errors as-is
-    except Exception as e:
-        raise SQLServerQueryError(
-            f"Script execution failed (connection: {connection}, file: {file_path}): {e}"
         ) from e
 
 
@@ -956,6 +953,58 @@ def initialize_database(sql_file_path: Union[str, Path], connection: str = 'TEST
 
 
 # ============================================================================
+# DISPLAY UTILITIES
+# ============================================================================
+
+def display_result_sets(dataframes: List[pd.DataFrame], max_rows: int = 10) -> None:
+    """
+    Display multiple result sets in a clean, readable format for Jupyter notebooks.
+
+    This function provides a much cleaner output than print(dataframes) which shows
+    the messy Python list representation across multiple lines.
+
+    Args:
+        dataframes: List of DataFrames returned from execute_query_from_file()
+        max_rows: Maximum number of rows to display per DataFrame (default: 10)
+
+    Example:
+        # Instead of: print(result)
+        result = execute_query_from_file('control_totals.sql', ...)
+        display_result_sets(result)
+    """
+    from IPython.display import display
+
+    if not dataframes:
+        print("No result sets to display")
+        return
+
+    print(f"\n{'='*80}")
+    print(f"QUERY RESULTS: {len(dataframes)} result set(s)")
+    print(f"{'='*80}\n")
+
+    for i, df in enumerate(dataframes, 1):
+        print(f"\n{'-'*80}")
+        print(f"Result Set {i} of {len(dataframes)}")
+        print(f"{'-'*80}")
+
+        if df.empty:
+            print(f"Empty DataFrame")
+            print(f"Columns: {list(df.columns)}")
+        else:
+            print(f"Rows: {len(df):,} | Columns: {len(df.columns)}")
+            print()
+
+            # Display the DataFrame (uses pandas default display settings)
+            if len(df) > max_rows:
+                display(df.head(max_rows))
+                print(f"\n... ({len(df) - max_rows:,} more rows not shown)")
+            else:
+                display(df)
+
+    print(f"\n{'='*80}\n")
+
+
+# ============================================================================
 # MODULE EXPORTS
 # ============================================================================
 
@@ -978,8 +1027,11 @@ __all__ = [
     'execute_command',
 
     # File-based operations
+    'sql_file_exists',
     'execute_query_from_file',
-    'execute_script_file',
+
+    # Display utilities
+    'display_result_sets',
 
     # Database initialization
     'initialize_database',
