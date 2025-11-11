@@ -562,11 +562,11 @@ def _substitute_named_parameters(query: str, params: Optional[Dict[str, Any]] = 
     for key, value in converted_params.items():
         # Check if this parameter appears in an identifier context (no quoting needed)
         # Pattern 1: Inside square brackets: [{{ param }}]
-        # Pattern 2: Inside string literals: '...{{ param }}...'
+        # Pattern 2: Inside string literals: '...{{ param }}...' (single line only)
         # Pattern 3: As part of a table/column name: word_{{ param }}_word or word_{{ param }} or {{ param }}_word
         identifier_patterns = [
             rf'\[\s*\{{\{{\s*{re.escape(key)}\s*\}}\}}\s*\]',  # [{{ param }}]
-            rf"'[^']*\{{\{{\s*{re.escape(key)}\s*\}}\}}[^']*'",  # '...{{ param }}...' (inside string literal)
+            rf"'[^'\n\r]*\{{\{{\s*{re.escape(key)}\s*\}}\}}[^'\n\r]*'",  # '...{{ param }}...' (inside string literal, single line only)
             rf'\w+_\{{\{{\s*{re.escape(key)}\s*\}}\}}',  # word_{{ param }}
             rf'\{{\{{\s*{re.escape(key)}\s*\}}\}}_\w+',  # {{ param }}_word
         ]
@@ -789,6 +789,34 @@ def _read_sql_file(file_path: Union[str, Path]) -> str:
         raise SQLServerQueryError(
             f"Failed to read SQL script file: {file_path}: {e}"
         ) from e
+
+
+def sql_file_exists(file_path: Union[str, Path]) -> bool:
+    """
+    Check if a SQL script file exists.
+
+    Args:
+        file_path: Path to SQL file (absolute or relative to workspace/sql/)
+
+    Returns:
+        True if file exists, False otherwise
+
+    Example:
+        # Check if optional SQL script exists before executing
+        sql_script = f'portfolio_mapping/{portfolio_name}.sql'
+        if sql_file_exists(sql_script):
+            result = execute_query_from_file(sql_script, params=params)
+        else:
+            print(f"Skipping - script not found: {sql_script}")
+    """
+    file_path = Path(file_path)
+
+    # If relative path, try workspace/sql/ directory
+    if not file_path.is_absolute():
+        sql_dir = WORKSPACE_PATH / 'sql'
+        file_path = sql_dir / file_path
+
+    return file_path.exists() and file_path.is_file()
 
 
 
@@ -1148,6 +1176,7 @@ __all__ = [
     'execute_command',
 
     # File-based operations
+    'sql_file_exists',
     'execute_query_from_file',
     'execute_script_file',
 
