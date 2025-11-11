@@ -236,23 +236,27 @@ class PortfolioManager:
                     f"Failed to extract portfolio details: {e}"
                 ) from e
             
+            # Before GeoHaz, check if the portfolio has location data to GeoHaz
+            # Get the location's accounts
             accounts = self.search_accounts_by_portfolio(exposure_id=exposure_id, portfolio_id=portfolio_id)
             if (len(accounts) == 0):
                 print(f"Portfolio {portfolio_name} does not have any Accounts / Locations to be GeoHaz'd; skipping...")
                 continue
+            
+            # Validate locations count
             try:
-                has_locations = True
+                locations_count = 0
                 for account in accounts:
-                    locations_count = account['locationsCount']
-                    if (locations_count == 0):
-                        has_locations = False
+                    locations_count += account['locationsCount']
+                    # If there is at least one location, stop checking for existence of locations
+                    if locations_count > 0:
                         break
             except(KeyError, TypeError, IndexError) as e:
                 raise IRPAPIError(
                     f"Failed to validate locations count for portfolio {portfolio_name}"
                 )
             
-            if has_locations:
+            if locations_count > 0:
                 job_ids.append(self.submit_geohaz_job(
                     portfolio_uri=portfolio_uri,
                     version=version,
