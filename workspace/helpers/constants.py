@@ -168,7 +168,6 @@ STAGE_PATTERN = r'Stage_(\d+)_(.+)'
 CYCLE_NAME_RULES = {
     'min_length': 3,
     'max_length': 255,
-    'valid_pattern': r'^Analysis-20\d{2}-Q[1-4](-[\w-]+)?$',
     'example': 'Analysis-2025-Q4 OR Analysis-2025-Q4-v1',
 }
 
@@ -229,7 +228,7 @@ METADATA_SCHEMA = {
         'Hazard Version': r'\d+(\.\d+)?(\.\d+)?',
         'Validate DLM Model Versions?': r'^[YN]$',
         'Validate HD Model Versions?': r'^[YN]$',
-        'Export RDM Name': r'^RMS_RDM_'
+        'Export RDM Name': r'^RM_RDM_'
     }
 }
 
@@ -247,7 +246,7 @@ DATABASES_SCHEMA = {
     },
     'unique_columns': ['Database'],
     'value_patterns': {
-        'Database': r'RMS?_EDM_\d{6}_.*',  # Accepts both RM_EDM and RMS_EDM
+        'Database': r'RM?_EDM_\d{6}_.*',  # Accepts both RM_EDM and RMS_EDM
         'Store in Data Bridge?': r'^[YN]$'
     }
 }
