@@ -371,11 +371,6 @@ def validate_cycle_name(cycle_name: str) -> bool:
         print(f"Name too long (max {CYCLE_NAME_RULES['max_length']} chars)")
         return False
     
-    # Check allowed pattern
-    if re.fullmatch(CYCLE_NAME_RULES['valid_pattern'], cycle_name) is None:
-        print(f"Name must match pattern: {CYCLE_NAME_RULES['example']}")
-        return False
-    
     # Check if name already exists
     existing = get_cycle_by_name(cycle_name)
     if existing:
