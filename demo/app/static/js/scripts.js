@@ -66,6 +66,8 @@ function sortTable(tableId, colIndex) {
 
 // Track active filters for each table: {tableId: {colIndex: Set/Array of values}}
 const tableFilters = {};
+// Track search box values for each table
+const tableSearchValues = {};
 
 function toggleFilterRow(tableId) {
     const table = document.getElementById(tableId);
@@ -188,38 +190,133 @@ function initializeFilters(tableId) {
 }
 
 function applyFilters(tableId) {
+    // Just call the unified filtering function
+    applyAllFilters(tableId);
+}
+
+function clearFilters(tableId) {
     const table = document.getElementById(tableId);
-    const tbody = table.querySelector('tbody');
     const filterRow = table.querySelector('.filter-row');
 
-    if (!filterRow) return;
+    // Clear column filters if they exist
+    if (filterRow) {
+        // Clear all filter inputs
+        filterRow.querySelectorAll('.filter-input').forEach(input => {
+            input.value = '';
+        });
 
-    const rows = tbody.querySelectorAll('tr');
-    const filterCells = filterRow.querySelectorAll('th');
+        // Reset all selects
+        filterRow.querySelectorAll('.filter-select').forEach(select => {
+            select.selectedIndex = 0;
+            Array.from(select.options).forEach(option => {
+                option.selected = option.value === '';
+            });
+        });
 
-    // Collect active filters
-    const activeFilters = [];
-    filterCells.forEach((filterCell, colIndex) => {
-        const select = filterCell.querySelector('.filter-select');
-        const input = filterCell.querySelector('.filter-input');
+        // Update filter count
+        updateFilterCount(tableId, 0);
+    }
 
-        if (select) {
-            const selectedOptions = Array.from(select.selectedOptions)
-                .map(opt => opt.value)
-                .filter(val => val !== '');
+    // Clear search box value for this table
+    tableSearchValues[tableId] = '';
 
-            if (selectedOptions.length > 0) {
-                activeFilters.push({ colIndex, type: 'select', values: selectedOptions });
+    // Find and clear the actual search input
+    // Pattern: jobsTable -> jobSearch, configsTable -> configSearch
+    const searchId = tableId.replace(/sTable$/, 'Search');
+    const searchInput = document.getElementById(searchId);
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    // Re-apply filters (should show all rows now)
+    applyAllFilters(tableId);
+}
+
+function updateFilterCount(tableId, count) {
+    const container = document.getElementById(tableId)?.closest('.table-container');
+    if (!container) return;
+
+    let badge = container.querySelector('.filter-count-badge');
+
+    if (count > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'filter-count-badge';
+            const toggleBtn = container.querySelector('.filter-toggle-btn');
+            if (toggleBtn) {
+                toggleBtn.appendChild(badge);
             }
-        } else if (input && input.value.trim()) {
-            activeFilters.push({ colIndex, type: 'text', value: input.value.trim().toLowerCase() });
         }
-    });
+        badge.textContent = count;
+        badge.style.display = 'inline';
+    } else if (badge) {
+        badge.style.display = 'none';
+    }
+}
 
-    // Apply filters to rows
+function filterTable(searchId, tableId) {
+    const input = document.getElementById(searchId);
+    if (!input) {
+        console.error('Search input not found:', searchId);
+        return;
+    }
+
+    const searchValue = (input.value || '').toLowerCase();
+
+    // Store search value for this table
+    tableSearchValues[tableId] = searchValue;
+
+    // Always use the unified filtering function
+    applyAllFilters(tableId);
+}
+
+// Unified function that applies both search and column filters
+function applyAllFilters(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) {
+        console.error('Table not found:', tableId);
+        return;
+    }
+
+    const tbody = table.querySelector('tbody');
+    const rows = tbody.querySelectorAll('tr');
+    const filterRow = table.querySelector('.filter-row');
+
+    // Collect active column filters (if they exist)
+    const activeFilters = [];
+    if (filterRow) {
+        const filterCells = filterRow.querySelectorAll('th');
+        filterCells.forEach((filterCell, colIndex) => {
+            const select = filterCell.querySelector('.filter-select');
+            const input = filterCell.querySelector('.filter-input');
+
+            if (select) {
+                const selectedOptions = Array.from(select.selectedOptions)
+                    .map(opt => opt.value)
+                    .filter(val => val !== '');
+
+                if (selectedOptions.length > 0) {
+                    activeFilters.push({ colIndex, type: 'select', values: selectedOptions });
+                }
+            } else if (input && (input.value || '').trim()) {
+                activeFilters.push({ colIndex, type: 'text', value: (input.value || '').trim().toLowerCase() });
+            }
+        });
+    }
+
+    // Get search box value
+    const searchValue = tableSearchValues[tableId] || '';
+
+    // Apply both filters to rows
     rows.forEach(row => {
+        // Skip empty state rows
+        if (row.cells.length === 1) {
+            return;
+        }
+
         let shouldShow = true;
 
+        // Check column filters first
         for (const filter of activeFilters) {
             if (!row.cells[filter.colIndex]) {
                 shouldShow = false;
@@ -247,74 +344,29 @@ function applyFilters(tableId) {
             }
         }
 
+        // Check search box filter (if row passed column filters)
+        if (shouldShow && searchValue) {
+            let rowText = row.textContent.toLowerCase();
+
+            // Also search full JSON content from data-json attributes
+            const jsonPreviews = row.querySelectorAll('.json-preview[data-json]');
+            jsonPreviews.forEach(preview => {
+                const jsonData = preview.getAttribute('data-json');
+                if (jsonData) {
+                    rowText += ' ' + jsonData.toLowerCase();
+                }
+            });
+
+            shouldShow = rowText.includes(searchValue);
+        }
+
         row.style.display = shouldShow ? '' : 'none';
     });
 
     // Update filter count badge
-    updateFilterCount(tableId, activeFilters.length);
-}
-
-function clearFilters(tableId) {
-    const table = document.getElementById(tableId);
-    const filterRow = table.querySelector('.filter-row');
-
-    if (!filterRow) return;
-
-    // Clear all filter inputs
-    filterRow.querySelectorAll('.filter-input').forEach(input => {
-        input.value = '';
-    });
-
-    // Reset all selects
-    filterRow.querySelectorAll('.filter-select').forEach(select => {
-        select.selectedIndex = 0;
-        Array.from(select.options).forEach(option => {
-            option.selected = option.value === '';
-        });
-    });
-
-    // Show all rows
-    const tbody = table.querySelector('tbody');
-    tbody.querySelectorAll('tr').forEach(row => {
-        row.style.display = '';
-    });
-
-    // Update filter count
-    updateFilterCount(tableId, 0);
-}
-
-function updateFilterCount(tableId, count) {
-    const container = document.getElementById(tableId)?.closest('.table-container');
-    if (!container) return;
-
-    let badge = container.querySelector('.filter-count-badge');
-
-    if (count > 0) {
-        if (!badge) {
-            badge = document.createElement('span');
-            badge.className = 'filter-count-badge';
-            const toggleBtn = container.querySelector('.filter-toggle-btn');
-            if (toggleBtn) {
-                toggleBtn.appendChild(badge);
-            }
-        }
-        badge.textContent = count;
-        badge.style.display = 'inline';
-    } else if (badge) {
-        badge.style.display = 'none';
+    if (filterRow) {
+        updateFilterCount(tableId, activeFilters.length);
     }
-}
-
-function filterTable(searchId, tableId) {
-    const input = document.getElementById(searchId);
-    const filter = input.value.toLowerCase();
-    const table = document.getElementById(tableId);
-    const rows = table.querySelectorAll('tbody tr');
-
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(filter) ? '' : 'none';
-    });
 }
 
 // JSON Tooltip Management

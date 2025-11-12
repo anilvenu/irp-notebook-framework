@@ -72,10 +72,10 @@
 
 <!-- Tabs -->
 <div class="tabs">
-    <button class="tab-button active" onclick="switchTab('jobs')">
+    <button class="tab-button active" onclick="switchTab('jobs', event)">
         Jobs ({{ jobs|length }})
     </button>
-    <button class="tab-button" onclick="switchTab('configurations')">
+    <button class="tab-button" onclick="switchTab('configurations', event)">
         Configurations ({{ configs|length }})
     </button>
 </div>
@@ -226,41 +226,6 @@
 
 {% block extra_scripts %}
 <script>
-// Tab switching
-function switchTab(tabName) {
-    // Hide all tab content
-    const tabContents = document.querySelectorAll('.tab-content');
-    tabContents.forEach(content => content.classList.remove('active'));
-
-    // Remove active from all buttons
-    const tabButtons = document.querySelectorAll('.tab-button');
-    tabButtons.forEach(button => button.classList.remove('active'));
-
-    // Show selected tab
-    document.getElementById(tabName + '-content').classList.add('active');
-
-    // Activate selected button
-    event.target.classList.add('active');
-}
-
-// Table filtering
-function filterTable(tableId, searchId) {
-    const input = document.getElementById(searchId);
-    const filter = input.value.toLowerCase();
-    const table = document.getElementById(tableId);
-    const rows = table.getElementsByTagName('tr');
-
-    for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        const text = row.textContent || row.innerText;
-        if (text.toLowerCase().indexOf(filter) > -1) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    }
-}
-
 // JSON modal
 function showJsonModal(element) {
     const modal = document.getElementById('jsonModal');
