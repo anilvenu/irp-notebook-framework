@@ -72,10 +72,10 @@
 
 <!-- Tabs -->
 <div class="tabs">
-    <button class="tab-button active" onclick="switchTab('jobs')">
+    <button class="tab-button active" onclick="switchTab('jobs', event)">
         Jobs ({{ jobs|length }})
     </button>
-    <button class="tab-button" onclick="switchTab('configurations')">
+    <button class="tab-button" onclick="switchTab('configurations', event)">
         Configurations ({{ configs|length }})
     </button>
 </div>
@@ -83,119 +83,140 @@
 <!-- Jobs Tab Content -->
 <div id="jobs-content" class="tab-content active">
     <div class="search-box">
-        <input type="text" id="jobSearch" placeholder="Search jobs..." onkeyup="filterTable('jobsTable', 'jobSearch')">
+        <input type="text" id="jobSearch" placeholder="Search jobs..." onkeyup="filterTable('jobSearch', 'jobsTable')">
     </div>
 
-    <table class="data-table" id="jobsTable">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Moody's Job ID</th>
-                <th>Status</th>
-                <th>Report Status</th>
-                <th>Configuration</th>
-                <th>Configuration Override</th>
-                <th>Age (hrs)</th>
-                <th>Next Action</th>
-                <th>Parent Job</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if jobs %}
-                {% for job in jobs %}
+    <div class="table-container">
+        <!-- Filter Controls -->
+        <div class="filter-controls">
+            <button class="filter-toggle-btn" onclick="toggleFilterRow('jobsTable')">Show Filters</button>
+            <button class="clear-filters-btn" onclick="clearFilters('jobsTable')">Clear Filters</button>
+        </div>
+
+        <table class="data-table" id="jobsTable">
+            <thead>
                 <tr>
-                    <td>{{ job.id }}</td>
-                    <td>{{ job.moodys_workflow_id or '-' }}</td>
-                    <td><span class="status-badge status-{{ job.status }}">{{ job.status }}</span></td>
-                    <td><span class="status-badge status-{{ job.report_status }}">{{ job.report_status or '-' }}</span></td>
-                    <td>
-                        <div class="json-preview" onclick="showJsonModal({{ job.job_configuration_data|tojson }})">
-                            {{ job.job_configuration_data|tojson|truncate(50) }}
-                        </div>
-                    </td>
-                    <td>{{ ('✓ ' ~ job.override_reason_txt) if job.overridden else '-' }}</td>
-                    <td>
-                        {% if job.age_hours %}
-                            <span class="age-badge">{{ "%.2f"|format(job.age_hours) }}h</span>
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td class="{% if job.needs_attention %}needs-attention{% endif %}">
-                        {{ job.next_best_action or '-' }}
-                    </td>
-                    <td>{{ job.parent_job_id or '-' }}</td>
+                    <th class="sortable" onclick="sortTable('jobsTable', 0)">ID</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 1)">Moody's Job ID</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 2)">Moody's Job Status</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 3)">Status</th>
+                    <th>Job Configuration JSON</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 5)">Configuration Override</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 6)">Age (hrs)</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 7)">Next Best Action</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 8)">Parent Job</th>
                 </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="9" class="empty-state">No jobs found</td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {% if jobs %}
+                    {% for job in jobs %}
+                    <tr>
+                        <td>{{ job.id }}</td>
+                        <td>{{ job.moodys_workflow_id or '-' }}</td>
+                        <td><span class="status-badge status-{{ job.status }}">{{ job.status }}</span></td>
+                        <td><span class="status-badge status-{{ job.report_status }}">{{ job.report_status or '-' }}</span></td>
+                        <td>
+                            <div class="json-preview" data-json="{{ job.job_configuration_data|tojson|forceescape }}" onclick="showJsonModal(this)">
+                                {{ job.job_configuration_data|tojson|truncate(50) }}
+                            </div>
+                        </td>
+                        <td>{{ ('✓ ' ~ job.override_reason_txt) if job.overridden else '-' }}</td>
+                        <td>
+                            {% if job.age_hours %}
+                                <span class="age-badge">{{ "%.2f"|format(job.age_hours) }}h</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="{% if job.needs_attention %}needs-attention{% endif %}">
+                            {{ job.next_best_action or '-' }}
+                        </td>
+                        <td>{{ job.parent_job_id or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr><td colspan="9" class="empty-state">No jobs found</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- Configurations Tab Content -->
 <div id="configurations-content" class="tab-content">
     <div class="search-box">
-        <input type="text" id="configSearch" placeholder="Search configurations..." onkeyup="filterTable('configsTable', 'configSearch')">
+        <input type="text" id="configSearch" placeholder="Search configurations..." onkeyup="filterTable('configSearch', 'configsTable')">
     </div>
 
-    <table class="data-table" id="configsTable">
-        <thead>
-            <tr>
-                <th>Config ID</th>
-                <th>Status</th>
-                <th>Configuration Data</th>
-                <th>Total Jobs</th>
-                <th>Active</th>
-                <th>Finished</th>
-                <th>Failed</th>
-                <th>Progress %</th>
-                <th>Job Alerts</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if configs %}
-                {% for config in configs %}
+    <div class="table-container">
+        <!-- Filter Controls -->
+        <div class="filter-controls">
+            <button class="filter-toggle-btn" onclick="toggleFilterRow('configsTable')">Show Filters</button>
+            <button class="clear-filters-btn" onclick="clearFilters('configsTable')">Clear Filters</button>
+        </div>
+
+        <table class="data-table" id="configsTable">
+            <thead>
                 <tr>
-                    <td>{{ config.config_id }}</td>
-                    <td><span class="status-badge status-{{ config.config_report_status }}">{{ config.config_report_status }}</span></td>
-                    <td>
-                        <div class="json-preview" onclick="showJsonModal({{ config.job_configuration_data|tojson }})">
-                            {{ config.job_configuration_data|tojson|truncate(50) }}
-                        </div>
-                    </td>
-                    <td>{{ config.total_jobs }}</td>
-                    <td>{{ config.active_jobs }}</td>
-                    <td>{{ config.finished_jobs }}</td>
-                    <td>{{ config.failed_jobs }}</td>
-                    <td>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: {{ config.progress_percent }}%"></div>
-                            <span class="progress-text">{{ "%.0f"|format(config.progress_percent) }}%</span>
-                        </div>
-                    </td>
-                    <td>
-                        {% set alerts = [] %}
-                        {% if config.has_failures %}{% set _ = alerts.append('⚠ Failures (' ~ config.failed_jobs ~ ')') %}{% endif %}
-                        {% if config.has_errors %}{% set _ = alerts.append('⚠ Errors (' ~ config.error_jobs ~ ')') %}{% endif %}
-                        {% if config.has_unsubmitted %}{% set _ = alerts.append('⚠ Unsubmitted (' ~ config.unsubmitted_jobs ~ ')') %}{% endif %}
-                        {{ alerts|join(', ') if alerts else '-' }}
-                    </td>
+                    <th class="sortable" onclick="sortTable('configsTable', 0)">Config ID</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 1)">Status</th>
+                    <th>Configuration JSON</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 3)">Total Jobs</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 4)">Active</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 5)">Finished</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 6)">Failed</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 7)">Progress %</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 8)">Job Alerts</th>
                 </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="9" class="empty-state">No configurations found</td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {% if configs %}
+                    {% for config in configs %}
+                    <tr>
+                        <td>{{ config.config_id }}</td>
+                        <td><span class="status-badge status-{{ config.config_report_status }}">{{ config.config_report_status }}</span></td>
+                        <td>
+                            <div class="json-preview" data-json="{{ config.job_configuration_data|tojson|forceescape }}" onclick="showJsonModal(this)">
+                                {{ config.job_configuration_data|tojson|truncate(50) }}
+                            </div>
+                        </td>
+                        <td>{{ config.total_jobs }}</td>
+                        <td>{{ config.active_jobs }}</td>
+                        <td>{{ config.finished_jobs }}</td>
+                        <td>{{ config.failed_jobs }}</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ config.progress_percent }}%"></div>
+                                <span class="progress-text">{{ "%.0f"|format(config.progress_percent) }}%</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% set alerts = [] %}
+                            {% if config.has_failures %}{% set _ = alerts.append('⚠ Failures (' ~ config.failed_jobs ~ ')') %}{% endif %}
+                            {% if config.has_errors %}{% set _ = alerts.append('⚠ Errors (' ~ config.error_jobs ~ ')') %}{% endif %}
+                            {% if config.has_unsubmitted %}{% set _ = alerts.append('⚠ Unsubmitted (' ~ config.unsubmitted_jobs ~ ')') %}{% endif %}
+                            {{ alerts|join(', ') if alerts else '-' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr><td colspan="9" class="empty-state">No configurations found</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- JSON Modal -->
 <div id="jsonModal" class="modal" onclick="closeJsonModal()">
     <div class="modal-content" onclick="event.stopPropagation()">
-        <span class="modal-close" onclick="closeJsonModal()">&times;</span>
-        <h3>Configuration Data</h3>
+        <div class="modal-header">
+            <h3>Configuration Data</h3>
+            <div class="modal-actions">
+                <button id="copyButton" class="copy-button" onclick="copyModalContent()">Copy</button>
+                <span class="modal-close" onclick="closeJsonModal()">&times;</span>
+            </div>
+        </div>
         <pre id="jsonModalContent"></pre>
     </div>
 </div>
@@ -205,51 +226,45 @@
 
 {% block extra_scripts %}
 <script>
-// Tab switching
-function switchTab(tabName) {
-    // Hide all tab content
-    const tabContents = document.querySelectorAll('.tab-content');
-    tabContents.forEach(content => content.classList.remove('active'));
-
-    // Remove active from all buttons
-    const tabButtons = document.querySelectorAll('.tab-button');
-    tabButtons.forEach(button => button.classList.remove('active'));
-
-    // Show selected tab
-    document.getElementById(tabName + '-content').classList.add('active');
-
-    // Activate selected button
-    event.target.classList.add('active');
-}
-
-// Table filtering
-function filterTable(tableId, searchId) {
-    const input = document.getElementById(searchId);
-    const filter = input.value.toLowerCase();
-    const table = document.getElementById(tableId);
-    const rows = table.getElementsByTagName('tr');
-
-    for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        const text = row.textContent || row.innerText;
-        if (text.toLowerCase().indexOf(filter) > -1) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    }
-}
-
 // JSON modal
-function showJsonModal(data) {
+function showJsonModal(element) {
     const modal = document.getElementById('jsonModal');
     const content = document.getElementById('jsonModalContent');
+    const copyButton = document.getElementById('copyButton');
+
+    // Get JSON data from data attribute
+    const jsonString = element.getAttribute('data-json');
+    const data = JSON.parse(jsonString);
+
+    // Format and display JSON
     content.textContent = JSON.stringify(data, null, 2);
     modal.style.display = 'block';
+
+    // Reset copy button state
+    copyButton.textContent = 'Copy';
+    copyButton.classList.remove('copied');
 }
 
 function closeJsonModal() {
     document.getElementById('jsonModal').style.display = 'none';
+}
+
+function copyModalContent() {
+    const content = document.getElementById('jsonModalContent').textContent;
+    const button = document.getElementById('copyButton');
+
+    navigator.clipboard.writeText(content).then(() => {
+        button.textContent = 'Copied!';
+        button.classList.add('copied');
+
+        setTimeout(() => {
+            button.textContent = 'Copy';
+            button.classList.remove('copied');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy to clipboard');
+    });
 }
 
 // Close modal on Escape key
@@ -261,261 +276,4 @@ document.addEventListener('keydown', function(event) {
 </script>
 {% endblock %}
 
-{% block extra_head %}
-<style>
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin: 24px 0;
-}
-
-.info-card {
-    background: white;
-    border-radius: 6px;
-    padding: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.info-label {
-    font-size: 12px;
-    color: #757575;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
-}
-
-.info-value {
-    font-size: 24px;
-    font-weight: bold;
-    color: #212121;
-    margin-bottom: 4px;
-}
-
-.info-detail {
-    font-size: 12px;
-    color: #757575;
-}
-
-.tabs {
-    display: flex;
-    gap: 8px;
-    margin-top: 24px;
-    border-bottom: 2px solid #e0e0e0;
-}
-
-.tab-button {
-    padding: 12px 24px;
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    color: #616161;
-    transition: all 0.2s;
-}
-
-.tab-button:hover {
-    color: #1976d2;
-}
-
-.tab-button.active {
-    color: #1976d2;
-    border-bottom-color: #1976d2;
-}
-
-.tab-content {
-    display: none;
-    background: white;
-    border-radius: 6px;
-    padding: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    margin-top: 16px;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-.search-box {
-    margin-bottom: 16px;
-}
-
-.search-box input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    font-size: 14px;
-}
-
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.data-table thead th {
-    background: #f5f5f5;
-    padding: 12px;
-    text-align: left;
-    font-size: 12px;
-    font-weight: 600;
-    color: #616161;
-    border-bottom: 2px solid #e0e0e0;
-}
-
-.data-table tbody td {
-    padding: 12px;
-    border-bottom: 1px solid #e0e0e0;
-    font-size: 13px;
-}
-
-.data-table tbody tr:hover {
-    background: #fafafa;
-}
-
-.status-badge {
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
-.status-COMPLETED, .status-FINISHED {
-    background: #e8f5e9;
-    color: #2e7d32;
-}
-
-.status-ACTIVE, .status-RUNNING, .status-SUBMITTED, .status-QUEUED, .status-PENDING {
-    background: #e3f2fd;
-    color: #1565c0;
-}
-
-.status-FAILED {
-    background: #ffebee;
-    color: #c62828;
-}
-
-.status-ERROR {
-    background: #fce4ec;
-    color: #ad1457;
-}
-
-.status-CANCELLED {
-    background: #f5f5f5;
-    color: #616161;
-}
-
-.status-SKIPPED {
-    background: #fff3e0;
-    color: #f57c00;
-}
-
-.status-UNSUBMITTED, .status-INITIATED {
-    background: #fff9c4;
-    color: #f57f17;
-}
-
-.json-preview {
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: pointer;
-    color: #1976d2;
-}
-
-.json-preview:hover {
-    text-decoration: underline;
-}
-
-.age-badge {
-    background: #e3f2fd;
-    color: #1565c0;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-}
-
-.needs-attention {
-    color: #d32f2f;
-    font-weight: 500;
-}
-
-.progress-bar {
-    position: relative;
-    background: #e0e0e0;
-    border-radius: 4px;
-    height: 20px;
-    overflow: hidden;
-}
-
-.progress-fill {
-    background: #4caf50;
-    height: 100%;
-    transition: width 0.3s;
-}
-
-.progress-text {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 11px;
-    font-weight: bold;
-    color: #333;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 40px;
-    color: #9e9e9e;
-}
-
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-}
-
-.modal-content {
-    background: white;
-    margin: 5% auto;
-    padding: 20px;
-    border-radius: 8px;
-    width: 80%;
-    max-width: 800px;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.modal-close {
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-    color: #9e9e9e;
-}
-
-.modal-close:hover {
-    color: #333;
-}
-
-#jsonModalContent {
-    background: #f5f5f5;
-    padding: 15px;
-    border-radius: 4px;
-    overflow-x: auto;
-    font-size: 12px;
-}
-</style>
-{% endblock %}
+{% block extra_head %}{% endblock %}
