@@ -859,3 +859,178 @@ tr:hover {
     line-height: 1.5;
     white-space: pre;
 }
+
+/* Sortable Table Headers */
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 24px;
+}
+
+th.sortable:hover {
+    background: #eeeeee;
+}
+
+th.sortable::after {
+    content: '⇅';
+    position: absolute;
+    right: 8px;
+    opacity: 0.3;
+    font-size: 12px;
+}
+
+th.sort-asc::after {
+    content: '▲';
+    opacity: 1;
+    color: #1976d2;
+}
+
+th.sort-desc::after {
+    content: '▼';
+    opacity: 1;
+    color: #1976d2;
+}
+
+th.sort-asc,
+th.sort-desc {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+/* Filter Row */
+.filter-row {
+    background: #fafafa;
+}
+
+.filter-row th {
+    padding: 8px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.filter-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+}
+
+/* Filter Inputs */
+.filter-input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: border-color 0.2s;
+    background: white;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-color: #1976d2;
+}
+
+.filter-input::placeholder {
+    color: #999;
+}
+
+/* Filter Select Dropdowns */
+.filter-select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 12px;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #1976d2;
+}
+
+.filter-select option {
+    padding: 4px 8px;
+}
+
+.filter-select option:checked {
+    background: #e3f2fd;
+    color: #1976d2;
+    font-weight: 600;
+}
+
+/* Table Container */
+.table-container {
+    position: relative;
+    background: white;
+    border-radius: 6px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Filter Controls Bar */
+.filter-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.filter-toggle-btn,
+.clear-filters-btn {
+    padding: 8px 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: white;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #666;
+}
+
+.filter-toggle-btn:hover,
+.clear-filters-btn:hover {
+    background: #f5f5f5;
+    border-color: #1976d2;
+    color: #1976d2;
+}
+
+.filter-toggle-btn:active,
+.clear-filters-btn:active {
+    background: #e3f2fd;
+}
+
+/* Filter Count Badge */
+.filter-count-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 6px;
+    background: #1976d2;
+    color: white;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    min-width: 18px;
+    text-align: center;
+}
+
+/* Responsive Filter Controls */
+@media (max-width: 768px) {
+    .filter-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-toggle-btn,
+    .clear-filters-btn {
+        width: 100%;
+    }
+
+    .filter-cell {
+        overflow-x: auto;
+    }
+}

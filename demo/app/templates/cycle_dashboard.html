@@ -65,50 +65,58 @@
 <div class="batch-list">
     <h3>Batches ({{ batches|length }})</h3>
 
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Batch ID</th>
-                <th>Batch Type</th>
-                <th>Stage</th>
-                <th>Step</th>
-                <th>Status</th>
-                <th>Total Jobs</th>
-                <th>Finished</th>
-                <th>Job Alerts</th>
-                <th>Created</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for batch in batches %}
-            <tr>
-                <td>
-                    <a href="/{{ schema }}/cycle/{{ cycle_name }}/batch/{{ batch.batch_id }}" class="batch-link">
-                        {{ batch.batch_id }}
-                    </a>
-                </td>
-                <td>{{ batch.batch_type }}</td>
-                <td>{{ batch.stage_name }}</td>
-                <td>{{ batch.step_name }}</td>
-                <td>
-                    <span class="status-badge status-{{ batch.reporting_status }}">
-                        {{ batch.reporting_status }}
-                    </span>
-                </td>
-                <td>{{ batch.total_jobs }}</td>
-                <td>{{ batch.finished_jobs }}</td>
-                <td class="{% if batch.failed_jobs > 0 or batch.error_jobs > 0 %}alert-cell{% endif %}">
-                    {% set alerts = [] %}
-                    {% if batch.failed_jobs > 0 %}{% set _ = alerts.append('⚠ Failures (' ~ batch.failed_jobs ~ ')') %}{% endif %}
-                    {% if batch.error_jobs > 0 %}{% set _ = alerts.append('⚠ Errors (' ~ batch.error_jobs ~ ')') %}{% endif %}
-                    {% if batch.skipped_jobs > 0 %}{% set _ = alerts.append('⚠ Skipped (' ~ batch.skipped_jobs ~ ')') %}{% endif %}
-                    {{ alerts|join(', ') if alerts else '-' }}
-                </td>
-                <td>{{ format_timestamp(batch.created_ts) }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="table-container">
+        <!-- Filter Controls -->
+        <div class="filter-controls">
+            <button class="filter-toggle-btn" onclick="toggleFilterRow('batchesTable')">Show Filters</button>
+            <button class="clear-filters-btn" onclick="clearFilters('batchesTable')">Clear Filters</button>
+        </div>
+
+        <table class="data-table" id="batchesTable">
+            <thead>
+                <tr>
+                    <th class="sortable" onclick="sortTable('batchesTable', 0)">Batch ID</th>
+                    <th class="sortable" onclick="sortTable('batchesTable', 1)">Batch Type</th>
+                    <th class="sortable" onclick="sortTable('batchesTable', 2)">Stage</th>
+                    <th class="sortable" onclick="sortTable('batchesTable', 3)">Step</th>
+                    <th class="sortable" onclick="sortTable('batchesTable', 4)">Status</th>
+                    <th class="sortable" onclick="sortTable('batchesTable', 5)">Total Jobs</th>
+                    <th class="sortable" onclick="sortTable('batchesTable', 6)">Finished</th>
+                    <th class="sortable" onclick="sortTable('batchesTable', 7)">Job Alerts</th>
+                    <th class="sortable" onclick="sortTable('batchesTable', 8)">Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for batch in batches %}
+                <tr>
+                    <td>
+                        <a href="/{{ schema }}/cycle/{{ cycle_name }}/batch/{{ batch.batch_id }}" class="batch-link">
+                            {{ batch.batch_id }}
+                        </a>
+                    </td>
+                    <td>{{ batch.batch_type }}</td>
+                    <td>{{ batch.stage_name }}</td>
+                    <td>{{ batch.step_name }}</td>
+                    <td>
+                        <span class="status-badge status-{{ batch.reporting_status }}">
+                            {{ batch.reporting_status }}
+                        </span>
+                    </td>
+                    <td>{{ batch.total_jobs }}</td>
+                    <td>{{ batch.finished_jobs }}</td>
+                    <td class="{% if batch.failed_jobs > 0 or batch.error_jobs > 0 %}alert-cell{% endif %}">
+                        {% set alerts = [] %}
+                        {% if batch.failed_jobs > 0 %}{% set _ = alerts.append('⚠ Failures (' ~ batch.failed_jobs ~ ')') %}{% endif %}
+                        {% if batch.error_jobs > 0 %}{% set _ = alerts.append('⚠ Errors (' ~ batch.error_jobs ~ ')') %}{% endif %}
+                        {% if batch.skipped_jobs > 0 %}{% set _ = alerts.append('⚠ Skipped (' ~ batch.skipped_jobs ~ ')') %}{% endif %}
+                        {{ alerts|join(', ') if alerts else '-' }}
+                    </td>
+                    <td>{{ format_timestamp(batch.created_ts) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 {% endif %}

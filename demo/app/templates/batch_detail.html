@@ -83,112 +83,128 @@
 <!-- Jobs Tab Content -->
 <div id="jobs-content" class="tab-content active">
     <div class="search-box">
-        <input type="text" id="jobSearch" placeholder="Search jobs..." onkeyup="filterTable('jobsTable', 'jobSearch')">
+        <input type="text" id="jobSearch" placeholder="Search jobs..." onkeyup="filterTable('jobSearch', 'jobsTable')">
     </div>
 
-    <table class="data-table" id="jobsTable">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Moody's Job ID</th>
-                <th>Moody's Job Status</th>
-                <th>Status</th>
-                <th>Job Configuration JSON</th>
-                <th>Configuration Override</th>
-                <th>Age (hrs)</th>
-                <th>Next Best Action</th>
-                <th>Parent Job</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if jobs %}
-                {% for job in jobs %}
+    <div class="table-container">
+        <!-- Filter Controls -->
+        <div class="filter-controls">
+            <button class="filter-toggle-btn" onclick="toggleFilterRow('jobsTable')">Show Filters</button>
+            <button class="clear-filters-btn" onclick="clearFilters('jobsTable')">Clear Filters</button>
+        </div>
+
+        <table class="data-table" id="jobsTable">
+            <thead>
                 <tr>
-                    <td>{{ job.id }}</td>
-                    <td>{{ job.moodys_workflow_id or '-' }}</td>
-                    <td><span class="status-badge status-{{ job.status }}">{{ job.status }}</span></td>
-                    <td><span class="status-badge status-{{ job.report_status }}">{{ job.report_status or '-' }}</span></td>
-                    <td>
-                        <div class="json-preview" data-json="{{ job.job_configuration_data|tojson|forceescape }}" onclick="showJsonModal(this)">
-                            {{ job.job_configuration_data|tojson|truncate(50) }}
-                        </div>
-                    </td>
-                    <td>{{ ('✓ ' ~ job.override_reason_txt) if job.overridden else '-' }}</td>
-                    <td>
-                        {% if job.age_hours %}
-                            <span class="age-badge">{{ "%.2f"|format(job.age_hours) }}h</span>
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td class="{% if job.needs_attention %}needs-attention{% endif %}">
-                        {{ job.next_best_action or '-' }}
-                    </td>
-                    <td>{{ job.parent_job_id or '-' }}</td>
+                    <th class="sortable" onclick="sortTable('jobsTable', 0)">ID</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 1)">Moody's Job ID</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 2)">Moody's Job Status</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 3)">Status</th>
+                    <th>Job Configuration JSON</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 5)">Configuration Override</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 6)">Age (hrs)</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 7)">Next Best Action</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 8)">Parent Job</th>
                 </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="9" class="empty-state">No jobs found</td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {% if jobs %}
+                    {% for job in jobs %}
+                    <tr>
+                        <td>{{ job.id }}</td>
+                        <td>{{ job.moodys_workflow_id or '-' }}</td>
+                        <td><span class="status-badge status-{{ job.status }}">{{ job.status }}</span></td>
+                        <td><span class="status-badge status-{{ job.report_status }}">{{ job.report_status or '-' }}</span></td>
+                        <td>
+                            <div class="json-preview" data-json="{{ job.job_configuration_data|tojson|forceescape }}" onclick="showJsonModal(this)">
+                                {{ job.job_configuration_data|tojson|truncate(50) }}
+                            </div>
+                        </td>
+                        <td>{{ ('✓ ' ~ job.override_reason_txt) if job.overridden else '-' }}</td>
+                        <td>
+                            {% if job.age_hours %}
+                                <span class="age-badge">{{ "%.2f"|format(job.age_hours) }}h</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="{% if job.needs_attention %}needs-attention{% endif %}">
+                            {{ job.next_best_action or '-' }}
+                        </td>
+                        <td>{{ job.parent_job_id or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr><td colspan="9" class="empty-state">No jobs found</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- Configurations Tab Content -->
 <div id="configurations-content" class="tab-content">
     <div class="search-box">
-        <input type="text" id="configSearch" placeholder="Search configurations..." onkeyup="filterTable('configsTable', 'configSearch')">
+        <input type="text" id="configSearch" placeholder="Search configurations..." onkeyup="filterTable('configSearch', 'configsTable')">
     </div>
 
-    <table class="data-table" id="configsTable">
-        <thead>
-            <tr>
-                <th>Config ID</th>
-                <th>Status</th>
-                <th>Configuration JSON</th>
-                <th>Total Jobs</th>
-                <th>Active</th>
-                <th>Finished</th>
-                <th>Failed</th>
-                <th>Progress %</th>
-                <th>Job Alerts</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if configs %}
-                {% for config in configs %}
+    <div class="table-container">
+        <!-- Filter Controls -->
+        <div class="filter-controls">
+            <button class="filter-toggle-btn" onclick="toggleFilterRow('configsTable')">Show Filters</button>
+            <button class="clear-filters-btn" onclick="clearFilters('configsTable')">Clear Filters</button>
+        </div>
+
+        <table class="data-table" id="configsTable">
+            <thead>
                 <tr>
-                    <td>{{ config.config_id }}</td>
-                    <td><span class="status-badge status-{{ config.config_report_status }}">{{ config.config_report_status }}</span></td>
-                    <td>
-                        <div class="json-preview" data-json="{{ config.job_configuration_data|tojson|forceescape }}" onclick="showJsonModal(this)">
-                            {{ config.job_configuration_data|tojson|truncate(50) }}
-                        </div>
-                    </td>
-                    <td>{{ config.total_jobs }}</td>
-                    <td>{{ config.active_jobs }}</td>
-                    <td>{{ config.finished_jobs }}</td>
-                    <td>{{ config.failed_jobs }}</td>
-                    <td>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: {{ config.progress_percent }}%"></div>
-                            <span class="progress-text">{{ "%.0f"|format(config.progress_percent) }}%</span>
-                        </div>
-                    </td>
-                    <td>
-                        {% set alerts = [] %}
-                        {% if config.has_failures %}{% set _ = alerts.append('⚠ Failures (' ~ config.failed_jobs ~ ')') %}{% endif %}
-                        {% if config.has_errors %}{% set _ = alerts.append('⚠ Errors (' ~ config.error_jobs ~ ')') %}{% endif %}
-                        {% if config.has_unsubmitted %}{% set _ = alerts.append('⚠ Unsubmitted (' ~ config.unsubmitted_jobs ~ ')') %}{% endif %}
-                        {{ alerts|join(', ') if alerts else '-' }}
-                    </td>
+                    <th class="sortable" onclick="sortTable('configsTable', 0)">Config ID</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 1)">Status</th>
+                    <th>Configuration JSON</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 3)">Total Jobs</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 4)">Active</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 5)">Finished</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 6)">Failed</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 7)">Progress %</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 8)">Job Alerts</th>
                 </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="9" class="empty-state">No configurations found</td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {% if configs %}
+                    {% for config in configs %}
+                    <tr>
+                        <td>{{ config.config_id }}</td>
+                        <td><span class="status-badge status-{{ config.config_report_status }}">{{ config.config_report_status }}</span></td>
+                        <td>
+                            <div class="json-preview" data-json="{{ config.job_configuration_data|tojson|forceescape }}" onclick="showJsonModal(this)">
+                                {{ config.job_configuration_data|tojson|truncate(50) }}
+                            </div>
+                        </td>
+                        <td>{{ config.total_jobs }}</td>
+                        <td>{{ config.active_jobs }}</td>
+                        <td>{{ config.finished_jobs }}</td>
+                        <td>{{ config.failed_jobs }}</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ config.progress_percent }}%"></div>
+                                <span class="progress-text">{{ "%.0f"|format(config.progress_percent) }}%</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% set alerts = [] %}
+                            {% if config.has_failures %}{% set _ = alerts.append('⚠ Failures (' ~ config.failed_jobs ~ ')') %}{% endif %}
+                            {% if config.has_errors %}{% set _ = alerts.append('⚠ Errors (' ~ config.error_jobs ~ ')') %}{% endif %}
+                            {% if config.has_unsubmitted %}{% set _ = alerts.append('⚠ Unsubmitted (' ~ config.unsubmitted_jobs ~ ')') %}{% endif %}
+                            {{ alerts|join(', ') if alerts else '-' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr><td colspan="9" class="empty-state">No configurations found</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- JSON Modal -->
