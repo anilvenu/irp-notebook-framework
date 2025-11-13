@@ -449,7 +449,7 @@ def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     for job_record in jobs:
         if job_record['status'] in JobStatus.ready_for_submit() and not job_record['skipped']:
             try:
-                job.submit_job(job_record['id'], schema=schema)
+                job.submit_job(job_record['id'], batch['batch_type'], schema=schema)
                 submitted_jobs.append({
                     'job_id': job_record['id'],
                     'status': 'SUBMITTED'

@@ -183,10 +183,10 @@ def delete_cycle(cycle_id: int) -> bool:
     """
     Permanently delete a cycle and all associated data.
 
-    WARNING: This is a hard delete that will CASCADE to all related records:
-    - All stages in the cycle
-    - All steps in those stages
-    - All step runs for those steps
+    WARNING: This is a hard delete that will remove ALL related records:
+    - All batches and jobs (must be deleted first due to FK constraints)
+    - All configurations
+    - All stages, steps, and step runs
     - All associated execution history
 
     This operation CANNOT be undone. Consider using archive_cycle_by_name() instead
@@ -220,6 +220,49 @@ def delete_cycle(cycle_id: int) -> bool:
         Use archive_cycle_by_name(): Safer alternative that preserves data
         Use get_cycle_by_name(): To verify before deleting
     """
+    # Get all configuration IDs for this cycle
+    config_query = """
+        SELECT id FROM irp_configuration
+        WHERE cycle_id = %s
+    """
+    config_df = execute_query(config_query, (cycle_id,))
+
+    if not config_df.empty:
+        config_ids = tuple(config_df['id'].tolist())
+
+        # Get all batch IDs for these configurations
+        if len(config_ids) == 1:
+            batch_query = "SELECT id FROM irp_batch WHERE configuration_id = %s"
+            batch_df = execute_query(batch_query, config_ids)
+        else:
+            batch_query = "SELECT id FROM irp_batch WHERE configuration_id IN %s"
+            batch_df = execute_query(batch_query, (config_ids,))
+
+        if not batch_df.empty:
+            batch_ids = tuple(batch_df['id'].tolist())
+
+            # Delete in order: irp_job -> irp_job_configuration -> irp_batch
+            # (irp_job has CASCADE from irp_batch, but we'll be explicit)
+
+            # Delete jobs first
+            if len(batch_ids) == 1:
+                execute_command("DELETE FROM irp_job WHERE batch_id = %s", batch_ids)
+            else:
+                execute_command("DELETE FROM irp_job WHERE batch_id IN %s", (batch_ids,))
+
+            # Delete job configurations
+            if len(batch_ids) == 1:
+                execute_command("DELETE FROM irp_job_configuration WHERE batch_id = %s", batch_ids)
+            else:
+                execute_command("DELETE FROM irp_job_configuration WHERE batch_id IN %s", (batch_ids,))
+
+            # Finally delete batches
+            if len(batch_ids) == 1:
+                execute_command("DELETE FROM irp_batch WHERE id = %s", batch_ids)
+            else:
+                execute_command("DELETE FROM irp_batch WHERE id IN %s", (batch_ids,))
+
+    # Now delete the cycle (which will CASCADE to configurations, stages, steps, etc.)
     query = """
         DELETE FROM irp_cycle
         WHERE id = %s
@@ -342,13 +385,24 @@ def delete_archived_cycles() -> int:
     Returns:
         Number of cycles deleted
     """
-    query = """
-        DELETE
-        FROM irp_cycle
+    # Get all archived cycle IDs
+    archived_query = """
+        SELECT id FROM irp_cycle
         WHERE status = 'ARCHIVED'
     """
+    archived_df = execute_query(archived_query)
 
-    return execute_command(query)
+    if archived_df.empty:
+        return 0
+
+    # Delete each archived cycle using the delete_cycle function
+    # which properly handles all foreign key constraints
+    count = 0
+    for cycle_id in archived_df['id'].tolist():
+        if delete_cycle(cycle_id):
+            count += 1
+
+    return count
 
 
 def validate_cycle_name(cycle_name: str) -> bool:
