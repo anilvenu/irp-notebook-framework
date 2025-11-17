@@ -228,7 +228,7 @@ METADATA_SCHEMA = {
         'Hazard Version': r'\d+(\.\d+)?(\.\d+)?',
         'Validate DLM Model Versions?': r'^[YN]$',
         'Validate HD Model Versions?': r'^[YN]$',
-        'Export RDM Name': r'^RM_RDM_'
+        'Export RDM Name': r'^(RM_|RMS_|TEST_)RDM_'
     }
 }
 
@@ -246,7 +246,7 @@ DATABASES_SCHEMA = {
     },
     'unique_columns': ['Database'],
     'value_patterns': {
-        'Database': r'RM?_EDM_\d{6}_.*',  # Accepts both RM_EDM and RMS_EDM
+        'Database': r'(RM_|RMS_|TEST_)EDM_\d{6}_.*',  # Accepts RM_EDM, RMS_EDM, and TEST_EDM
         'Store in Data Bridge?': r'^[YN]$'
     }
 }

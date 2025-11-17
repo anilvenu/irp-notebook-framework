@@ -45,9 +45,21 @@ from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus
 # ============================================================================
 
 def create_test_hierarchy(test_schema, cycle_name='test_cycle', config_data=None):
-    """Helper to create cycle, stage, step, and configuration"""
+    """Helper to create cycle, stage, step, and configuration
+
+    Creates a configuration suitable for EDM Creation batch type by default,
+    which is needed for tests that submit batches.
+    """
     if config_data is None:
-        config_data = {'param1': 'value1', 'param2': 100}
+        config_data = {
+            'Metadata': {
+                'cycle': cycle_name,
+                'date': '2024-01-01'
+            },
+            'Databases': [
+                {'Database': 'TestDB', 'Server': 'databridge-1'}
+            ]
+        }
 
     # Create cycle
     cycle_id = execute_insert(
@@ -89,18 +101,18 @@ def create_test_hierarchy(test_schema, cycle_name='test_cycle', config_data=None
 
 @pytest.mark.database
 @pytest.mark.e2e
-def test_end_to_end_batch_workflow(test_schema):
+def test_end_to_end_batch_workflow(test_schema, mock_irp_client):
     """Test complete end-to-end batch workflow"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_e2e')
 
     # Step 1: Create and submit batch
     batch_id = create_batch(
-        batch_type='test_default',
+        batch_type='EDM Creation',
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
     )
-    submit_batch(batch_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Step 2: Verify batch is ACTIVE
     batch = read_batch(batch_id, schema=test_schema)
@@ -115,7 +127,7 @@ def test_end_to_end_batch_workflow(test_schema):
     # Step 4: Track jobs to completion
     for job in jobs:
         for i in range(10):  # Max 10 attempts
-            status = track_job_status(job['id'], schema=test_schema)
+            status = track_job_status(job['id'], mock_irp_client, schema=test_schema)
             if status in [JobStatus.FINISHED, JobStatus.FAILED, JobStatus.CANCELLED]:
                 break
 
@@ -141,7 +153,7 @@ def test_end_to_end_batch_workflow(test_schema):
 
 @pytest.mark.database
 @pytest.mark.e2e
-def test_multi_job_batch_workflow(test_schema):
+def test_multi_job_batch_workflow(test_schema, mock_irp_client):
     """Test multi-job batch workflow"""
     # Create config with multiple jobs
     config_data = {
@@ -163,7 +175,7 @@ def test_multi_job_batch_workflow(test_schema):
         step_id=step_id,
         schema=test_schema
     )
-    submit_batch(batch_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Verify 5 jobs created
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -172,13 +184,13 @@ def test_multi_job_batch_workflow(test_schema):
 
 @pytest.mark.database
 @pytest.mark.e2e
-def test_job_resubmission_workflow(test_schema):
+def test_job_resubmission_workflow(test_schema, mock_irp_client):
     """Test job resubmission workflow"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_resubmit_workflow')
 
     # Create and submit batch
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     original_jobs = get_batch_jobs(batch_id, schema=test_schema)
     original_job_id = original_jobs[0]['id']
@@ -187,7 +199,7 @@ def test_job_resubmission_workflow(test_schema):
     update_job_status(original_job_id, JobStatus.FAILED, schema=test_schema)
 
     # Resubmit job
-    new_job_id = resubmit_job(original_job_id, schema=test_schema)
+    new_job_id = resubmit_job(original_job_id, mock_irp_client, 'EDM Creation', schema=test_schema)
 
     # Verify original job is skipped
     original_job = read_job(original_job_id, schema=test_schema)
@@ -198,9 +210,9 @@ def test_job_resubmission_workflow(test_schema):
     assert new_job['parent_job_id'] == original_job_id
 
     # Submit and track new job
-    submit_job(new_job_id, schema=test_schema)
+    submit_job(new_job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
     for i in range(10):
-        status = track_job_status(new_job_id, schema=test_schema)
+        status = track_job_status(new_job_id, mock_irp_client, schema=test_schema)
         if status in [JobStatus.FINISHED, JobStatus.FAILED]:
             break
 
@@ -211,13 +223,13 @@ def test_job_resubmission_workflow(test_schema):
 
 @pytest.mark.database
 @pytest.mark.e2e
-def test_configuration_override_workflow(test_schema):
+def test_configuration_override_workflow(test_schema, mock_irp_client):
     """Test configuration override workflow"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_override_workflow')
 
     # Create and submit batch
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     original_jobs = get_batch_jobs(batch_id, schema=test_schema)
     original_job_id = original_jobs[0]['id']
@@ -227,6 +239,8 @@ def test_configuration_override_workflow(test_schema):
 
     # Resubmit with override
     override_config = {
+        'Database': 'OverriddenDB',
+        'Server': 'databridge-1',
         'param1': 'overridden_value',
         'param2': 999,
         'new_param': 'added'
@@ -235,6 +249,8 @@ def test_configuration_override_workflow(test_schema):
 
     new_job_id = resubmit_job(
         original_job_id,
+        mock_irp_client,
+        'EDM Creation',
         job_configuration_data=override_config,
         override_reason=override_reason,
         schema=test_schema
@@ -253,7 +269,7 @@ def test_configuration_override_workflow(test_schema):
 
 @pytest.mark.database
 @pytest.mark.e2e
-def test_mixed_job_states_recon(test_schema):
+def test_mixed_job_states_recon(test_schema, mock_irp_client):
     """Test batch reconciliation with mixed job states"""
     # Create config with multiple jobs
     config_data = {
@@ -269,7 +285,7 @@ def test_mixed_job_states_recon(test_schema):
 
     # Create and submit batch
     batch_id = create_batch('test_multi_job', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     jobs = get_batch_jobs(batch_id, schema=test_schema)
 
@@ -303,13 +319,13 @@ def test_mixed_job_states_recon(test_schema):
 
 @pytest.mark.database
 @pytest.mark.e2e
-def test_parent_child_job_chain(test_schema):
+def test_parent_child_job_chain(test_schema, mock_irp_client):
     """Test parent-child job chain"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_job_chain')
 
     # Create and submit batch
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     jobs = get_batch_jobs(batch_id, schema=test_schema)
     original_job_id = jobs[0]['id']
@@ -321,7 +337,7 @@ def test_parent_child_job_chain(test_schema):
     current_job_id = original_job_id
     for i in range(3):
         update_job_status(current_job_id, JobStatus.FAILED, schema=test_schema)
-        new_job_id = resubmit_job(current_job_id, schema=test_schema)
+        new_job_id = resubmit_job(current_job_id, mock_irp_client, 'EDM Creation', schema=test_schema)
         job_chain.append(new_job_id)
         current_job_id = new_job_id
 

@@ -338,6 +338,95 @@ def sample_batch(sample_hierarchy, test_schema):
     }
 
 
+@pytest.fixture
+def mock_irp_client():
+    """
+    Mock IRPClient for testing without actual API calls.
+
+    This fixture provides a mock IRPClient that simulates Moody's API responses
+    without making actual HTTP requests. It's configured with default behaviors
+    that work for most test scenarios.
+
+    The mock tracks:
+    - Submitted EDM creation jobs
+    - Job status queries
+    - Job IDs and their statuses
+
+    Default behaviors:
+    - submit_create_edm_job(): Returns incrementing job IDs (1, 2, 3...)
+    - get_risk_data_job(): Returns job with FINISHED status
+
+    You can customize behavior per test using side_effect or return_value:
+
+    Example - Simulate API failure:
+        def test_submit_failure(mock_irp_client):
+            from helpers.irp_integration.exceptions import IRPAPIError
+            mock_irp_client.edm.submit_create_edm_job.side_effect = IRPAPIError("Connection failed")
+            # Test error handling...
+
+    Example - Simulate job progression:
+        def test_job_tracking(mock_irp_client):
+            # Simulate job transitioning from PENDING -> RUNNING -> FINISHED
+            mock_irp_client.job.get_risk_data_job.side_effect = [
+                {'status': 'PENDING', 'progress': 0},
+                {'status': 'RUNNING', 'progress': 50},
+                {'status': 'FINISHED', 'progress': 100}
+            ]
+            # Test polling logic...
+
+    Returns:
+        MagicMock: Configured mock IRPClient instance
+    """
+    from unittest.mock import MagicMock
+
+    # Create main mock client
+    mock_client = MagicMock()
+
+    # Configure EDM manager mock
+    mock_edm = MagicMock()
+
+    # Track submitted EDM jobs (for stateful testing if needed)
+    submitted_edms = []
+
+    def mock_submit_edm(edm_name, server_name="databridge-1"):
+        """Mock EDM submission - returns incrementing job IDs"""
+        job_id = len(submitted_edms) + 1
+        submitted_edms.append({
+            'job_id': job_id,
+            'edm_name': edm_name,
+            'server_name': server_name
+        })
+        return job_id
+
+    mock_edm.submit_create_edm_job.side_effect = mock_submit_edm
+
+    # Configure Job manager mock
+    mock_job_manager = MagicMock()
+
+    # Default job status response - FINISHED
+    def mock_get_job(job_id):
+        """Mock job status retrieval - returns FINISHED status by default"""
+        return {
+            'jobId': job_id,
+            'status': 'FINISHED',
+            'progress': 100,
+            'message': 'Job completed successfully',
+            'createdDate': '2024-01-01T00:00:00Z',
+            'completedDate': '2024-01-01T00:01:00Z'
+        }
+
+    mock_job_manager.get_risk_data_job.side_effect = mock_get_job
+
+    # Attach managers to client
+    mock_client.edm = mock_edm
+    mock_client.job = mock_job_manager
+
+    # Store submitted_edms for inspection in tests (if needed)
+    mock_client._test_submitted_edms = submitted_edms
+
+    return mock_client
+
+
 # ==============================================================================
 # HELPER FUNCTIONS (for use in tests)
 # ==============================================================================

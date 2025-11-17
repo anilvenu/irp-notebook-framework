@@ -408,23 +408,29 @@ def delete_archived_cycles() -> int:
 def validate_cycle_name(cycle_name: str) -> bool:
     """
     Validate cycle name against rules.
-    
+
     Args:
         cycle_name: Proposed cycle name
-    
+
     Returns:
         bool of is_valid
     """
-    
+    import re
+
     # Check length
     if len(cycle_name) < CYCLE_NAME_RULES['min_length']:
         print(f"Name too short (min {CYCLE_NAME_RULES['min_length']} chars)")
         return False
-    
+
     if len(cycle_name) > CYCLE_NAME_RULES['max_length']:
         print(f"Name too long (max {CYCLE_NAME_RULES['max_length']} chars)")
         return False
-    
+
+    # Check for invalid characters (only allow alphanumeric, hyphens, and underscores)
+    if not re.match(r'^[A-Za-z0-9_-]+$', cycle_name):
+        print(f"Invalid characters in cycle name. Only alphanumeric, hyphens, and underscores allowed")
+        return False
+
     # Check if name already exists
     existing = get_cycle_by_name(cycle_name)
     if existing:

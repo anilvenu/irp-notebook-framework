@@ -158,7 +158,7 @@ def create_job(
         raise JobError(f"Failed to create job: {str(e)}")   # pragma: no cover
 
 
-def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str) -> Tuple[Optional[str], Dict, Dict]:
+def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_client: 'IRPClient') -> Tuple[Optional[str], Dict, Dict]:
     """
     Submit job to Moody's workflow API.
 
@@ -168,34 +168,29 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str) -> Tup
         job_id: Job ID
         job_config: Job configuration data
         batch_type: Type of batch (from irp_batch.batch_type)
+        irp_client: IRPClient instance
 
     Returns:
         Tuple of (workflow_id, request_json, response_json)
         Returns (None, request_json, error_response) on failure
     """
-    from helpers.irp_integration import IRPClient
-    from helpers.irp_integration.exceptions import IRPAPIError
-
     try:
-        # Initialize Moody's API client
-        client = IRPClient()
-
         # Route to appropriate submission handler based on batch type
         if batch_type == 'EDM Creation':
             workflow_id, request_json, response_json = _submit_edm_creation_job(
-                job_id, job_config, client
+                job_id, job_config, irp_client
             )
         elif batch_type == 'Portfolio Creation':
             workflow_id, request_json, response_json = _submit_portfolio_creation_job(
-                job_id, job_config, client
+                job_id, job_config, irp_client
             )
         elif batch_type == 'MRI Import':
             workflow_id, request_json, response_json = _submit_mri_import_job(
-                job_id, job_config, client
+                job_id, job_config, irp_client
             )
         elif batch_type == 'Analysis':
             workflow_id, request_json, response_json = _submit_analysis_job(
-                job_id, job_config, client
+                job_id, job_config, irp_client
             )
         # Add more batch types as needed
         else:
@@ -244,33 +239,13 @@ def _submit_edm_creation_job(
     Returns:
         Tuple of (workflow_id, request_json, response_json)
     """
-    # Extract required fields
-    edm_name = job_config.get('Database')  # EDM name from Database column
-    server_name = "databridge-1"  # Default server name (hardcoded for now)
-
+    edm_name = job_config.get('Database')
     if not edm_name:
         raise ValueError("Missing required field: Database")
 
-    # Step 1: Lookup database server by name
-    database_servers = client.edm.search_database_servers(filter=f"serverName=\"{server_name}\"")
-    if not database_servers:
-        raise ValueError(f"Database server not found: {server_name}")
-    database_server_id = database_servers[0]['serverId']
-
-    # Step 2: Search or create exposure set
-    exposure_sets = client.edm.search_exposure_sets(filter=f"exposureSetName=\"{edm_name}\"")
-    if exposure_sets:
-        # Use existing exposure set
-        exposure_set_id = exposure_sets[0]['exposureSetId']
-    else:
-        # Create new exposure set
-        exposure_set_id = client.edm.create_exposure_set(name=edm_name)
-
-    # Step 3: Submit EDM creation job
+    # Submit EDM creation job
     moody_job_id = client.edm.submit_create_edm_job(
-        exposure_set_id=exposure_set_id,
-        edm_name=edm_name,
-        server_id=database_server_id
+        edm_name=edm_name
     )
 
     # Build workflow ID
@@ -282,10 +257,7 @@ def _submit_edm_creation_job(
         'batch_type': 'EDM Creation',
         'configuration': job_config,
         'api_request': {
-            'edm_name': edm_name,
-            'server_name': server_name,
-            'server_id': database_server_id,
-            'exposure_set_id': exposure_set_id
+            'edm_name': edm_name
         },
         'submitted_at': datetime.now().isoformat()
     }
@@ -293,7 +265,6 @@ def _submit_edm_creation_job(
     response_json = {
         'workflow_id': workflow_id,
         'moody_job_id': moody_job_id,
-        'exposure_set_id': exposure_set_id,
         'status': 'ACCEPTED',
         'message': 'EDM creation job submitted successfully'
     }
@@ -784,6 +755,7 @@ def skip_job_configuration(
 def submit_job(
     job_id: int,
     batch_type: str,
+    irp_client: 'IRPClient',
     force: bool = False,
     track_immediately: bool = False,
     schema: str = 'public'
@@ -842,7 +814,8 @@ def submit_job(
         workflow_id, request, response = _submit_job(
             job_id,
             job_config['job_configuration_data'],
-            batch_type
+            batch_type,
+            irp_client
         )
 
         # Check if submission succeeded
@@ -867,13 +840,14 @@ def submit_job(
 
     # Optionally track immediately
     if track_immediately:
-        track_job_status(job_id, schema=schema)
+        track_job_status(job_id, irp_client, schema=schema)
 
     return job_id
 
 
 def track_job_status(
     job_id: int,
+    irp_client: 'IRPClient',
     moodys_workflow_id: Optional[str] = None,
     schema: str = 'public'
 ) -> str:
@@ -888,6 +862,7 @@ def track_job_status(
 
     Args:
         job_id: Job ID
+        irp_client: IRPClient instance for API calls
         moodys_workflow_id: Optional workflow ID (uses job's if None)
         schema: Database schema
 
@@ -916,16 +891,12 @@ def track_job_status(
     current_status = job['status']
 
     # Poll Moody's API for current job status
-    from helpers.irp_integration import IRPClient
     from helpers.irp_integration.exceptions import IRPAPIError
 
     try:
-        # Initialize Moody's API client
-        client = IRPClient()
-
         # Get job status from Moody's
         # Note: workflow_id from our DB is Moody's job_id
-        job_data = client.job.get_risk_data_job(int(workflow_id))
+        job_data = irp_client.job.get_risk_data_job(int(workflow_id))
 
         # Extract status and full data
         new_status = job_data['status']
@@ -957,6 +928,8 @@ def track_job_status(
 
 def resubmit_job(
     job_id: int,
+    irp_client: 'IRPClient',
+    batch_type: str,
     job_configuration_data: Optional[Dict[str, Any]] = None,
     override_reason: Optional[str] = None,
     schema: str = 'public'
@@ -1072,7 +1045,7 @@ def resubmit_job(
 
     # Submit the job AFTER transaction completes successfully
     # Job submission involves external API call, so keep it outside transaction
-    submit_job(new_job_id, schema=schema)
+    submit_job(new_job_id, batch_type=batch_type, irp_client=irp_client, schema=schema)
     # TODO Handle submission error
 
     return new_job_id

@@ -329,7 +329,7 @@ def test_transaction_rollback_batch_creation_on_error(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_transaction_atomic_job_resubmission(test_schema):
+def test_transaction_atomic_job_resubmission(test_schema, mock_irp_client):
     """Test that job resubmission (create new job + skip old job) is atomic"""
     from helpers.job import create_job_with_config, resubmit_job, read_job
     from helpers.constants import ConfigurationStatus
@@ -365,7 +365,7 @@ def test_transaction_atomic_job_resubmission(test_schema):
     # Create batch
     batch_id = execute_insert(
         "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
-        (step_id, config_id, 'test_type', 'INITIATED'),
+        (step_id, config_id, 'EDM Creation', 'INITIATED'),
         schema=test_schema
     )
 
@@ -379,9 +379,11 @@ def test_transaction_atomic_job_resubmission(test_schema):
     )
 
     # Resubmit with override
-    override_config = {'overridden': 'config', 'reason': 'testing'}
+    override_config = {'Database': 'OverriddenDB', 'overridden': 'config', 'reason': 'testing'}
     new_job_id = resubmit_job(
         job_id=original_job_id,
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
         job_configuration_data=override_config,
         override_reason='Testing transaction atomicity',
         schema=test_schema
