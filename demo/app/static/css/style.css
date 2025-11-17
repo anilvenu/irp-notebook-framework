@@ -719,23 +719,29 @@ tr:hover {
 /* From batch_detail.html - Tab Button */
 .tab-button {
     padding: 12px 24px;
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-bottom: none;
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    color: #616161;
+    color: #757575;
     transition: all 0.2s;
+    margin-right: 4px;
+    border-radius: 4px 4px 0 0;
 }
 
 .tab-button:hover {
-    color: #1976d2;
+    color: #5a5a5a;
+    background: #eeeeee;
 }
 
 .tab-button.active {
-    color: #1976d2;
-    border-bottom-color: #1976d2;
+    color: #424242;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-bottom: 3px solid #1976d2;
+    font-weight: 600;
 }
 
 /* From batch_detail.html - Search Box Input */
@@ -745,6 +751,12 @@ tr:hover {
     border: 1px solid #e0e0e0;
     border-radius: 4px;
     font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: #999;
 }
 
 /* From batch_detail.html - Progress Bar */
@@ -869,7 +881,7 @@ th.sortable {
 }
 
 th.sortable:hover {
-    background: #eeeeee;
+    background: #f5f5f5;
 }
 
 th.sortable::after {
@@ -882,20 +894,20 @@ th.sortable::after {
 
 th.sort-asc::after {
     content: '▲';
-    opacity: 1;
-    color: #1976d2;
+    opacity: 0.6;
+    color: #666;
 }
 
 th.sort-desc::after {
     content: '▼';
-    opacity: 1;
-    color: #1976d2;
+    opacity: 0.6;
+    color: #666;
 }
 
 th.sort-asc,
 th.sort-desc {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #f0f0f0;
+    color: #424242;
 }
 
 /* Filter Row */
@@ -928,7 +940,7 @@ th.sort-desc {
 
 .filter-input:focus {
     outline: none;
-    border-color: #1976d2;
+    border-color: #999;
 }
 
 .filter-input::placeholder {
@@ -949,7 +961,7 @@ th.sort-desc {
 
 .filter-select:focus {
     outline: none;
-    border-color: #1976d2;
+    border-color: #999;
 }
 
 .filter-select option {
@@ -957,8 +969,8 @@ th.sort-desc {
 }
 
 .filter-select option:checked {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #f0f0f0;
+    color: #424242;
     font-weight: 600;
 }
 
@@ -995,13 +1007,13 @@ th.sort-desc {
 .filter-toggle-btn:hover,
 .clear-filters-btn:hover {
     background: #f5f5f5;
-    border-color: #1976d2;
-    color: #1976d2;
+    border-color: #999;
+    color: #424242;
 }
 
 .filter-toggle-btn:active,
 .clear-filters-btn:active {
-    background: #e3f2fd;
+    background: #eeeeee;
 }
 
 /* Filter Count Badge */
@@ -1009,7 +1021,7 @@ th.sort-desc {
     display: inline-block;
     margin-left: 6px;
     padding: 2px 6px;
-    background: #1976d2;
+    background: #666;
     color: white;
     border-radius: 10px;
     font-size: 10px;
