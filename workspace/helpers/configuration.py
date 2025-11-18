@@ -53,6 +53,22 @@ def _extract_metadata(config: Dict[str, Any]) -> Dict[str, Any]:
     return config.get('Metadata', {})
 
 
+def get_base_portfolios(portfolios: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Filter base portfolios from a list of portfolio dictionaries.
+
+    Args:
+        portfolios: List of portfolio dictionaries with keys:
+                   - "Portfolio": Portfolio name
+                   - "Database": Database name
+                   - "Base Portfolio?": "Y" (base) or "N" (not base)
+
+    Returns:
+        List of portfolio dictionaries where "Base Portfolio?" == "Y"
+    """
+    return [p for p in portfolios if p.get('Base Portfolio?') == 'Y']
+
+
 # ============================================================================
 # TRANSFORMERS - Batch Type Functions
 # ============================================================================
@@ -95,9 +111,10 @@ def transform_portfolio_creation(config: Dict[str, Any]) -> List[Dict[str, Any]]
     """
     metadata = _extract_metadata(config)
     portfolios = config.get('Portfolios', [])
+    base_portfolios = get_base_portfolios(portfolios)
 
     job_configs = []
-    for portfolio_row in portfolios:
+    for portfolio_row in base_portfolios:
         job_config = {
             'Metadata': metadata,
             **portfolio_row
