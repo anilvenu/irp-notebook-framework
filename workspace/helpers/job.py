@@ -31,6 +31,7 @@ from helpers.database import (
     execute_query, execute_command, execute_insert, DatabaseError
 )
 from helpers.constants import JobStatus
+from helpers.configuration import BATCH_TYPE_TRANSFORMERS
 
 
 class JobError(Exception):
@@ -175,6 +176,9 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
         Returns (None, request_json, error_response) on failure
     """
     try:
+        if batch_type not in BATCH_TYPE_TRANSFORMERS:
+            raise ValueError(f"Unsupported batch type: {batch_type}")
+
         # Route to appropriate submission handler based on batch type
         if batch_type == 'EDM Creation':
             workflow_id, request_json, response_json = _submit_edm_creation_job(
@@ -193,8 +197,6 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
                 job_id, job_config, irp_client
             )
         # Add more batch types as needed
-        else:
-            raise ValueError(f"Unsupported batch type: {batch_type}")
 
         return workflow_id, request_json, response_json
 

@@ -209,9 +209,8 @@ class EDMManager:
         Submit job to create a new EDM (exposure).
 
         Args:
-            exposure_set_id: ID of the exposure set
             edm_name: Name of the EDM
-            server_id: ID of the database server
+            server_name: Name of the database server (default: "databridge-1")
 
         Returns:
             The EDM ID
@@ -231,7 +230,7 @@ class EDMManager:
 
         # Validate Exposure Set exists; create if it does not exist
         exposure_sets = self.search_exposure_sets(filter=f"exposureSetName={edm_name}")
-        if (len(exposure_sets) > 1):
+        if (len(exposure_sets) > 0):
             try:
                 exposure_set_id = exposure_sets[0]['exposureSetId']
             except (KeyError, TypeError, IndexError) as e:

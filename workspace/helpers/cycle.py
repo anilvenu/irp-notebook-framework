@@ -415,7 +415,6 @@ def validate_cycle_name(cycle_name: str) -> bool:
     Returns:
         bool of is_valid
     """
-    import re
 
     # Check length
     if len(cycle_name) < CYCLE_NAME_RULES['min_length']:
