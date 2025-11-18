@@ -21,12 +21,10 @@ Workflow:
 
 import os
 import json
-from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 
-if TYPE_CHECKING:
-    from helpers.irp_integration import IRPClient
-
+from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, DatabaseError
 )
@@ -159,7 +157,7 @@ def create_job(
         raise JobError(f"Failed to create job: {str(e)}")   # pragma: no cover
 
 
-def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_client: 'IRPClient') -> Tuple[Optional[str], Dict, Dict]:
+def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_client: IRPClient) -> Tuple[Optional[str], Dict, Dict]:
     """
     Submit job to Moody's workflow API.
 
@@ -223,7 +221,7 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
 def _submit_edm_creation_job(
     job_id: int,
     job_config: Dict[str, Any],
-    client: 'IRPClient'
+    client: IRPClient
 ) -> Tuple[str, Dict, Dict]:
     """
     Submit EDM Creation job to Moody's API.
@@ -277,7 +275,7 @@ def _submit_edm_creation_job(
 def _submit_portfolio_creation_job(
     job_id: int,
     job_config: Dict[str, Any],
-    client: 'IRPClient'
+    client: IRPClient
 ) -> Tuple[str, Dict, Dict]:
     """
     Submit Portfolio Creation job to Moody's API.
@@ -298,7 +296,7 @@ def _submit_portfolio_creation_job(
 def _submit_mri_import_job(
     job_id: int,
     job_config: Dict[str, Any],
-    client: 'IRPClient'
+    client: IRPClient
 ) -> Tuple[str, Dict, Dict]:
     """
     Submit MRI Import job to Moody's API.
@@ -319,7 +317,7 @@ def _submit_mri_import_job(
 def _submit_analysis_job(
     job_id: int,
     job_config: Dict[str, Any],
-    client: 'IRPClient'
+    client: IRPClient
 ) -> Tuple[str, Dict, Dict]:
     """
     Submit Analysis job to Moody's API.
@@ -757,7 +755,7 @@ def skip_job_configuration(
 def submit_job(
     job_id: int,
     batch_type: str,
-    irp_client: 'IRPClient',
+    irp_client: IRPClient,
     force: bool = False,
     track_immediately: bool = False,
     schema: str = 'public'
@@ -849,7 +847,7 @@ def submit_job(
 
 def track_job_status(
     job_id: int,
-    irp_client: 'IRPClient',
+    irp_client: IRPClient,
     moodys_workflow_id: Optional[str] = None,
     schema: str = 'public'
 ) -> str:
@@ -930,7 +928,7 @@ def track_job_status(
 
 def resubmit_job(
     job_id: int,
-    irp_client: 'IRPClient',
+    irp_client: IRPClient,
     batch_type: str,
     job_configuration_data: Optional[Dict[str, Any]] = None,
     override_reason: Optional[str] = None,

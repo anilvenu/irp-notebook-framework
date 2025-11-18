@@ -33,12 +33,10 @@ Workflow:
 """
 
 import json
-from typing import Dict, Any, List, Optional, TYPE_CHECKING
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-if TYPE_CHECKING:
-    from helpers.irp_integration import IRPClient
-
+from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
@@ -381,7 +379,7 @@ def create_batch(
         raise BatchError(f"Failed to create batch: {str(e)}")
 
 
-def submit_batch(batch_id: int, irp_client: 'IRPClient', schema: str = 'public') -> Dict[str, Any]:
+def submit_batch(batch_id: int, irp_client: IRPClient, schema: str = 'public') -> Dict[str, Any]:
     """
     Submit all eligible jobs in batch to Moody's.
 
