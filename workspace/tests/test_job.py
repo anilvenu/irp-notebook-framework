@@ -42,7 +42,11 @@ from helpers.constants import JobStatus, ConfigurationStatus
 # ============================================================================
 
 def create_test_hierarchy(test_schema, cycle_name='test_cycle'):
-    """Helper to create cycle, stage, step, configuration, and batch"""
+    """Helper to create cycle, stage, step, configuration, and batch
+
+    Creates a configuration suitable for EDM Creation batch type by default,
+    which is needed for tests that submit jobs.
+    """
     # Create cycle
     cycle_id = execute_insert(
         "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
@@ -64,8 +68,16 @@ def create_test_hierarchy(test_schema, cycle_name='test_cycle'):
         schema=test_schema
     )
 
-    # Create configuration
-    config_data = {'param1': 'value1', 'param2': 100}
+    # Create configuration with EDM Creation-compatible structure
+    config_data = {
+        'Metadata': {
+            'cycle': cycle_name,
+            'date': '2024-01-01'
+        },
+        'Databases': [
+            {'Database': 'TestDB', 'Server': 'databridge-1'}
+        ]
+    }
     config_id = execute_insert(
         """INSERT INTO irp_configuration
            (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
@@ -75,10 +87,10 @@ def create_test_hierarchy(test_schema, cycle_name='test_cycle'):
         schema=test_schema
     )
 
-    # Create batch
+    # Create batch with EDM Creation type
     batch_id = execute_insert(
         "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
-        (step_id, config_id, 'default', 'INITIATED'),
+        (step_id, config_id, 'EDM Creation', 'INITIATED'),
         schema=test_schema
     )
 
@@ -268,18 +280,18 @@ def test_skip_job(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_submit_job(test_schema):
+def test_submit_job(test_schema, mock_irp_client):
     """Test submitting a job"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_submit')
 
     job_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'test': 'data'},
+        job_configuration_data={'Database': 'TestDB'},
         schema=test_schema
     )
 
     # Submit job
-    result_id = submit_job(job_id, schema=test_schema)
+    result_id = submit_job(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
     assert result_id == job_id
 
     # Verify job is SUBMITTED
@@ -295,23 +307,23 @@ def test_submit_job(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_submit_job_force_resubmit(test_schema):
+def test_submit_job_force_resubmit(test_schema, mock_irp_client):
     """Test force resubmitting a job"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_force_submit')
 
     job_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'test': 'data'},
+        job_configuration_data={'Database': 'TestDB'},
         schema=test_schema
     )
 
     # Submit job first time
-    submit_job(job_id, schema=test_schema)
+    submit_job(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
     job1 = read_job(job_id, schema=test_schema)
     workflow_id_1 = job1['moodys_workflow_id']
 
     # Force resubmit
-    submit_job(job_id, force=True, schema=test_schema)
+    submit_job(job_id, 'EDM Creation', mock_irp_client, force=True, schema=test_schema)
     job2 = read_job(job_id, schema=test_schema)
     workflow_id_2 = job2['moodys_workflow_id']
 
@@ -325,23 +337,23 @@ def test_submit_job_force_resubmit(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_track_job_status(test_schema):
+def test_track_job_status(test_schema, mock_irp_client):
     """Test tracking job status"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_track')
 
     job_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'test': 'data'},
+        job_configuration_data={'Database': 'TestDB'},
         schema=test_schema
     )
 
     # Submit job
-    submit_job(job_id, schema=test_schema)
+    submit_job(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
 
     # Track job status multiple times
-    status1 = track_job_status(job_id, schema=test_schema)
-    status2 = track_job_status(job_id, schema=test_schema)
-    status3 = track_job_status(job_id, schema=test_schema)
+    status1 = track_job_status(job_id, mock_irp_client, schema=test_schema)
+    status2 = track_job_status(job_id, mock_irp_client, schema=test_schema)
+    status3 = track_job_status(job_id, mock_irp_client, schema=test_schema)
 
     # Verify tracking logs created
     df = execute_query(
@@ -364,24 +376,24 @@ def test_track_job_status(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_resubmit_job_without_override(test_schema):
+def test_resubmit_job_without_override(test_schema, mock_irp_client):
     """Test resubmitting job without configuration override"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_no_override')
 
     # Create and submit original job
     original_job_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'original': 'config'},
+        job_configuration_data={'Database': 'OriginalDB'},
         schema=test_schema
     )
-    submit_job(original_job_id, schema=test_schema)
+    submit_job(original_job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
 
     # Get original job config ID
     original_job = read_job(original_job_id, schema=test_schema)
     original_config_id = original_job['job_configuration_id']
 
     # Resubmit without override
-    new_job_id = resubmit_job(original_job_id, schema=test_schema)
+    new_job_id = resubmit_job(original_job_id, mock_irp_client, 'EDM Creation', schema=test_schema)
 
     # Verify original job is skipped
     original_job = read_job(original_job_id, schema=test_schema)
@@ -397,14 +409,14 @@ def test_resubmit_job_without_override(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_resubmit_job_with_override(test_schema):
+def test_resubmit_job_with_override(test_schema, mock_irp_client):
     """Test resubmitting job with configuration override"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_override')
 
     # Create original job
     original_job_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'original': 'config'},
+        job_configuration_data={'Database': 'OriginalDB'},
         schema=test_schema
     )
 
@@ -413,11 +425,13 @@ def test_resubmit_job_with_override(test_schema):
     original_config_id = original_job['job_configuration_id']
 
     # Resubmit with override
-    override_config = {'overridden': 'config', 'new_param': 999}
+    override_config = {'Database': 'OverriddenDB', 'new_param': 999}
     override_reason = "User requested parameter change"
 
     new_job_id = resubmit_job(
         original_job_id,
+        mock_irp_client,
+        'EDM Creation',
         job_configuration_data=override_config,
         override_reason=override_reason,
         schema=test_schema
@@ -474,18 +488,18 @@ def test_job_error_invalid_status(test_schema):
 
 @pytest.mark.database
 @pytest.mark.unit
-def test_job_error_track_without_submission(test_schema):
+def test_job_error_track_without_submission(test_schema, mock_irp_client):
     """Test error handling for tracking unsubmitted job"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_track_error')
     job_id = create_job_with_config(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
 
     with pytest.raises(JobError):
-        track_job_status(job_id, schema=test_schema)
+        track_job_status(job_id, mock_irp_client, schema=test_schema)
 
 
 @pytest.mark.database
 @pytest.mark.unit
-def test_job_error_resubmit_override_no_reason(test_schema):
+def test_job_error_resubmit_override_no_reason(test_schema, mock_irp_client):
     """Test error handling for resubmit with override but no reason"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_error')
     job_id = create_job_with_config(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
@@ -493,6 +507,8 @@ def test_job_error_resubmit_override_no_reason(test_schema):
     with pytest.raises(JobError):
         resubmit_job(
             job_id,
+            mock_irp_client,
+            'default',
             job_configuration_data={'new': 'config'},
             schema=test_schema
         )
@@ -677,17 +693,17 @@ def test_insert_tracking_log_invalid_job_id(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_read_job_json_parsing_submission_request(test_schema):
+def test_read_job_json_parsing_submission_request(test_schema, mock_irp_client):
     """Test read_job() parses JSON submission_request field"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_json_parse')
 
     # Create and submit job
     job_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'test': 'data'},
+        job_configuration_data={'Database': 'TestDB'},
         schema=test_schema
     )
-    submit_job(job_id, schema=test_schema)
+    submit_job(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
 
     # Read job - submission_request should be parsed from JSON to dict
     job = read_job(job_id, schema=test_schema)
@@ -770,28 +786,28 @@ def test_skip_job_not_found(test_schema):
 
 @pytest.mark.database
 @pytest.mark.unit
-def test_submit_job_invalid_id(test_schema):
+def test_submit_job_invalid_id(test_schema, mock_irp_client):
     """Test submit_job() with invalid job_id"""
     with pytest.raises(JobError) as exc_info:
-        submit_job(job_id=-1, schema=test_schema)
+        submit_job(job_id=-1, batch_type='EDM Creation', irp_client=mock_irp_client, schema=test_schema)
     assert 'invalid job_id' in str(exc_info.value).lower()
 
 
 @pytest.mark.database
 @pytest.mark.unit
-def test_track_job_status_invalid_id(test_schema):
+def test_track_job_status_invalid_id(test_schema, mock_irp_client):
     """Test track_job_status() with invalid job_id"""
     with pytest.raises(JobError) as exc_info:
-        track_job_status(job_id=-1, schema=test_schema)
+        track_job_status(job_id=-1, irp_client=mock_irp_client, schema=test_schema)
     assert 'invalid job_id' in str(exc_info.value).lower()
 
 
 @pytest.mark.database
 @pytest.mark.unit
-def test_resubmit_job_invalid_id(test_schema):
+def test_resubmit_job_invalid_id(test_schema, mock_irp_client):
     """Test resubmit_job() with invalid job_id"""
     with pytest.raises(JobError) as exc_info:
-        resubmit_job(job_id=-1, schema=test_schema)
+        resubmit_job(job_id=-1, irp_client=mock_irp_client, batch_type='EDM Creation', schema=test_schema)
     assert 'invalid job_id' in str(exc_info.value).lower()
 
 
@@ -958,14 +974,14 @@ def test_skip_job_configuration_not_found(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_resubmit_job_with_override_config_relationships(test_schema):
+def test_resubmit_job_with_override_config_relationships(test_schema, mock_irp_client):
     """Test resubmit_job with override creates proper parent-child relationships"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_config_relationships')
 
     # Create original job
     original_job_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'original': 'config'},
+        job_configuration_data={'Database': 'OriginalDB'},
         schema=test_schema
     )
 
@@ -974,11 +990,13 @@ def test_resubmit_job_with_override_config_relationships(test_schema):
     original_config_id = original_job['job_configuration_id']
 
     # Resubmit with override
-    override_config = {'overridden': 'config'}
+    override_config = {'Database': 'OverriddenDB'}
     override_reason = "Testing parent-child relationship"
 
     new_job_id = resubmit_job(
         original_job_id,
+        mock_irp_client,
+        'EDM Creation',
         job_configuration_data=override_config,
         override_reason=override_reason,
         schema=test_schema
@@ -1015,14 +1033,14 @@ def test_resubmit_job_with_override_config_relationships(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_resubmit_job_without_override_no_config_skip(test_schema):
+def test_resubmit_job_without_override_no_config_skip(test_schema, mock_irp_client):
     """Test resubmit_job without override does NOT skip original configuration"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_no_override_no_skip')
 
     # Create original job
     original_job_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'original': 'config'},
+        job_configuration_data={'Database': 'OriginalDB'},
         schema=test_schema
     )
 
@@ -1031,7 +1049,7 @@ def test_resubmit_job_without_override_no_config_skip(test_schema):
     original_config_id = original_job['job_configuration_id']
 
     # Resubmit WITHOUT override
-    new_job_id = resubmit_job(original_job_id, schema=test_schema)
+    new_job_id = resubmit_job(original_job_id, mock_irp_client, 'EDM Creation', schema=test_schema)
 
     # Verify ORIGINAL configuration is NOT marked as skipped
     # (because we're reusing the same configuration)
@@ -1148,14 +1166,14 @@ def test_get_job_config_returns_new_fields(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_chained_resubmissions_with_override(test_schema):
+def test_chained_resubmissions_with_override(test_schema, mock_irp_client):
     """Test multiple chained resubmissions create proper parent-child chain"""
     cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_chained_resubmit')
 
     # Create original job
     job1_id = create_job_with_config(
         batch_id, config_id,
-        job_configuration_data={'version': 1},
+        job_configuration_data={'Database': 'DB_v1'},
         schema=test_schema
     )
     config1_id = read_job(job1_id, schema=test_schema)['job_configuration_id']
@@ -1163,7 +1181,9 @@ def test_chained_resubmissions_with_override(test_schema):
     # First resubmission
     job2_id = resubmit_job(
         job1_id,
-        job_configuration_data={'version': 2},
+        mock_irp_client,
+        'EDM Creation',
+        job_configuration_data={'Database': 'DB_v2'},
         override_reason="First override",
         schema=test_schema
     )
@@ -1172,7 +1192,9 @@ def test_chained_resubmissions_with_override(test_schema):
     # Second resubmission
     job3_id = resubmit_job(
         job2_id,
-        job_configuration_data={'version': 3},
+        mock_irp_client,
+        'EDM Creation',
+        job_configuration_data={'Database': 'DB_v3'},
         override_reason="Second override",
         schema=test_schema
     )

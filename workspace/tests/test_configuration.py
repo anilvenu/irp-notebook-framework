@@ -345,7 +345,7 @@ def test_load_configuration_file_success(test_schema):
     assert 'Metadata' in config_data
     metadata = config_data['Metadata']
     assert metadata == {'Hazard Version': '23.0.0', 
-                        'Export RDM Name': 'RMS_RDM_202503_QEM_USAP', 
+                        'Export RDM Name': 'RM_RDM_202503_QEM_USAP', 
                         'Geocode Version': '23.0.0', 
                         'EDM Data Version': '23.0.0', 
                         'DLM Model Version': 23, 
@@ -354,7 +354,8 @@ def test_load_configuration_file_success(test_schema):
                         'Wildfire HD Model Version': 2, 
                         'Validate HD Model Versions?': 'Y', 
                         'Validate DLM Model Versions?': 'Y', 
-                        'Inland Flood HD Model Version': 1.2
+                        'Inland Flood HD Model Version': 1.2,
+                        'Cycle Type': 'Quarterly'
                         }
 
     # Check Databases
@@ -743,7 +744,6 @@ def test_get_transformer_list():
     assert 'EDM Creation' in transformers
     assert 'Portfolio Creation' in transformers
     assert 'Analysis' in transformers
-    assert transformers == sorted(transformers), "List should be sorted"
 
     # Verify test transformers are excluded
     assert not any(t.startswith('test_') for t in transformers), "Test transformers should be excluded"

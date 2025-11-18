@@ -36,6 +36,7 @@ import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
@@ -378,7 +379,7 @@ def create_batch(
         raise BatchError(f"Failed to create batch: {str(e)}")
 
 
-def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
+def submit_batch(batch_id: int, irp_client: IRPClient, schema: str = 'public') -> Dict[str, Any]:
     """
     Submit all eligible jobs in batch to Moody's.
 
@@ -449,7 +450,7 @@ def submit_batch(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     for job_record in jobs:
         if job_record['status'] in JobStatus.ready_for_submit() and not job_record['skipped']:
             try:
-                job.submit_job(job_record['id'], schema=schema)
+                job.submit_job(job_record['id'], batch['batch_type'], irp_client, schema=schema)
                 submitted_jobs.append({
                     'job_id': job_record['id'],
                     'status': 'SUBMITTED'

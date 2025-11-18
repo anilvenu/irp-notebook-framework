@@ -340,7 +340,7 @@ def generate_notebooks_from_file(
     # Generate folder structure and notebooks
     for stage_name, steps in structure.items():
         # Create stage folder
-        stage_path = output_path / stage_name
+        stage_path = output_path / f"Stage_{stage_name}"
         stage_existed = stage_path.exists()
         stage_path.mkdir(exist_ok=True)
 
@@ -348,16 +348,16 @@ def generate_notebooks_from_file(
             stats['stages_created'] += 1
 
         if verbose:
-            print(f"Stage: {stage_name}")
+            print(f"Stage: Stage_{stage_name}")
 
         # Create notebooks for each step
         for step_name, activities in steps.items():
-            notebook_path = stage_path / f"{step_name}.ipynb"
+            notebook_path = stage_path / f"Step_{step_name}.ipynb"
 
             # Check if notebook exists
             if notebook_path.exists() and not overwrite:
                 if verbose:
-                    print(f"  - {step_name}.ipynb (skipped - already exists)")
+                    print(f"  - Step_{step_name}.ipynb (skipped - already exists)")
                 stats['notebooks_skipped'] += 1
                 continue
 
@@ -373,7 +373,7 @@ def generate_notebooks_from_file(
                 stats['total_activities'] += len(activities)
 
                 if verbose:
-                    print(f"  - {step_name}.ipynb ({len(activities)} activities)")
+                    print(f"  - Step_{step_name}.ipynb ({len(activities)} activities)")
 
             except Exception as e:
                 raise NotebookGeneratorError(
@@ -454,9 +454,9 @@ def preview_structure(file_path: str, sheet_name: Optional[str] = None) -> str:
     lines.append("=" * 60)
 
     for stage_name, steps in structure.items():
-        lines.append(f"{stage_name}/")
+        lines.append(f"Stage_{stage_name}/")
         for step_name, activities in steps.items():
-            lines.append(f"  - {step_name}.ipynb ({len(activities)} activities)")
+            lines.append(f"  - Step_{step_name}.ipynb ({len(activities)} activities)")
 
     lines.append("=" * 60)
 

@@ -268,7 +268,7 @@ BEGIN
 	'
 
 /*	Account File Controls - INSERT into temp table	*/
-INSERT INTO #FloodAccountControls (PORTNAME, PolicyCount, PolicyPremium, PolicyLimit_NonCommercialFlood, AttachmentPoint, PolicyDeductible)
+INSERT INTO #FloodAccountControls (PORTNAME, PolicyCount, PolicyPremium, PolicyLimit_NonCommercialFlood, AttachmentPoint, PolicyDeductible) -- TODO: Rename PolicyLimit_NonCommercialFlood to PolicyLimit
 Select CASE WHEN c.PORTNAME Like ''%Clay%'' THEN ''USFL_Other_Clayton'' ELSE c.PORTNAME END AS PORTNAME
 ,Count(distinct a.ACCGRPID) PolicyCount
 ,SUM(BLANPREAMT) PolicyPremium
@@ -281,7 +281,7 @@ Join '+@DBName_Flood+'..portinfo c on c.PORTINFOID = b.PORTINFOID
 Group by CASE WHEN c.PORTNAME Like ''%Clay%'' THEN ''USFL_Other_Clayton'' ELSE c.PORTNAME END
 
 /*Commercial Flood Policy Limit - INSERT into temp table*/
-INSERT INTO #FloodCommercialPolicyLimit (USFL_Commercial_PolicyLimit)
+INSERT INTO #FloodCommercialPolicyLimit (USFL_Commercial_PolicyLimit) -- TODO: UPDATE #FloodAccountControls.PolicyLimit where portname = "USFL_Commercial"
 SELECT (PolicyLimit+PolicyCoverageLimit) as USFL_Commercial_PolicyLimit
 FROM (
     Select c.PORTNAME, SUM(a.BLANLIMAMT) PolicyLimit, SUM(d.LIMITAMT) PolicyCoverageLimit

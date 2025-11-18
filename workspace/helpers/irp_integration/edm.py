@@ -114,35 +114,11 @@ class EDMManager:
                 raise IRPAPIError(
                     f"Missing 'server_name' or 'server_name' in create edm data: {e}"
                 ) from e
-            
-            # Validate Database Server exists
-            database_servers = self.search_database_servers(filter=f"serverName=\"{server_name}\"")
-            if (len(database_servers) != 1):
-                raise IRPReferenceDataError(f"Database server {server_name} not found: {database_servers}")
-            try:
-                database_server_id = database_servers[0]['serverId']
-            except (KeyError, TypeError, IndexError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract server ID: {e}"
-                ) from e
-            
-            # Validate Exposure Set exists; create if it does not exist
-            exposure_sets = self.search_exposure_sets(filter=f"exposureSetName={edm_name}")
-            if (len(exposure_sets) > 1):
-                try:
-                    exposure_set_id = exposure_sets[0]['exposureSetId']
-                except (KeyError, TypeError, IndexError) as e:
-                    raise IRPAPIError(
-                        f"Missing 'exposureSetId' index 0 does not exist in database server data: {e}"
-                    ) from e
-            else:
-                exposure_set_id = self.create_exposure_set(name=edm_name)
 
             # Submit job
             job_ids.append(self.submit_create_edm_job(
-                exposure_set_id=exposure_set_id,
                 edm_name=edm_name,
-                server_id=database_server_id
+                server_name=server_name
             ))
         
         return job_ids
@@ -228,24 +204,45 @@ class EDMManager:
             raise IRPAPIError(f"Failed to search EDMs: {e}")
         
 
-    def submit_create_edm_job(self, exposure_set_id: int, edm_name: str, server_id: int) -> int:
+    def submit_create_edm_job(self, edm_name: str, server_name: str = "databridge-1") -> int:
         """
         Submit job to create a new EDM (exposure).
 
         Args:
-            exposure_set_id: ID of the exposure set
             edm_name: Name of the EDM
-            server_id: ID of the database server
+            server_name: Name of the database server (default: "databridge-1")
 
         Returns:
             The EDM ID
         """
-        validate_positive_int(exposure_set_id, "exposure_set_id")
         validate_non_empty_string(edm_name, "edm_name")
-        validate_positive_int(server_id, "server_id")
+
+        # Validate Database Server exists
+        database_servers = self.search_database_servers(filter=f"serverName=\"{server_name}\"")
+        if (len(database_servers) != 1):
+            raise IRPReferenceDataError(f"Database server {server_name} not found: {database_servers}")
+        try:
+            database_server_id = database_servers[0]['serverId']
+        except (KeyError, TypeError, IndexError) as e:
+            raise IRPAPIError(
+                f"Failed to extract server ID: {e}"
+            ) from e
+
+        # Validate Exposure Set exists; create if it does not exist
+        exposure_sets = self.search_exposure_sets(filter=f"exposureSetName={edm_name}")
+        if (len(exposure_sets) > 0):
+            try:
+                exposure_set_id = exposure_sets[0]['exposureSetId']
+            except (KeyError, TypeError, IndexError) as e:
+                raise IRPAPIError(
+                    f"Missing 'exposureSetId' index 0 does not exist in database server data: {e}"
+                ) from e
+        else:
+            exposure_set_id = self.create_exposure_set(name=edm_name)
+
         data = {
             "exposureName": edm_name,
-            "serverId": server_id
+            "serverId": database_server_id
         }
         try:
             response = self.client.request(

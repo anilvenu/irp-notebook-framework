@@ -92,7 +92,7 @@ def test_validate_metadata_success():
             '202503', '23.0.0', '23.0', '23',
             23, 'Y', 2,
             1, 1.2, 'Y',
-            'RMS_RDM_202503_TEST'
+            'RM_RDM_202503_TEST'
         ]
     }
     df = pd.DataFrame(data)
