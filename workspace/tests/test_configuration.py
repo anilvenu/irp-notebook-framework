@@ -542,16 +542,17 @@ def test_transform_portfolio_creation():
         'Metadata': {'Current Date Value': '202503'},
         'Portfolios': [
             {'Portfolio': 'P1', 'Database': 'DB1', 'Base Portfolio?': 'Y'},
-            {'Portfolio': 'P2', 'Database': 'DB1', 'Base Portfolio?': 'N'}
+            {'Portfolio': 'P2', 'Database': 'DB1', 'Base Portfolio?': 'N'},
+            {'Portfolio': 'P3', 'Database': 'DB1', 'Base Portfolio?': 'Y'}
         ]
     }
 
     result = create_job_configurations('Portfolio Creation', config)
 
-    assert len(result) == 2, "Should create one job per portfolio"
+    assert len(result) == 2, "Should create one job per base portfolio"
     assert result[0]['Metadata'] == config['Metadata']
     assert result[0]['Portfolio'] == 'P1'
-    assert result[1]['Portfolio'] == 'P2'
+    assert result[1]['Portfolio'] == 'P3'
 
 
 @pytest.mark.unit

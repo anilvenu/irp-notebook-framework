@@ -28,7 +28,7 @@ from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, DatabaseError
 )
-from helpers.constants import JobStatus
+from helpers.constants import JobStatus, BatchType
 from helpers.configuration import BATCH_TYPE_TRANSFORMERS
 
 
@@ -174,15 +174,15 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
         Returns (None, request_json, error_response) on failure
     """
     try:
-        if batch_type not in BATCH_TYPE_TRANSFORMERS:
+        if batch_type not in BatchType.all():
             raise ValueError(f"Unsupported batch type: {batch_type}")
 
         # Route to appropriate submission handler based on batch type
-        if batch_type == 'EDM Creation':
+        if batch_type == BatchType.EDM_CREATION:
             workflow_id, request_json, response_json = _submit_edm_creation_job(
                 job_id, job_config, irp_client
             )
-        elif batch_type == 'Portfolio Creation':
+        elif batch_type == BatchType.PORTFOLIO_CREATION:
             workflow_id, request_json, response_json = _submit_portfolio_creation_job(
                 job_id, job_config, irp_client
             )
@@ -280,17 +280,71 @@ def _submit_portfolio_creation_job(
     """
     Submit Portfolio Creation job to Moody's API.
 
-    TODO: Implement portfolio creation submission logic.
+    Portfolio creation is a synchronous process - portfolios are created immediately
+    without asynchronous job tracking. Returns N/A as workflow_id on success to indicate
+    synchronous completion.
 
     Args:
         job_id: Job ID
-        job_config: Job configuration data
+        job_config: Job configuration data containing:
+            - Database: EDM database name
+            - Portfolio: Portfolio name
+            - portfolio_number: Portfolio number (optional, defaults to portfolio name)
+            - description: Portfolio description (optional)
         client: IRPClient instance
 
     Returns:
         Tuple of (workflow_id, request_json, response_json)
+        - workflow_id: "N/A" if successful (synchronous operation), None if failed
+        - request_json: Request details
+        - response_json: Response details
     """
-    raise NotImplementedError("Portfolio Creation job submission not yet implemented")
+    # Extract required fields
+    edm_name = job_config.get('Database')
+    portfolio_name = job_config.get('Portfolio')
+
+    if not edm_name:
+        raise ValueError("Missing required field: Database")
+    if not portfolio_name:
+        raise ValueError("Missing required field: Portfolio")
+
+    # Extract optional fields
+    portfolio_number = portfolio_name
+    description = f"{portfolio_name} created via IRP Notebook Framework"
+
+    # Create portfolio synchronously
+    portfolio_id = client.portfolio.create_portfolio(
+        edm_name=edm_name,
+        portfolio_name=portfolio_name,
+        portfolio_number=portfolio_number,
+        description=description
+    )
+
+    # Build workflow ID - use N/A to indicate synchronous completion
+    workflow_id = "N/A"
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.PORTFOLIO_CREATION,
+        'configuration': job_config,
+        'api_request': {
+            'edm_name': edm_name,
+            'portfolio_name': portfolio_name,
+            'portfolio_number': portfolio_number,
+            'description': description
+        },
+        'submitted_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': workflow_id,
+        'portfolio_id': portfolio_id,
+        'status': 'COMPLETED',
+        'message': f'Portfolio "{portfolio_name}" created successfully with ID {portfolio_id}'
+    }
+
+    return workflow_id, request_json, response_json
 
 
 def _submit_mri_import_job(
@@ -837,6 +891,10 @@ def submit_job(
             schema=schema
         )
 
+        # If BatchType is synchronous and no errors until this point, the job can be considered complete
+        # Update the JobStatus to FINISHED
+        if BatchType.is_synchronous(batch_type):
+            update_job_status(job_id, JobStatus.FINISHED, schema=schema)
 
     # Optionally track immediately
     if track_immediately:

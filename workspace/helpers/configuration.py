@@ -27,7 +27,7 @@ import numpy as np
 # from helpers.database import execute_query, execute_command, execute_insert, DatabaseError
 from helpers.constants import (
     ConfigurationStatus, CONFIGURATION_TAB_LIST,
-    EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES
+    EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES, BatchType
 )
 
 
@@ -51,6 +51,22 @@ def _extract_metadata(config: Dict[str, Any]) -> Dict[str, Any]:
         Metadata dictionary
     """
     return config.get('Metadata', {})
+
+
+def get_base_portfolios(portfolios: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Filter base portfolios from a list of portfolio dictionaries.
+
+    Args:
+        portfolios: List of portfolio dictionaries with keys:
+                   - "Portfolio": Portfolio name
+                   - "Database": Database name
+                   - "Base Portfolio?": "Y" (base) or "N" (not base)
+
+    Returns:
+        List of portfolio dictionaries where "Base Portfolio?" == "Y"
+    """
+    return [p for p in portfolios if p.get('Base Portfolio?') == 'Y']
 
 
 # ============================================================================
@@ -95,9 +111,10 @@ def transform_portfolio_creation(config: Dict[str, Any]) -> List[Dict[str, Any]]
     """
     metadata = _extract_metadata(config)
     portfolios = config.get('Portfolios', [])
+    base_portfolios = get_base_portfolios(portfolios)
 
     job_configs = []
-    for portfolio_row in portfolios:
+    for portfolio_row in base_portfolios:
         job_config = {
             'Metadata': metadata,
             **portfolio_row
@@ -375,20 +392,20 @@ def transform_test_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 BATCH_TYPE_TRANSFORMERS = {
     # Business transformers (11)
-    'EDM Creation': transform_edm_creation,
-    'Portfolio Creation': transform_portfolio_creation,
-    'MRI Import': transform_mri_import,
-    'Create Reinsurance Treaties': transform_create_reinsurance_treaties,
-    'EDM DB Upgrade': transform_edm_db_upgrade,
-    'GeoHaz': transform_geohaz,
-    'Portfolio Mapping': transform_portfolio_mapping,
-    'Analysis': transform_analysis,
-    'Grouping': transform_grouping,
-    'Export to RDM': transform_export_to_rdm,
-    'Staging ETL': transform_staging_etl,
+    BatchType.EDM_CREATION: transform_edm_creation,
+    BatchType.PORTFOLIO_CREATION: transform_portfolio_creation,
+    BatchType.MRI_IMPORT: transform_mri_import,
+    BatchType.CREATE_REINSURANCE_TREATIES: transform_create_reinsurance_treaties,
+    BatchType.EDM_DB_UPGRADE: transform_edm_db_upgrade,
+    BatchType.GEOHAZ: transform_geohaz,
+    BatchType.PORTFOLIO_MAPPING: transform_portfolio_mapping,
+    BatchType.ANALYSIS: transform_analysis,
+    BatchType.GROUPING: transform_grouping,
+    BatchType.EXPORT_TO_RDM: transform_export_to_rdm,
+    BatchType.STAGING_ETL: transform_staging_etl,
     # Test-only transformers (2)
-    'test_default': transform_test_default,
-    'test_multi_job': transform_test_multi_job,
+    BatchType.TEST_DEFAULT: transform_test_default,
+    BatchType.TEST_MULTI_JOB: transform_test_multi_job,
 }
 
 
