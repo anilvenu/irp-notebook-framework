@@ -67,6 +67,23 @@ else
     echo -e "${GREEN}✓ pyodbc is available${NC}"
 fi
 
+echo ""
+# Check if venv exists - supports (venv) and (.venv)
+if [ -d "venv" ]; then
+    echo -e "${GREEN}✓${NC} Found venv directory"
+    source venv/bin/activate
+elif [ -d ".venv" ]; then
+    echo -e "${GREEN}✓${NC} Found .venv directory"
+    source .venv/bin/activate
+else
+    echo -e "${YELLOW}⚠${NC} No virtual environment found"
+    echo "  To create one, run: python -m venv venv"
+    echo "  Running with system Python..."
+fi
+
+# Install packages for test
+pip install -r requirements-test.txt -q
+
 # Run pytest with SQL Server marker
 # Note: We need to override the --ignore setting from pytest.ini
 echo -e "${YELLOW}Running SQL Server tests...${NC}"

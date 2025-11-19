@@ -970,7 +970,12 @@ def test_initialize_database_success(mssql_env, wait_for_sqlserver, temp_sql_fil
         cursor.execute("SELECT DB_NAME()")
         db_name = cursor.fetchone()[0]
         assert db_name == 'test_init_db'
+        cursor.close()
     # Connection is now closed after exiting the with block
+
+    # Add a small delay to ensure connection is fully released
+    import time
+    time.sleep(0.5)
 
     # Cleanup - need to use raw connection with autocommit for DROP DATABASE
     config = get_connection_config('TEST')
@@ -985,11 +990,19 @@ def test_initialize_database_success(mssql_env, wait_for_sqlserver, temp_sql_fil
     conn = pyodbc.connect(master_conn_str)
     conn.autocommit = True
     cursor = conn.cursor()
-    # Kill any active connections before dropping database
-    cursor.execute("ALTER DATABASE test_init_db SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
-    cursor.execute("DROP DATABASE test_init_db")
-    cursor.close()
-    conn.close()
+
+    try:
+        # Kill any active connections before dropping database
+        cursor.execute("""
+            IF EXISTS (SELECT * FROM sys.databases WHERE name = 'test_init_db')
+            BEGIN
+                ALTER DATABASE test_init_db SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                DROP DATABASE test_init_db;
+            END
+        """)
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def test_initialize_database_with_existing_objects(mssql_env, wait_for_sqlserver, temp_sql_file):
@@ -1035,15 +1048,27 @@ def test_initialize_database_with_existing_objects(mssql_env, wait_for_sqlserver
     finally:
         sys.stdout = sys.__stdout__
 
+    # Add a small delay to ensure connection is fully released
+    import time
+    time.sleep(0.5)
+
     # Cleanup - use raw connection with autocommit for DROP DATABASE
     conn = pyodbc.connect(master_conn_str)
     conn.autocommit = True
     cursor = conn.cursor()
-    # Kill any active connections before dropping database
-    cursor.execute("IF EXISTS (SELECT * FROM sys.databases WHERE name = 'test_init_db2') ALTER DATABASE test_init_db2 SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
-    cursor.execute("DROP DATABASE IF EXISTS test_init_db2")
-    cursor.close()
-    conn.close()
+
+    try:
+        # Kill any active connections before dropping database
+        cursor.execute("""
+            IF EXISTS (SELECT * FROM sys.databases WHERE name = 'test_init_db2')
+            BEGIN
+                ALTER DATABASE test_init_db2 SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                DROP DATABASE test_init_db2;
+            END
+        """)
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def test_initialize_database_file_not_found():

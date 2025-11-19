@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 import tempfile
 import shutil
+import sys
 
 from helpers.csv_export import (
     get_working_files_path,
@@ -353,9 +354,13 @@ def test_save_dataframes_to_csv_without_output_dir(sample_dataframe):
 
 def test_save_sql_results_to_csv(sample_dataframes, temp_output_dir):
     """Test the convenience function that executes SQL and saves to CSV."""
-    with patch('helpers.sqlserver.execute_query_from_file') as mock_execute:
-        mock_execute.return_value = sample_dataframes
+    # Create a mock sqlserver module to avoid importing pyodbc
+    mock_sqlserver = MagicMock()
+    mock_execute = Mock(return_value=sample_dataframes)
+    mock_sqlserver.execute_query_from_file = mock_execute
 
+    with patch.dict(sys.modules, {'helpers.sqlserver': mock_sqlserver}):
+        # Now when save_sql_results_to_csv imports from helpers.sqlserver, it gets our mock
         filenames = build_import_filenames(
             '202511', 'USEQ', ['Account', 'Location'], cycle_type='Quarterly'
         )
@@ -384,9 +389,13 @@ def test_save_sql_results_to_csv(sample_dataframes, temp_output_dir):
 
 def test_save_sql_results_to_csv_passes_all_parameters(sample_dataframe, temp_output_dir):
     """Test that all parameters are properly passed through."""
-    with patch('helpers.sqlserver.execute_query_from_file') as mock_execute:
-        mock_execute.return_value = [sample_dataframe]
+    # Create a mock sqlserver module to avoid importing pyodbc
+    mock_sqlserver = MagicMock()
+    mock_execute = Mock(return_value=[sample_dataframe])
+    mock_sqlserver.execute_query_from_file = mock_execute
 
+    with patch.dict(sys.modules, {'helpers.sqlserver': mock_sqlserver}):
+        # Now when save_sql_results_to_csv imports from helpers.sqlserver, it gets our mock
         result = save_sql_results_to_csv(
             sql_file='test.sql',
             filenames='test_file',
