@@ -37,7 +37,7 @@ from helpers.job import (
     skip_job,
     get_job_config
 )
-from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus
+from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus, BatchType
 
 
 # ============================================================================
@@ -107,7 +107,7 @@ def test_end_to_end_batch_workflow(test_schema, mock_irp_client):
 
     # Step 1: Create and submit batch
     batch_id = create_batch(
-        batch_type='EDM Creation',
+        batch_type=BatchType.EDM_CREATION,
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
@@ -157,7 +157,7 @@ def test_multi_job_batch_workflow(test_schema, mock_irp_client):
     """Test multi-job batch workflow"""
     # Create config with multiple jobs
     config_data = {
-        'batch_type': 'multi_test',
+        'batch_type': 'test_multi',
         'jobs': [
             {'job_id': 1, 'param': 'A'},
             {'job_id': 2, 'param': 'B'},
@@ -170,7 +170,7 @@ def test_multi_job_batch_workflow(test_schema, mock_irp_client):
 
     # Create batch with multi_job transformer
     batch_id = create_batch(
-        batch_type='test_multi_job',
+        batch_type=BatchType.TEST_MULTI_JOB,
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema

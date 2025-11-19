@@ -142,6 +142,107 @@ class JobStatus:
         return self.value
 
 # ============================================================================
+# BATCH TYPES
+# ============================================================================
+
+class BatchType:
+    """
+    Batch type definitions with execution pattern metadata.
+
+    Execution Patterns:
+    - SYNCHRONOUS: Jobs complete quickly, can wait for immediate results
+    - ASYNCHRONOUS: Jobs take time, require polling/monitoring
+    """
+    # Batch type constants
+    EDM_CREATION = 'EDM Creation'
+    PORTFOLIO_CREATION = 'Portfolio Creation'
+    MRI_IMPORT = 'MRI Import'
+    CREATE_REINSURANCE_TREATIES = 'Create Reinsurance Treaties'
+    EDM_DB_UPGRADE = 'EDM DB Upgrade'
+    GEOHAZ = 'GeoHaz'
+    PORTFOLIO_MAPPING = 'Portfolio Mapping'
+    ANALYSIS = 'Analysis'
+    GROUPING = 'Grouping'
+    EXPORT_TO_RDM = 'Export to RDM'
+    STAGING_ETL = 'Staging ETL'
+    # Test-only batch types
+    TEST_DEFAULT = 'test_default'
+    TEST_MULTI_JOB = 'test_multi_job'
+
+    # Execution pattern constants
+    SYNCHRONOUS = 'synchronous'
+    ASYNCHRONOUS = 'asynchronous'
+
+    # Batch type to execution pattern mapping
+    _PATTERNS = {
+        EDM_CREATION: ASYNCHRONOUS,
+        PORTFOLIO_CREATION: SYNCHRONOUS,
+        MRI_IMPORT: ASYNCHRONOUS,
+        CREATE_REINSURANCE_TREATIES: SYNCHRONOUS,
+        EDM_DB_UPGRADE: ASYNCHRONOUS,
+        GEOHAZ: ASYNCHRONOUS,
+        PORTFOLIO_MAPPING: SYNCHRONOUS,
+        ANALYSIS: ASYNCHRONOUS,
+        GROUPING: ASYNCHRONOUS,
+        EXPORT_TO_RDM: ASYNCHRONOUS,
+        STAGING_ETL: ASYNCHRONOUS,
+        # Test-only
+        TEST_DEFAULT: ASYNCHRONOUS,
+        TEST_MULTI_JOB: ASYNCHRONOUS,
+    }
+
+    @classmethod
+    def all(cls):
+        """Return all defined batch types"""
+        return list(cls._PATTERNS.keys())
+
+    @classmethod
+    def get_pattern(cls, batch_type: str) -> str:
+        """
+        Get the execution pattern for a batch type.
+
+        Args:
+            batch_type: The batch type name
+
+        Returns:
+            'synchronous' or 'asynchronous'
+
+        Raises:
+            ValueError: If batch_type is not recognized
+        """
+        if batch_type not in cls._PATTERNS:
+            raise ValueError(
+                f"Unknown batch type: {batch_type}. "
+                f"Valid types: {', '.join(cls.all())}"
+            )
+        return cls._PATTERNS[batch_type]
+
+    @classmethod
+    def is_synchronous(cls, batch_type: str) -> bool:
+        """Check if a batch type uses synchronous execution"""
+        return cls.get_pattern(batch_type) == cls.SYNCHRONOUS
+
+    @classmethod
+    def is_asynchronous(cls, batch_type: str) -> bool:
+        """Check if a batch type uses asynchronous execution"""
+        return cls.get_pattern(batch_type) == cls.ASYNCHRONOUS
+
+    @classmethod
+    def get_by_pattern(cls, pattern: str) -> list:
+        """
+        Get all batch types that use a specific execution pattern.
+
+        Args:
+            pattern: Either 'synchronous' or 'asynchronous'
+
+        Returns:
+            List of batch type names matching the pattern
+        """
+        if pattern not in [cls.SYNCHRONOUS, cls.ASYNCHRONOUS]:
+            raise ValueError(f"Invalid pattern: {pattern}. Use 'synchronous' or 'asynchronous'")
+        return [bt for bt, p in cls._PATTERNS.items() if p == pattern]
+
+# ============================================================================
 # DISPLAY SETTINGS
 # ============================================================================
 
