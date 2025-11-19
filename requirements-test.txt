@@ -6,6 +6,8 @@ pytest-timeout==2.2.0      # Timeout protection for hanging tests
 pytest-mock==3.12.0        # Enhanced mocking capabilities
 responses==0.25.0          # HTTP request mocking
 
+pyodbc==5.1.0
+
 # Code Quality
 coverage==7.4.0            # Coverage analysis (standalone)
 

@@ -905,6 +905,9 @@ def initialize_database(sql_file_path: Union[str, Path], connection: str = 'TEST
             connection='TEST'
         )
     """
+    conn = None
+    cursor = None
+
     try:
         # Read the SQL script
         script_path = Path(sql_file_path)
@@ -943,13 +946,23 @@ def initialize_database(sql_file_path: Union[str, Path], connection: str = 'TEST
                     if 'already exists' not in str(e).lower():
                         print(f"Warning executing batch: {str(e)[:100]}")
 
-        cursor.close()
-        conn.close()
-
         return True
 
     except Exception as e:
         raise SQLServerError(f"Failed to initialize database: {e}") from e
+
+    finally:
+        # Ensure cursor and connection are properly closed
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 # ============================================================================
