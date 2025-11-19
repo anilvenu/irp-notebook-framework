@@ -57,6 +57,9 @@ else
     echo "  Running with system Python..."
 fi
 
+# Install packages
+pip install -r requirements.txt -q
+
 # Install packages for test
 pip install -r requirements-test.txt -q
 

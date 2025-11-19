@@ -10,6 +10,7 @@ import traceback
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+import pandas as pd
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -201,7 +202,7 @@ def query_batch_data(batch_id: int, schema: str) -> Optional[Dict[str, Any]]:
                   'skipped_configs', 'total_jobs', 'finished_jobs', 'skipped_jobs',
                   'active_jobs', 'unfinished_jobs']
     for field in int_fields:
-        if field in summary and summary[field] is not None:
+        if field in summary and summary[field] is not None and not pd.isna(summary[field]):
             summary[field] = int(summary[field])
 
     # Get jobs
@@ -239,7 +240,7 @@ def query_batch_data(batch_id: int, schema: str) -> Optional[Dict[str, Any]]:
     job_int_fields = ['id', 'job_configuration_id', 'parent_job_id']
     for job in jobs:
         for field in job_int_fields:
-            if field in job and job[field] is not None:
+            if field in job and job[field] is not None and not pd.isna(job[field]):
                 job[field] = int(job[field])
 
     # Get configurations with active job details
@@ -274,7 +275,7 @@ def query_batch_data(batch_id: int, schema: str) -> Optional[Dict[str, Any]]:
                         'failed_jobs', 'cancelled_jobs', 'error_jobs', 'active_jobs']
     for config in configs:
         for field in config_int_fields:
-            if field in config and config[field] is not None:
+            if field in config and config[field] is not None and not pd.isna(config[field]):
                 config[field] = int(config[field])
 
     return {
