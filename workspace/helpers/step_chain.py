@@ -98,7 +98,7 @@ def get_next_step_info(batch_id: int, schema: Optional[str] = None) -> Optional[
             s.step_num,
             c.status as cycle_status
         FROM irp_batch b
-        JOIN irp_step_run sr ON b.step_id = sr.id
+        JOIN irp_step_run sr ON b.step_id = sr.step_id
         JOIN irp_step s ON sr.step_id = s.id
         JOIN irp_stage st ON s.stage_id = st.id
         JOIN irp_cycle c ON st.cycle_id = c.id
@@ -209,7 +209,7 @@ def should_execute_next_step(
 
     result = execute_query(
         query,
-        (next_step_info['cycle_name'], next_step_info['stage_num'], next_step_info['step_num']),
+        (next_step_info['cycle_name'], int(next_step_info['stage_num']), int(next_step_info['step_num'])),
         schema=schema
     )
 
