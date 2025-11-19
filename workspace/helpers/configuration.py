@@ -27,7 +27,7 @@ import numpy as np
 # from helpers.database import execute_query, execute_command, execute_insert, DatabaseError
 from helpers.constants import (
     ConfigurationStatus, CONFIGURATION_TAB_LIST,
-    EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES
+    EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES, BatchType
 )
 
 
@@ -392,17 +392,17 @@ def transform_test_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 BATCH_TYPE_TRANSFORMERS = {
     # Business transformers (11)
-    'EDM Creation': transform_edm_creation,
-    'Portfolio Creation': transform_portfolio_creation,
-    'MRI Import': transform_mri_import,
-    'Create Reinsurance Treaties': transform_create_reinsurance_treaties,
-    'EDM DB Upgrade': transform_edm_db_upgrade,
-    'GeoHaz': transform_geohaz,
-    'Portfolio Mapping': transform_portfolio_mapping,
-    'Analysis': transform_analysis,
-    'Grouping': transform_grouping,
-    'Export to RDM': transform_export_to_rdm,
-    'Staging ETL': transform_staging_etl,
+    BatchType.EDM_CREATION: transform_edm_creation,
+    BatchType.PORTFOLIO_CREATION: transform_portfolio_creation,
+    BatchType.MRI_IMPORT: transform_mri_import,
+    BatchType.CREATE_REINSURANCE_TREATIES: transform_create_reinsurance_treaties,
+    BatchType.EDM_DB_UPGRADE: transform_edm_db_upgrade,
+    BatchType.GEOHAZ: transform_geohaz,
+    BatchType.PORTFOLIO_MAPPING: transform_portfolio_mapping,
+    BatchType.ANALYSIS: transform_analysis,
+    BatchType.GROUPING: transform_grouping,
+    BatchType.EXPORT_TO_RDM: transform_export_to_rdm,
+    BatchType.STAGING_ETL: transform_staging_etl,
     # Test-only transformers (2)
     'test_default': transform_test_default,
     'test_multi_job': transform_test_multi_job,

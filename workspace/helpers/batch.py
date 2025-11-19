@@ -40,7 +40,7 @@ from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
-from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus
+from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus, BatchType
 from helpers.configuration import (
     read_configuration, update_configuration_status,
     create_job_configurations, BATCH_TYPE_TRANSFORMERS
@@ -418,6 +418,10 @@ def submit_batch(batch_id: int, irp_client: IRPClient, schema: str = 'public') -
     # Read batch
     batch = read_batch(batch_id, schema=schema)
 
+    # Validate batch status
+    if batch['batch_type'] not in BatchType.all():
+        raise BatchError(f"Invalid batch_type: {batch['batch_type']}") # pragma: no cover
+
     # Read and validate configuration
     config = read_configuration(batch['configuration_id'], schema=schema)
 
@@ -463,20 +467,36 @@ def submit_batch(batch_id: int, irp_client: IRPClient, schema: str = 'public') -
                     'error': str(e)
                 })
 
+    # If BatchType is synchronous and no errors to this point, the batch can be considered complete; set the BatchStatus to COMPLETED
+    if BatchType.is_synchronous(batch['batch_type']):
+        batch_status = BatchStatus.COMPLETED
+    else:
+        batch_status = BatchStatus.ACTIVE
+
     # Update batch status to ACTIVE and set submitted_ts
     query = """
         UPDATE irp_batch
         SET status = %s, submitted_ts = NOW()
         WHERE id = %s
     """
-    execute_command(query, (BatchStatus.ACTIVE, batch_id), schema=schema)
+    execute_command(query, (batch_status, batch_id), schema=schema)
+
+    # If BatchType is synchronous and no errors to this point, the batch can be considered complete
+    # Update the completed_ts of the batch
+    if BatchType.is_synchronous(batch['batch_type']):
+        query = """
+            UPDATE irp_batch
+            SET completed_ts = NOW()
+            WHERE id = %s
+        """
+        execute_command(query, (batch_id,), schema=schema)
 
     # Update configuration status to ACTIVE
     update_configuration_status(batch['configuration_id'], ConfigurationStatus.ACTIVE, schema=schema)
 
     return {
         'batch_id': batch_id,
-        'batch_status': BatchStatus.ACTIVE,
+        'batch_status': batch_status,
         'submitted_jobs': len(submitted_jobs),
         'jobs': submitted_jobs
     }
