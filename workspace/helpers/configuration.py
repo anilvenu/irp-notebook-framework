@@ -404,8 +404,8 @@ BATCH_TYPE_TRANSFORMERS = {
     BatchType.EXPORT_TO_RDM: transform_export_to_rdm,
     BatchType.STAGING_ETL: transform_staging_etl,
     # Test-only transformers (2)
-    'test_default': transform_test_default,
-    'test_multi_job': transform_test_multi_job,
+    BatchType.TEST_DEFAULT: transform_test_default,
+    BatchType.TEST_MULTI_JOB: transform_test_multi_job,
 }
 
 

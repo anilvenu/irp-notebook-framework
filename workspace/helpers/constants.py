@@ -165,6 +165,9 @@ class BatchType:
     GROUPING = 'Grouping'
     EXPORT_TO_RDM = 'Export to RDM'
     STAGING_ETL = 'Staging ETL'
+    # Test-only batch types
+    TEST_DEFAULT = 'test_default'
+    TEST_MULTI_JOB = 'test_multi_job'
 
     # Execution pattern constants
     SYNCHRONOUS = 'synchronous'
@@ -183,6 +186,9 @@ class BatchType:
         GROUPING: ASYNCHRONOUS,
         EXPORT_TO_RDM: ASYNCHRONOUS,
         STAGING_ETL: ASYNCHRONOUS,
+        # Test-only
+        TEST_DEFAULT: ASYNCHRONOUS,
+        TEST_MULTI_JOB: ASYNCHRONOUS,
     }
 
     @classmethod
