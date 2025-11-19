@@ -1,0 +1,640 @@
+{
+    "accountItems": [
+        {
+            "source": "ACCNTNUM",
+            "destination": "ACCNTNUM"
+        },
+        {
+            "source": "ACCNTNAME",
+            "destination": "ACCNTNAME"
+        },
+        {
+            "source": "UWRITRNAME",
+            "destination": "UWRITRNAME"
+        },
+        {
+            "source": "PRODID",
+            "destination": "PRODID"
+        },
+        {
+            "source": "BRANCHNAME",
+            "destination": "BRANCHNAME"
+        },
+        {
+            "source": "PRODNAME",
+            "destination": "PRODNAME"
+        },
+        {
+            "source": "CEDANTID",
+            "destination": "CEDANTID"
+        },
+        {
+            "source": "CEDANTNAME",
+            "destination": "CEDANTNAME"
+        },
+        {
+            "source": "POLICYNUM",
+            "destination": "POLICYNUM"
+        },
+        {
+            "source": "LOBNAME",
+            "destination": "LOBNAME"
+        },
+        {
+            "source": "INCEPTDATE",
+            "destination": "INCEPTDATE"
+        },
+        {
+            "source": "EXPIREDATE",
+            "destination": "EXPIREDATE"
+        },
+        {
+            "source": "UNDCOVAMT",
+            "destination": "UNDCOVAMT"
+        },
+        {
+            "source": "UNDCOVCUR",
+            "destination": "UNDCOVCUR"
+        },
+        {
+            "source": "PARTOF",
+            "destination": "PARTOF"
+        },
+        {
+            "source": "PARTOFCUR",
+            "destination": "PARTOFCUR"
+        },
+        {
+            "source": "POLICYTYPE",
+            "destination": "POLICYTYPE"
+        },
+        {
+            "source": "POLICYSTRUCTURE",
+            "destination": "POLICYSTRUCTURE"
+        },
+        {
+            "source": "MINDEDAMT",
+            "destination": "MINDEDAMT"
+        },
+        {
+            "source": "MINDEDCUR",
+            "destination": "MINDEDCUR"
+        },
+        {
+            "source": "MAXDEDAMT",
+            "destination": "MAXDEDAMT"
+        },
+        {
+            "source": "MAXDEDCUR",
+            "destination": "MAXDEDCUR"
+        },
+        {
+            "source": "BLANDEDAMT",
+            "destination": "BLANDEDAMT"
+        },
+        {
+            "source": "BLANDEDCUR",
+            "destination": "BLANDEDCUR"
+        },
+        {
+            "source": "BLANLIMAMT",
+            "destination": "BLANLIMAMT"
+        },
+        {
+            "source": "BLANLIMCUR",
+            "destination": "BLANLIMCUR"
+        },
+        {
+            "source": "COV1LIMIT",
+            "destination": "COV1LIMIT"
+        },
+        {
+            "source": "COV2LIMIT",
+            "destination": "COV2LIMIT"
+        },
+        {
+            "source": "BLANPREAMT",
+            "destination": "BLANPREAMT"
+        },
+        {
+            "source": "BLANPRECUR",
+            "destination": "BLANPRECUR"
+        },
+        {
+            "source": "COMBINEDLIM",
+            "destination": "COMBINEDLIM"
+        },
+        {
+            "source": "COMBINEDLCUR",
+            "destination": "COMBINEDLCUR"
+        },
+        {
+            "source": "COMBINEDDED",
+            "destination": "COMBINEDDED"
+        },
+        {
+            "source": "COMBINEDDCUR",
+            "destination": "COMBINEDDCUR"
+        },
+        {
+            "source": "COMBINEDPREM",
+            "destination": "COMBINEDPREM"
+        },
+        {
+            "source": "COMBINEDPCUR",
+            "destination": "COMBINEDPCUR"
+        },
+        {
+            "source": "COND1TYPE",
+            "destination": "COND1TYPE"
+        },
+        {
+            "source": "COND1NAME",
+            "destination": "COND1NAME"
+        },
+        {
+            "source": "COND1LIMIT",
+            "destination": "COND1LIMIT"
+        },
+        {
+            "source": "COVBASE",
+            "destination": "COVBASE"
+        },
+        {
+            "source": "LIMITGU",
+            "destination": "LIMITGU"
+        },
+        {
+            "source": "USERDEF1",
+            "destination": "USERDEF1"
+        },
+        {
+            "source": "USERDEF2",
+            "destination": "USERDEF2"
+        },
+        {
+            "source": "USERDEF3",
+            "destination": "USERDEF3"
+        },
+        {
+            "source": "USERDEF4",
+            "destination": "USERDEF4"
+        },
+        {
+            "source": "USERTXT1",
+            "destination": "USERTXT1"
+        },
+        {
+            "source": "USERTXT2",
+            "destination": "USERTXT2"
+        },
+        {
+            "source": "POLICYUSERTXT1",
+            "destination": "POLICYUSERTXT1"
+        },
+        {
+            "source": "POLICYUSERTXT2",
+            "destination": "POLICYUSERTXT2"
+        },
+        {
+            "source": "POLICYUSERTXT3",
+            "destination": "POLICYUSERTXT3"
+        },
+        {
+            "source": "POLICYUSERTXT4",
+            "destination": "POLICYUSERTXT4"
+        }
+    ],
+    "locationItems": [
+        {
+            "source": "ACCNTNUM",
+            "destination": "ACCNTNUM"
+        },
+        {
+            "source": "LOCNUM",
+            "destination": "LOCNUM"
+        },
+        {
+            "source": "LOCNAME",
+            "destination": "LOCNAME"
+        },
+        {
+            "source": "SITENAME",
+            "destination": "SITENAME"
+        },
+        {
+            "source": "ADDRESSNUM",
+            "destination": "ADDRESSNUM"
+        },
+        {
+            "source": "ADDRMATCH",
+            "destination": "ADDRMATCH"
+        },
+        {
+            "source": "STREETNAME",
+            "destination": "STREETNAME"
+        },
+        {
+            "source": "DISTRICT",
+            "destination": "DISTRICT"
+        },
+        {
+            "source": "DSTRCTCODE",
+            "destination": "DSTRCTCODE"
+        },
+        {
+            "source": "CITY",
+            "destination": "CITY"
+        },
+        {
+            "source": "CITYCODE",
+            "destination": "CITYCODE"
+        },
+        {
+            "source": "STATE",
+            "destination": "STATE"
+        },
+        {
+            "source": "STATECODE",
+            "destination": "STATECODE"
+        },
+        {
+            "source": "POSTALCODE",
+            "destination": "POSTALCODE"
+        },
+        {
+            "source": "COUNTY",
+            "destination": "COUNTY"
+        },
+        {
+            "source": "COUNTYCODE",
+            "destination": "COUNTYCODE"
+        },
+        {
+            "source": "CRESTA",
+            "destination": "CRESTA"
+        },
+        {
+            "source": "LATITUDE",
+            "destination": "LATITUDE"
+        },
+        {
+            "source": "LONGITUDE",
+            "destination": "LONGITUDE"
+        },
+        {
+            "source": "FLOORAREA",
+            "destination": "FLOORAREA"
+        },
+        {
+            "source": "AREAUNIT",
+            "destination": "AREAUNIT"
+        },
+        {
+            "source": "CNTRYSCHEME",
+            "destination": "CNTRYSCHEME"
+        },
+        {
+            "source": "CNTRYCODE",
+            "destination": "CNTRYCODE"
+        },
+        {
+            "source": "NUMBLDGS",
+            "destination": "NUMBLDGS"
+        },
+        {
+            "source": "BLDGSCHEME",
+            "destination": "BLDGSCHEME"
+        },
+        {
+            "source": "BLDGCLASS",
+            "destination": "BLDGCLASS"
+        },
+        {
+            "source": "OCCSCHEME",
+            "destination": "OCCSCHEME"
+        },
+        {
+            "source": "OCCTYPE",
+            "destination": "OCCTYPE"
+        },
+        {
+            "source": "YEARBUILT",
+            "destination": "YEARBUILT"
+        },
+        {
+            "source": "NUMSTORIES",
+            "destination": "NUMSTORIES"
+        },
+        {
+            "source": "EQCV4VAL",
+            "destination": "EQCV4VAL"
+        },
+        {
+            "source": "EQCV4VCUR",
+            "destination": "EQCV4VCUR"
+        },
+        {
+            "source": "EQCV5VAL",
+            "destination": "EQCV5VAL"
+        },
+        {
+            "source": "EQCV5VCUR",
+            "destination": "EQCV5VCUR"
+        },
+        {
+            "source": "EQCV6VAL",
+            "destination": "EQCV6VAL"
+        },
+        {
+            "source": "EQCV6VCUR",
+            "destination": "EQCV6VCUR"
+        },
+        {
+            "source": "EQCV7VAL",
+            "destination": "EQCV7VAL"
+        },
+        {
+            "source": "EQCV7VCUR",
+            "destination": "EQCV7VCUR"
+        },
+        {
+            "source": "EQCV4LIMIT",
+            "destination": "EQCV4LIMIT"
+        },
+        {
+            "source": "EQCV4LCUR",
+            "destination": "EQCV4LCUR"
+        },
+        {
+            "source": "EQCV5LIMIT",
+            "destination": "EQCV5LIMIT"
+        },
+        {
+            "source": "EQCV5LCUR",
+            "destination": "EQCV5LCUR"
+        },
+        {
+            "source": "EQCV6LIMIT",
+            "destination": "EQCV6LIMIT"
+        },
+        {
+            "source": "EQCV6LCUR",
+            "destination": "EQCV6LCUR"
+        },
+        {
+            "source": "EQCV7LIMIT",
+            "destination": "EQCV7LIMIT"
+        },
+        {
+            "source": "EQCV7LCUR",
+            "destination": "EQCV7LCUR"
+        },
+        {
+            "source": "EQCV4DED",
+            "destination": "EQCV4DED"
+        },
+        {
+            "source": "EQCV4DCUR",
+            "destination": "EQCV4DCUR"
+        },
+        {
+            "source": "EQCV5DED",
+            "destination": "EQCV5DED"
+        },
+        {
+            "source": "EQCV5DCUR",
+            "destination": "EQCV5DCUR"
+        },
+        {
+            "source": "EQCV6DED",
+            "destination": "EQCV6DED"
+        },
+        {
+            "source": "EQCV6DCUR",
+            "destination": "EQCV6DCUR"
+        },
+        {
+            "source": "EQCV7DED",
+            "destination": "EQCV7DED"
+        },
+        {
+            "source": "EQCV7DCUR",
+            "destination": "EQCV7DCUR"
+        },
+        {
+            "source": "EQSITELIM",
+            "destination": "EQSITELIM"
+        },
+        {
+            "source": "EQSITELCUR",
+            "destination": "EQSITELCUR"
+        },
+        {
+            "source": "EQSITEDED",
+            "destination": "EQSITEDED"
+        },
+        {
+            "source": "EQSITEDCUR",
+            "destination": "EQSITEDCUR"
+        },
+        {
+            "source": "WSSITELIM",
+            "destination": "WSSITELIM"
+        },
+        {
+            "source": "WSSITELCUR",
+            "destination": "WSSITELCUR"
+        },
+        {
+            "source": "WSSITEDED",
+            "destination": "WSSITEDED"
+        },
+        {
+            "source": "WSSITEDCUR",
+            "destination": "WSSITEDCUR"
+        },
+        {
+            "source": "EQCOMBINEDLIM",
+            "destination": "EQCOMBINEDLIM"
+        },
+        {
+            "source": "EQCOMBINEDLCUR",
+            "destination": "EQCOMBINEDLCUR"
+        },
+        {
+            "source": "EQCOMBINEDDED",
+            "destination": "EQCOMBINEDDED"
+        },
+        {
+            "source": "EQCOMBINEDDCUR",
+            "destination": "EQCOMBINEDDCUR"
+        },
+        {
+            "source": "WSCV4VAL",
+            "destination": "WSCV4VAL"
+        },
+        {
+            "source": "WSCV4VCUR",
+            "destination": "WSCV4VCUR"
+        },
+        {
+            "source": "WSCV5VAL",
+            "destination": "WSCV5VAL"
+        },
+        {
+            "source": "WSCV5VCUR",
+            "destination": "WSCV5VCUR"
+        },
+        {
+            "source": "WSCV6VAL",
+            "destination": "WSCV6VAL"
+        },
+        {
+            "source": "WSCV6VCUR",
+            "destination": "WSCV6VCUR"
+        },
+        {
+            "source": "WSCV7VAL",
+            "destination": "WSCV7VAL"
+        },
+        {
+            "source": "WSCV7VCUR",
+            "destination": "WSCV7VCUR"
+        },
+        {
+            "source": "WSCV4LIMIT",
+            "destination": "WSCV4LIMIT"
+        },
+        {
+            "source": "WSCV4LCUR",
+            "destination": "WSCV4LCUR"
+        },
+        {
+            "source": "WSCV5LIMIT",
+            "destination": "WSCV5LIMIT"
+        },
+        {
+            "source": "WSCV5LCUR",
+            "destination": "WSCV5LCUR"
+        },
+        {
+            "source": "WSCV6LIMIT",
+            "destination": "WSCV6LIMIT"
+        },
+        {
+            "source": "WSCV6LCUR",
+            "destination": "WSCV6LCUR"
+        },
+        {
+            "source": "WSCV7LIMIT",
+            "destination": "WSCV7LIMIT"
+        },
+        {
+            "source": "WSCV7LCUR",
+            "destination": "WSCV7LCUR"
+        },
+        {
+            "source": "WSCV4DED",
+            "destination": "WSCV4DED"
+        },
+        {
+            "source": "WSCV4DCUR",
+            "destination": "WSCV4DCUR"
+        },
+        {
+            "source": "WSCV5DED",
+            "destination": "WSCV5DED"
+        },
+        {
+            "source": "WSCV5DCUR",
+            "destination": "WSCV5DCUR"
+        },
+        {
+            "source": "WSCV6DED",
+            "destination": "WSCV6DED"
+        },
+        {
+            "source": "WSCV6DCUR",
+            "destination": "WSCV6DCUR"
+        },
+        {
+            "source": "WSCV7DED",
+            "destination": "WSCV7DED"
+        },
+        {
+            "source": "WSCV7DCUR",
+            "destination": "WSCV7DCUR"
+        },
+        {
+            "source": "WSCOMBINEDLIM",
+            "destination": "WSCOMBINEDLIM"
+        },
+        {
+            "source": "WSCOMBINEDLCUR",
+            "destination": "WSCOMBINEDLCUR"
+        },
+        {
+            "source": "WSCOMBINEDDED",
+            "destination": "WSCOMBINEDDED"
+        },
+        {
+            "source": "WSCOMBINEDDCUR",
+            "destination": "WSCOMBINEDDCUR"
+        },
+        {
+            "source": "RESISTOPEN",
+            "destination": "RESISTOPEN"
+        },
+        {
+            "source": "ROOFAGE",
+            "destination": "ROOFAGE"
+        },
+        {
+            "source": "ROOFANCH",
+            "destination": "ROOFANCH"
+        },
+        {
+            "source": "ROOFSYS",
+            "destination": "ROOFSYS"
+        },
+        {
+            "source": "CLADRATE",
+            "destination": "CLADRATE"
+        },
+        {
+            "source": "CLADDING",
+            "destination": "CLADDING"
+        },
+        {
+            "source": "ROOFGEOM",
+            "destination": "ROOFGEOM"
+        },
+        {
+            "source": "CLADSYS",
+            "destination": "CLADSYS"
+        },
+        {
+            "source": "USERTXT1",
+            "destination": "USERTXT1"
+        },
+        {
+            "source": "USERTXT2",
+            "destination": "USERTXT2"
+        },
+        {
+            "source": "USERID1",
+            "destination": "USERID1"
+        },
+        {
+            "source": "USERID2",
+            "destination": "USERID2"
+        },
+        {
+            "source": "PRIMARYBLDG",
+            "destination": "PRIMARYBLDG"
+        }
+    ],
+    "reinsuranceItems": [],
+    "mapFileName": "map1"
+}

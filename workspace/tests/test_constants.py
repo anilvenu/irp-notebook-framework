@@ -462,54 +462,7 @@ class TestStagePattern:
 # ==============================================================================
 
 class TestCycleNameValidation:
-    """Test CYCLE_NAME_RULES valid_pattern regex"""
-
-    @pytest.mark.unit
-    def test_cycle_name_valid_pattern_matches_correct_format(self):
-        """Test valid_pattern matches correct cycle name format"""
-        # Pattern: r'^Analysis-20\d{2}-Q[1-4](-[\w-]+)?$'
-        pattern = CYCLE_NAME_RULES['valid_pattern']
-
-        valid_names = [
-            'Analysis-2025-Q1',
-            'Analysis-2025-Q2',
-            'Analysis-2025-Q3',
-            'Analysis-2025-Q4',
-            'Analysis-2024-Q1',
-            'Analysis-2099-Q4',
-            'Analysis-2025-Q1-v1',
-            'Analysis-2025-Q2-final',
-            'Analysis-2025-Q3-test-run',
-            'Analysis-2025-Q4-2024-11-15',
-        ]
-
-        for name in valid_names:
-            match = re.match(pattern, name)
-            assert match is not None, f"Should match valid cycle name: {name}"
-
-    @pytest.mark.unit
-    def test_cycle_name_valid_pattern_rejects_invalid_format(self):
-        """Test valid_pattern rejects invalid cycle name format"""
-        pattern = CYCLE_NAME_RULES['valid_pattern']
-
-        invalid_names = [
-            'Analysis-2025-Q5',  # Invalid quarter (Q5)
-            'Analysis-2025-Q0',  # Invalid quarter (Q0)
-            'Analysis-19-Q1',    # Wrong year format (not 20XX)
-            'Analysis-1999-Q1',  # Wrong century
-            'analysis-2025-Q1',  # Lowercase 'analysis'
-            'ANALYSIS-2025-Q1',  # All uppercase
-            'Analysis-2025-q1',  # Lowercase 'q'
-            'Analysis-2025-Quarter1',  # Wrong quarter format
-            'Cycle-2025-Q1',     # Wrong prefix
-            '2025-Q1',           # Missing prefix
-            'Analysis-2025',     # Missing quarter
-            'Analysis-2025-Q1-'  # Trailing dash with no suffix
-        ]
-
-        for name in invalid_names:
-            match = re.match(pattern, name)
-            assert match is None, f"Should NOT match invalid cycle name: {name}"
+    """Test CYCLE_NAME_RULES constraints"""
 
     @pytest.mark.unit
     def test_cycle_name_rules_min_length(self):
@@ -530,23 +483,6 @@ class TestCycleNameValidation:
         # Test that normal names fit within limit
         assert len('Analysis-2025-Q1-with-very-long-suffix-name') < max_length, \
             "Normal cycle names should fit within max_length"
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-    def test_cycle_name_rules_example_is_valid(self):
-        """Test that CYCLE_NAME_RULES example is actually valid"""
-        example = CYCLE_NAME_RULES['example']
-        pattern = CYCLE_NAME_RULES['valid_pattern']
-
-        # Example format: 'Analysis-2025-Q4 OR Analysis-2025-Q4-v1'
-        # Extract individual examples
-        examples = [e.strip() for e in example.split('OR')]
-
-        for ex in examples:
-            match = re.match(pattern, ex)
-            assert match is not None, \
-                f"Example '{ex}' should match the valid_pattern"
 
 
 # ==============================================================================

@@ -21,14 +21,15 @@ Workflow:
 
 import os
 import json
-import random
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 
+from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, DatabaseError
 )
 from helpers.constants import JobStatus
+from helpers.configuration import BATCH_TYPE_TRANSFORMERS
 
 
 class JobError(Exception):
@@ -156,38 +157,182 @@ def create_job(
         raise JobError(f"Failed to create job: {str(e)}")   # pragma: no cover
 
 
-def _submit_job(job_id: int, job_config: Dict[str, Any]) -> Tuple[str, Dict, Dict]:
+def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_client: IRPClient) -> Tuple[Optional[str], Dict, Dict]:
     """
-    Submit job to Moody's workflow API (stubbed for now).
+    Submit job to Moody's workflow API.
+
+    Routes to appropriate submission handler based on batch type.
 
     Args:
         job_id: Job ID
         job_config: Job configuration data
+        batch_type: Type of batch (from irp_batch.batch_type)
+        irp_client: IRPClient instance
 
     Returns:
         Tuple of (workflow_id, request_json, response_json)
-
-    NOTE: Currently returns random workflow_id and empty dicts.
-          Will be replaced with actual Moody's API call.
+        Returns (None, request_json, error_response) on failure
     """
-    # TODO: Replace with actual Moody's API call
-    # For now, generate random workflow_id
-    workflow_id = f"MW-{random.randint(100000, 999999)}"
+    try:
+        if batch_type not in BATCH_TYPE_TRANSFORMERS:
+            raise ValueError(f"Unsupported batch type: {batch_type}")
 
-    # Stub request/response
+        # Route to appropriate submission handler based on batch type
+        if batch_type == 'EDM Creation':
+            workflow_id, request_json, response_json = _submit_edm_creation_job(
+                job_id, job_config, irp_client
+            )
+        elif batch_type == 'Portfolio Creation':
+            workflow_id, request_json, response_json = _submit_portfolio_creation_job(
+                job_id, job_config, irp_client
+            )
+        elif batch_type == 'MRI Import':
+            workflow_id, request_json, response_json = _submit_mri_import_job(
+                job_id, job_config, irp_client
+            )
+        elif batch_type == 'Analysis':
+            workflow_id, request_json, response_json = _submit_analysis_job(
+                job_id, job_config, irp_client
+            )
+        # Add more batch types as needed
+
+        return workflow_id, request_json, response_json
+
+    except Exception as e:
+        # Build generic error response
+        request_json = {
+            'job_id': job_id,
+            'batch_type': batch_type,
+            'configuration': job_config,
+            'submitted_at': datetime.now().isoformat()
+        }
+
+        response_json = {
+            'status': 'ERROR',
+            'error': str(e),
+            'error_type': type(e).__name__,
+            'message': f'Job submission failed: {str(e)}'
+        }
+
+        # Return None for workflow_id on error
+        return None, request_json, response_json
+
+
+def _submit_edm_creation_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Submit EDM Creation job to Moody's API.
+
+    Follows the pattern from irp_integration.edm.submit_create_edm_jobs:
+    - Lookup database server by name
+    - Search or create exposure set
+    - Submit EDM creation job
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+    """
+    edm_name = job_config.get('Database')
+    if not edm_name:
+        raise ValueError("Missing required field: Database")
+
+    # Submit EDM creation job
+    moody_job_id = client.edm.submit_create_edm_job(
+        edm_name=edm_name
+    )
+
+    # Build workflow ID
+    workflow_id = str(moody_job_id)
+
+    # Build request/response structures
     request_json = {
         'job_id': job_id,
+        'batch_type': 'EDM Creation',
         'configuration': job_config,
+        'api_request': {
+            'edm_name': edm_name
+        },
         'submitted_at': datetime.now().isoformat()
     }
 
     response_json = {
         'workflow_id': workflow_id,
+        'moody_job_id': moody_job_id,
         'status': 'ACCEPTED',
-        'message': 'Job submitted successfully (stub)'
+        'message': 'EDM creation job submitted successfully'
     }
 
     return workflow_id, request_json, response_json
+
+
+def _submit_portfolio_creation_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Submit Portfolio Creation job to Moody's API.
+
+    TODO: Implement portfolio creation submission logic.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+    """
+    raise NotImplementedError("Portfolio Creation job submission not yet implemented")
+
+
+def _submit_mri_import_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Submit MRI Import job to Moody's API.
+
+    TODO: Implement MRI import submission logic.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+    """
+    raise NotImplementedError("MRI Import job submission not yet implemented")
+
+
+def _submit_analysis_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Submit Analysis job to Moody's API.
+
+    TODO: Implement analysis submission logic.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+    """
+    raise NotImplementedError("Analysis job submission not yet implemented")
 
 
 def _register_job_submission(
@@ -609,6 +754,8 @@ def skip_job_configuration(
 
 def submit_job(
     job_id: int,
+    batch_type: str,
+    irp_client: IRPClient,
     force: bool = False,
     track_immediately: bool = False,
     schema: str = 'public'
@@ -627,6 +774,7 @@ def submit_job(
 
     Args:
         job_id: Job ID
+        batch_type: Batch Type
         force: Resubmit even if already submitted
         track_immediately: Track status after submission
         schema: Database schema
@@ -662,13 +810,24 @@ def submit_job(
         # Get job configuration
         job_config = get_job_config(job_id, schema=schema)
 
-        # Submit job (stubbed)
+        # Submit job
         workflow_id, request, response = _submit_job(
             job_id,
-            job_config['job_configuration_data']
+            job_config['job_configuration_data'],
+            batch_type,
+            irp_client
         )
 
-        # Register submission
+        # Check if submission succeeded
+        if workflow_id is None:
+            # Submission failed - set job to ERROR status
+            update_job_status(job_id, JobStatus.ERROR, schema=schema)
+
+            # Get error message and raise to caller
+            error_msg = response.get('error', 'Unknown submission error')
+            raise JobError(f"Job submission failed: {error_msg}")
+
+        # Submission succeeded - proceed with registration
         _register_job_submission(
             job_id,
             workflow_id,
@@ -681,13 +840,14 @@ def submit_job(
 
     # Optionally track immediately
     if track_immediately:
-        track_job_status(job_id, schema=schema)
+        track_job_status(job_id, irp_client, schema=schema)
 
     return job_id
 
 
 def track_job_status(
     job_id: int,
+    irp_client: IRPClient,
     moodys_workflow_id: Optional[str] = None,
     schema: str = 'public'
 ) -> str:
@@ -696,18 +856,13 @@ def track_job_status(
 
     Process:
     1. Read job (or use provided workflow_id)
-    2. Call Moody's API to get current status (STUBBED)
+    2. Call Moody's API to get current status
     3. Insert tracking log entry
     4. Update job status if changed
 
-    STUB BEHAVIOR (for testing):
-    - SUBMITTED → QUEUED or PENDING
-    - QUEUED → PENDING or RUNNING
-    - PENDING → RUNNING
-    - RUNNING → RUNNING, COMPLETED, or FAILED (random)
-
     Args:
         job_id: Job ID
+        irp_client: IRPClient instance for API calls
         moodys_workflow_id: Optional workflow ID (uses job's if None)
         schema: Database schema
 
@@ -715,9 +870,7 @@ def track_job_status(
         Current job status
 
     Raises:
-        JobError: If job not found or has no workflow_id
-
-    NOTE: Currently uses realistic stub. Will be replaced with actual Moody's API.
+        JobError: If job not found, has no workflow_id, or API call fails
     """
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
@@ -737,28 +890,27 @@ def track_job_status(
     # Get current status
     current_status = job['status']
 
-    # TODO: Replace with actual Moody's API call
-    # For now, use realistic stub transitions
-    transitions = {
-        JobStatus.SUBMITTED: [JobStatus.QUEUED, JobStatus.PENDING],
-        JobStatus.QUEUED: [JobStatus.PENDING, JobStatus.RUNNING],
-        JobStatus.PENDING: [JobStatus.RUNNING],
-        JobStatus.RUNNING: [JobStatus.RUNNING, JobStatus.RUNNING, JobStatus.FINISHED, JobStatus.FAILED],
-    }
+    # Poll Moody's API for current job status
+    from helpers.irp_integration.exceptions import IRPAPIError
 
-    if current_status in transitions:
-        new_status = random.choice(transitions[current_status])
-    else:
-        # Already in terminal state or unknown state
-        new_status = current_status
+    try:
+        # Get job status from Moody's
+        # Note: workflow_id from our DB is Moody's job_id
+        job_data = irp_client.job.get_risk_data_job(int(workflow_id))
 
-    # Stub response data
-    tracking_data = {
-        'workflow_id': workflow_id,
-        'status': new_status,
-        'polled_at': datetime.now().isoformat(),
-        'message': f'Status transition: {current_status} -> {new_status} (stub)'
-    }
+        # Extract status and full data
+        new_status = job_data['status']
+        tracking_data = job_data  # Store full API response
+
+    except IRPAPIError as e:
+        # API error - don't change job status, raise error
+        raise JobError(f"Failed to track job {job_id} from Moody's API: {str(e)}")
+    except ValueError as e:
+        # Invalid workflow_id format
+        raise JobError(f"Invalid workflow_id format for job {job_id}: {workflow_id}")
+    except Exception as e:
+        # Other unexpected error
+        raise JobError(f"Unexpected error tracking job {job_id}: {str(e)}")
 
     # Insert tracking log
     _insert_tracking_log(job_id, workflow_id, new_status, tracking_data, schema=schema)
@@ -776,6 +928,8 @@ def track_job_status(
 
 def resubmit_job(
     job_id: int,
+    irp_client: IRPClient,
+    batch_type: str,
     job_configuration_data: Optional[Dict[str, Any]] = None,
     override_reason: Optional[str] = None,
     schema: str = 'public'
@@ -891,7 +1045,7 @@ def resubmit_job(
 
     # Submit the job AFTER transaction completes successfully
     # Job submission involves external API call, so keep it outside transaction
-    submit_job(new_job_id, schema=schema)
+    submit_job(new_job_id, batch_type=batch_type, irp_client=irp_client, schema=schema)
     # TODO Handle submission error
 
     return new_job_id

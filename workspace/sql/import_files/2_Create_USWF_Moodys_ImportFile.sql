@@ -188,3 +188,6 @@ INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location
 FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE State NOT IN ('PR','VI','GU')	and FFMODELED = 'Y'
 --(3816610 rows affected)
+
+SELECT * FROM Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account
+SELECT * FROM Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location

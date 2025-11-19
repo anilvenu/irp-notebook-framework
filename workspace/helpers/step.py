@@ -123,7 +123,7 @@ def get_last_step_run(step_id: int) -> Optional[Dict[str, Any]]:
         Dictionary with step run information or None if not found
     """
     query = """
-        SELECT id, run_num, status, started_ts, completed_ts,
+        SELECT id, step_id, run_num, status, started_ts, completed_ts,
                started_by, error_message, output_data
         FROM irp_step_run
         WHERE step_id = %s

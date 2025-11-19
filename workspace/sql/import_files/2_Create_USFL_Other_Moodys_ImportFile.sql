@@ -151,3 +151,6 @@ SELECT
 INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Location
 FROM CombinedData_{{ DATE_VALUE }}_Working
 WHERE OTHER_FLOOD_IND = 'Y'
+
+SELECT * FROM Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account
+SELECT * FROM Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Location

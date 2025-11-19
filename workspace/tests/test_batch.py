@@ -40,7 +40,11 @@ from helpers.constants import BatchStatus, JobStatus, ConfigurationStatus
 # ============================================================================
 
 def create_test_hierarchy(test_schema, cycle_name='test_cycle'):
-    """Helper to create cycle, stage, step, and configuration"""
+    """Helper to create cycle, stage, step, and configuration
+
+    Creates a configuration suitable for EDM Creation batch type by default,
+    which is needed for tests that submit batches.
+    """
     # Create cycle
     cycle_id = execute_insert(
         "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
@@ -62,11 +66,16 @@ def create_test_hierarchy(test_schema, cycle_name='test_cycle'):
         schema=test_schema
     )
 
-    # Create configuration
+    # Create configuration with EDM Creation structure
+    # This allows tests to use 'EDM Creation' batch type without extra setup
     config_data = {
-        'param1': 'value1',
-        'param2': 100,
-        'nested': {'key': 'value'}
+        'Metadata': {
+            'cycle': cycle_name,
+            'date': '2024-01-01'
+        },
+        'Databases': [
+            {'Database': 'TestDB', 'Server': 'databridge-1'}
+        ]
     }
 
     config_id = execute_insert(
@@ -95,7 +104,7 @@ def test_read_batch(test_schema):
     # Create batch manually
     batch_id = execute_insert(
         "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
-        (step_id, config_id, 'default', BatchStatus.INITIATED),
+        (step_id, config_id, 'EDM Creation', BatchStatus.INITIATED),
         schema=test_schema
     )
 
@@ -106,7 +115,7 @@ def test_read_batch(test_schema):
     assert result['id'] == batch_id
     assert result['step_id'] == step_id
     assert result['configuration_id'] == config_id
-    assert result['batch_type'] == 'default'
+    assert result['batch_type'] == 'EDM Creation'
     assert result['status'] == BatchStatus.INITIATED
 
 
@@ -119,7 +128,7 @@ def test_update_batch_status(test_schema):
 
     batch_id = execute_insert(
         "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
-        (step_id, config_id, 'default', BatchStatus.INITIATED),
+        (step_id, config_id, 'EDM Creation', BatchStatus.INITIATED),
         schema=test_schema
     )
 
@@ -142,13 +151,13 @@ def test_update_batch_status(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_create_batch_default(test_schema):
-    """Test creating batch with default transformer"""
+def test_create_batch_default(test_schema, mock_irp_client):
+    """Test creating batch with EDM Creation (single database)"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_create_batch')
 
-    # Create batch
+    # Create batch (config already has single database from create_test_hierarchy)
     batch_id = create_batch(
-        batch_type='test_default',
+        batch_type='EDM Creation',
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
@@ -156,26 +165,29 @@ def test_create_batch_default(test_schema):
     assert isinstance(batch_id, int)
 
     # Submit batch
-    submit_batch(batch_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Verify batch
     batch = read_batch(batch_id, schema=test_schema)
     assert batch['id'] == batch_id
-    assert batch['batch_type'] == 'test_default'
+    assert batch['batch_type'] == 'EDM Creation'
 
     # Verify jobs were created
     jobs = get_batch_jobs(batch_id, schema=test_schema)
-    assert len(jobs) == 1, "Default transformer should create 1 job"
+    assert len(jobs) == 1, "EDM Creation with 1 database should create 1 job"
 
     # Verify job configurations
     job_configs = get_batch_job_configurations(batch_id, schema=test_schema)
     assert len(job_configs) == 1
 
+    # Verify mock was called once
+    assert mock_irp_client.edm.submit_create_edm_job.call_count == 1
+
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_create_batch_multi_job(test_schema):
-    """Test creating batch with test_multi_job transformer"""
+def test_create_batch_multi_job(test_schema, mock_irp_client):
+    """Test creating batch with EDM Creation transformer (multi-job)"""
     # Create hierarchy with multi-job config
     cycle_id = execute_insert(
         "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
@@ -194,11 +206,14 @@ def test_create_batch_multi_job(test_schema):
     )
 
     config_data = {
-        'batch_type': 'multi_test',
-        'jobs': [
-            {'job_id': 1, 'param': 'A'},
-            {'job_id': 2, 'param': 'B'},
-            {'job_id': 3, 'param': 'C'}
+        'Metadata': {
+            'cycle': 'test_multi_job',
+            'date': '2024-01-01'
+        },
+        'Databases': [
+            {'Database': 'TestDB_A', 'Server': 'databridge-1'},
+            {'Database': 'TestDB_B', 'Server': 'databridge-1'},
+            {'Database': 'TestDB_C', 'Server': 'databridge-1'}
         ]
     }
 
@@ -213,22 +228,25 @@ def test_create_batch_multi_job(test_schema):
 
     # Create batch
     batch_id = create_batch(
-        batch_type='test_multi_job',
+        batch_type='EDM Creation',
         configuration_id=config_id,
         step_id=step_id,
         schema=test_schema
     )
 
     # Submit batch
-    submit_batch(batch_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
-    # Verify jobs were created
+    # Verify jobs were created (one per database)
     jobs = get_batch_jobs(batch_id, schema=test_schema)
-    assert len(jobs) == 3, "Multi-job transformer should create 3 jobs"
+    assert len(jobs) == 3, "EDM Creation transformer should create 3 jobs (one per database)"
 
     # Verify all jobs are SUBMITTED
     for job in jobs:
         assert job['status'] == JobStatus.SUBMITTED
+
+    # Verify mock was called for each database
+    assert mock_irp_client.edm.submit_create_edm_job.call_count == 3
 
 
 # ============================================================================
@@ -244,7 +262,7 @@ def test_get_batch_jobs_with_filters(test_schema):
     # Create batch
     batch_id = execute_insert(
         "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
-        (step_id, config_id, 'default', BatchStatus.ACTIVE),
+        (step_id, config_id, 'EDM Creation', BatchStatus.ACTIVE),
         schema=test_schema
     )
 
@@ -283,13 +301,13 @@ def test_get_batch_jobs_with_filters(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_recon_batch_all_completed(test_schema):
+def test_recon_batch_all_completed(test_schema, mock_irp_client):
     """Test reconciling batch with all jobs completed"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_completed')
 
     # Create batch with jobs
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Get jobs and mark them as FINISHED
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -308,12 +326,12 @@ def test_recon_batch_all_completed(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_recon_batch_with_failures(test_schema):
+def test_recon_batch_with_failures(test_schema, mock_irp_client):
     """Test reconciling batch with failed jobs"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_failed')
 
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Get jobs and mark some as FAILED
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -327,12 +345,12 @@ def test_recon_batch_with_failures(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_recon_batch_all_cancelled(test_schema):
+def test_recon_batch_all_cancelled(test_schema, mock_irp_client):
     """Test reconciling batch with all jobs cancelled"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_cancelled')
 
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Get jobs and mark them as CANCELLED
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -372,7 +390,7 @@ def test_batch_error_invalid_status(test_schema):
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_error')
     batch_id = execute_insert(
         "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
-        (step_id, config_id, 'default', BatchStatus.INITIATED),
+        (step_id, config_id, 'EDM Creation', BatchStatus.INITIATED),
         schema=test_schema
     )
 
@@ -534,12 +552,12 @@ def test_create_batch_transformer_returns_empty(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_submit_batch_configuration_error_status(test_schema):
+def test_submit_batch_configuration_error_status(test_schema, mock_irp_client):
     """Test submit_batch when configuration has ERROR status"""
     from helpers.database import execute_command
 
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_submit_error')
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
 
     # Set config to ERROR status
     execute_command(
@@ -549,17 +567,17 @@ def test_submit_batch_configuration_error_status(test_schema):
     )
 
     with pytest.raises(BatchError, match="Must be VALID or ACTIVE to submit"):
-        submit_batch(batch_id, schema=test_schema)
+        submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_submit_batch_cycle_not_active(test_schema):
+def test_submit_batch_cycle_not_active(test_schema, mock_irp_client):
     """Test submit_batch when cycle is not ACTIVE"""
     from helpers.database import execute_command
 
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_cycle_archived')
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
 
     # Archive the cycle
     execute_command(
@@ -569,7 +587,7 @@ def test_submit_batch_cycle_not_active(test_schema):
     )
 
     with pytest.raises(BatchError, match="Must be ACTIVE to submit"):
-        submit_batch(batch_id, schema=test_schema)
+        submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
 
 @pytest.mark.database
@@ -639,11 +657,11 @@ def test_get_batch_job_configurations_json_parsing(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_recon_batch_with_error_jobs(test_schema):
+def test_recon_batch_with_error_jobs(test_schema, mock_irp_client):
     """Test recon_batch with ERROR status jobs"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_error')
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Mark job as ERROR
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -655,11 +673,11 @@ def test_recon_batch_with_error_jobs(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_recon_batch_all_skipped(test_schema):
+def test_recon_batch_all_skipped(test_schema, mock_irp_client):
     """Test recon_batch with all jobs skipped"""
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_recon_skipped')
-    batch_id = create_batch('test_default', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Skip all jobs
     jobs = get_batch_jobs(batch_id, schema=test_schema)
@@ -698,7 +716,7 @@ def test_recon_batch_empty_batch(test_schema):
     # Create batch manually without jobs
     batch_id = execute_insert(
         "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
-        (step_id, config_id, 'default', BatchStatus.INITIATED),
+        (step_id, config_id, 'EDM Creation', BatchStatus.INITIATED),
         schema=test_schema
     )
 
@@ -722,9 +740,9 @@ def test_recon_batch_empty_batch(test_schema):
 
 @pytest.mark.database
 @pytest.mark.integration
-def test_recon_batch_mixed_job_states(test_schema):
+def test_recon_batch_mixed_job_states(test_schema, mock_irp_client):
     """Test recon_batch with mixed job states (some finished, some in progress)"""
-    # Create multi-job batch
+    # Create multi-job batch using EDM Creation
     cycle_id = execute_insert(
         "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
         ('test_mixed_states', 'ACTIVE'),
@@ -742,10 +760,14 @@ def test_recon_batch_mixed_job_states(test_schema):
     )
 
     config_data = {
-        'jobs': [
-            {'job_id': 1, 'param': 'A'},
-            {'job_id': 2, 'param': 'B'},
-            {'job_id': 3, 'param': 'C'}
+        'Metadata': {
+            'cycle': 'test_mixed_states',
+            'date': '2024-01-01'
+        },
+        'Databases': [
+            {'Database': 'TestDB_Mixed_A', 'Server': 'databridge-1'},
+            {'Database': 'TestDB_Mixed_B', 'Server': 'databridge-1'},
+            {'Database': 'TestDB_Mixed_C', 'Server': 'databridge-1'}
         ]
     }
 
@@ -758,8 +780,8 @@ def test_recon_batch_mixed_job_states(test_schema):
         schema=test_schema
     )
 
-    batch_id = create_batch('test_multi_job', config_id, step_id, schema=test_schema)
-    submit_batch(batch_id, schema=test_schema)
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
 
     # Set different job states
     jobs = get_batch_jobs(batch_id, schema=test_schema)
