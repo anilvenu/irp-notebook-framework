@@ -11,9 +11,16 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}========================================${NC}"
+echo "============================================"
+echo " "
+echo "     _                                  _   "
+echo "    / \   ___ ___ _   _ _ __ __ _ _ __ | |_ "
+echo "   / _ \ / __/ __| | | |  __/ _  |  _ \\| __|"
+echo "  / ___ \\\\__ \\__ \\ |_| | | | (_| | | | | |_ "
+echo " /_/   \_\___/___/\__,_|_|  \__,_|_| |_|\__|"
+echo " "
 echo -e "${BLUE}Microsoft ODBC Driver 18 Setup${NC}"
-echo -e "${BLUE}========================================${NC}"
+echo "============================================"
 
 # Detect Linux distribution
 detect_distro() {
@@ -36,11 +43,14 @@ install_ubuntu() {
     sudo apt-get update
     sudo apt-get install -y curl gnupg apt-transport-https
 
-    # Add Microsoft repository
-    curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+    # Remove old key if exists
+    sudo rm -f /etc/apt/trusted.gpg.d/microsoft.asc
 
-    # Add repository based on Ubuntu version
-    curl https://packages.microsoft.com/config/ubuntu/${VER}/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+    # Add Microsoft repository using modern signed-by method (required for Ubuntu 24.04+)
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+
+    # Add repository with signed-by reference
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/${VER}/prod $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/mssql-release.list
 
     # Update and install
     sudo apt-get update
@@ -174,9 +184,6 @@ main() {
         echo -e "\n${GREEN}========================================${NC}"
         echo -e "${GREEN}Installation completed successfully!${NC}"
         echo -e "${GREEN}========================================${NC}"
-        echo -e "\n${YELLOW}Next steps:${NC}"
-        echo -e "1. Install Python pyodbc: ${BLUE}pip install pyodbc${NC}"
-        echo -e "2. Test connection with: ${BLUE}./validate_odbc.sh${NC}"
     else
         echo -e "\n${RED}========================================${NC}"
         echo -e "${RED}Installation completed with warnings${NC}"

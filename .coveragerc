@@ -14,6 +14,8 @@ omit =
     # Exclude ux.py and notebook.py from coverage
     workspace/helpers/ux.py
     workspace/helpers/notebook*.py
+    # Exclude sqlserver.py
+    workspace/helpers/sqlserver.py 
     # Exclude __pycache__ and .pyc files
     */__pycache__/*
     */.pytest_cache/*
