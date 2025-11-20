@@ -186,7 +186,7 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_portfolio_creation_job(
                 job_id, job_config, irp_client
             )
-        elif batch_type == 'MRI Import':
+        elif batch_type == BatchType.MRI_IMPORT:
             workflow_id, request_json, response_json = _submit_mri_import_job(
                 job_id, job_config, irp_client
             )
@@ -355,17 +355,80 @@ def _submit_mri_import_job(
     """
     Submit MRI Import job to Moody's API.
 
-    TODO: Implement MRI import submission logic.
+    Extracts portfolio, EDM, and file information from job_config and submits
+    the import job using the MRI import manager.
 
     Args:
         job_id: Job ID
-        job_config: Job configuration data
+        job_config: Job configuration data containing:
+            - Database: EDM name
+            - Portfolio: Portfolio name
+            - accounts_import_file: Accounts CSV filename
+            - locations_import_file: Locations CSV filename
+            - Metadata: Dict containing configuration metadata
         client: IRPClient instance
 
     Returns:
         Tuple of (workflow_id, request_json, response_json)
+
+    Raises:
+        ValueError: If required fields are missing
+        JobError: If submission fails
     """
-    raise NotImplementedError("MRI Import job submission not yet implemented")
+    # Extract required fields
+    edm_name = job_config.get('Database')
+    portfolio_name = job_config.get('Portfolio')
+    accounts_file = job_config.get('accounts_import_file')
+    locations_file = job_config.get('locations_import_file')
+
+    # Validate required fields
+    if not edm_name:
+        raise ValueError("Missing required field: Database")
+    if not portfolio_name:
+        raise ValueError("Missing required field: Portfolio")
+    if not accounts_file:
+        raise ValueError("Missing required field: accounts_import_file")
+    if not locations_file:
+        raise ValueError("Missing required field: locations_import_file")
+
+    # Use default mapping file (mapping.json)
+    mapping_file_name = "mapping.json"
+
+    # Submit MRI import job
+    # Directory resolution is handled automatically by submit_mri_import_job
+    try:
+        workflow_id = client.mri_import.submit_mri_import_job(
+            edm_name=edm_name,
+            portfolio_name=portfolio_name,
+            accounts_file_name=accounts_file,
+            locations_file_name=locations_file,
+            mapping_file_name=mapping_file_name
+        )
+    except Exception as e:
+        raise JobError(f"Failed to submit MRI import job: {str(e)}")
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': 'MRI Import',
+        'configuration': job_config,
+        'api_request': {
+            'edm_name': edm_name,
+            'portfolio_name': portfolio_name,
+            'accounts_file': accounts_file,
+            'locations_file': locations_file,
+            'mapping_file': mapping_file_name
+        },
+        'submitted_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': str(workflow_id),
+        'status': 'ACCEPTED',
+        'message': 'MRI import job submitted successfully'
+    }
+
+    return (str(workflow_id), request_json, response_json)
 
 
 def _submit_analysis_job(
@@ -898,13 +961,14 @@ def submit_job(
 
     # Optionally track immediately
     if track_immediately:
-        track_job_status(job_id, irp_client, schema=schema)
+        track_job_status(job_id, batch_type, irp_client, schema=schema)
 
     return job_id
 
 
 def track_job_status(
     job_id: int,
+    batch_type: str,
     irp_client: IRPClient,
     moodys_workflow_id: Optional[str] = None,
     schema: str = 'public'
@@ -932,6 +996,9 @@ def track_job_status(
     """
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
+    
+    if batch_type not in BatchType.all():
+        raise ValueError(f"Unsupported batch type: {batch_type}")
 
     # Read job
     job = read_job(job_id, schema=schema)
@@ -954,7 +1021,12 @@ def track_job_status(
     try:
         # Get job status from Moody's
         # Note: workflow_id from our DB is Moody's job_id
-        job_data = irp_client.job.get_risk_data_job(int(workflow_id))
+        if batch_type == BatchType.EDM_CREATION:
+            job_data = irp_client.job.get_risk_data_job(int(workflow_id))
+        elif batch_type == BatchType.MRI_IMPORT:
+            job_data = irp_client.mri_import.get_import_job(int(workflow_id))
+        else:
+            raise ValueError(f"Invalid batch type for tracking: {batch_type}")
 
         # Extract status and full data
         new_status = job_data['status']
