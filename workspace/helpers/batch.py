@@ -379,21 +379,30 @@ def create_batch(
         raise BatchError(f"Failed to create batch: {str(e)}")
 
 
-def submit_batch(batch_id: int, irp_client: IRPClient, schema: str = 'public') -> Dict[str, Any]:
+def submit_batch(
+    batch_id: int,
+    irp_client: IRPClient,
+    step_id: Optional[int] = None,
+    schema: str = 'public'
+) -> Dict[str, Any]:
     """
     Submit all eligible jobs in batch to Moody's.
 
     Process:
     1. Validate configuration is VALID or ACTIVE
     2. Validate cycle is ACTIVE
-    3. Get all jobs in batch
-    4. For each job in INITIATED status, call submit_job
-    5. Update batch status to ACTIVE
-    6. Update batch submitted_ts
-    7. Update configuration status to ACTIVE
+    3. Update batch step_id if provided (for batches submitted in different step than created)
+    4. Get all jobs in batch
+    5. For each job in INITIATED status, call submit_job
+    6. Update batch status to ACTIVE
+    7. Update batch submitted_ts
+    8. Update configuration status to ACTIVE
 
     Args:
         batch_id: Batch ID
+        irp_client: IRP client for Moody's API
+        step_id: Optional step_run ID to associate batch with (useful when submitting
+                 a batch created in a different step)
         schema: Database schema
 
     Returns:
@@ -445,6 +454,15 @@ def submit_batch(batch_id: int, irp_client: IRPClient, schema: str = 'public') -
             f"Cycle {cycle_id} has status '{cycle_status}'. "
             f"Must be ACTIVE to submit batch."
         )
+
+    # Update batch step_id if provided (allows re-associating batch with submission step)
+    if step_id is not None:
+        query = """
+            UPDATE irp_batch
+            SET step_id = %s
+            WHERE id = %s
+        """
+        execute_command(query, (step_id, batch_id), schema=schema)
 
     # Get all jobs for this batch
     jobs = get_batch_jobs(batch_id, schema=schema)
