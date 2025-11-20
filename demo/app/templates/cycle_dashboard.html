@@ -102,13 +102,13 @@
                             {{ batch.reporting_status }}
                         </span>
                     </td>
-                    <td>{{ batch.total_jobs }}</td>
-                    <td>{{ batch.finished_jobs }}</td>
+                    <td>{{ batch.total_jobs|int }}</td>
+                    <td>{{ batch.finished_jobs|int }}</td>
                     <td class="{% if batch.failed_jobs > 0 or batch.error_jobs > 0 %}alert-cell{% endif %}">
                         {% set alerts = [] %}
-                        {% if batch.failed_jobs > 0 %}{% set _ = alerts.append('⚠ Failures (' ~ batch.failed_jobs ~ ')') %}{% endif %}
-                        {% if batch.error_jobs > 0 %}{% set _ = alerts.append('⚠ Errors (' ~ batch.error_jobs ~ ')') %}{% endif %}
-                        {% if batch.skipped_jobs > 0 %}{% set _ = alerts.append('⚠ Skipped (' ~ batch.skipped_jobs ~ ')') %}{% endif %}
+                        {% if batch.failed_jobs > 0 %}{% set _ = alerts.append('⚠ Failures (' ~ batch.failed_jobs|int ~ ')') %}{% endif %}
+                        {% if batch.error_jobs > 0 %}{% set _ = alerts.append('⚠ Errors (' ~ batch.error_jobs|int ~ ')') %}{% endif %}
+                        {% if batch.skipped_jobs > 0 %}{% set _ = alerts.append('⚠ Skipped (' ~ batch.skipped_jobs|int ~ ')') %}{% endif %}
                         {{ alerts|join(', ') if alerts else '-' }}
                     </td>
                     <td>{{ format_timestamp(batch.created_ts) }}</td>
