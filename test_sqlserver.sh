@@ -8,9 +8,18 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}========================================${NC}"
+
+
+echo "============================================"
+echo " "
+echo "     _                                  _   "
+echo "    / \   ___ ___ _   _ _ __ __ _ _ __ | |_ "
+echo "   / _ \ / __/ __| | | |  __/ _  |  _ \\| __|"
+echo "  / ___ \\\\__ \\__ \\ |_| | | | (_| | | | | |_ "
+echo " /_/   \_\___/___/\__,_|_|  \__,_|_| |_|\__|"
+echo " "
 echo -e "${GREEN}SQL Server Test Suite${NC}"
-echo -e "${GREEN}========================================${NC}"
+echo "============================================"
 
 # Load environment variables
 if [ -f .env.test ]; then
@@ -49,24 +58,6 @@ MSYS_NO_PATHCONV=1 docker exec irp-sqlserver-test /opt/mssql-tools18/bin/sqlcmd 
 
 echo -e "${GREEN}Test database initialized${NC}"
 
-# Check if pyodbc is installed
-echo -e "${YELLOW}Checking pyodbc installation...${NC}"
-if ! python -c "import pyodbc" 2>/dev/null; then
-    echo -e "${YELLOW}pyodbc not found. Installing...${NC}"
-    pip install pyodbc==5.1.0 -q
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ pyodbc installed successfully${NC}"
-    else
-        echo -e "${RED}✗ Failed to install pyodbc${NC}"
-        echo -e "${YELLOW}Note: pyodbc requires ODBC drivers to be installed on the host system${NC}"
-        echo -e "${YELLOW}For Windows: Install 'ODBC Driver 18 for SQL Server'${NC}"
-        echo -e "${YELLOW}For Linux: Install unixodbc-dev and msodbcsql18${NC}"
-        exit 1
-    fi
-else
-    echo -e "${GREEN}✓ pyodbc is available${NC}"
-fi
-
 echo ""
 # Check if venv exists - supports (venv) and (.venv)
 if [ -d "venv" ]; then
@@ -80,6 +71,9 @@ else
     echo "  To create one, run: python -m venv venv"
     echo "  Running with system Python..."
 fi
+
+# Install packages for test
+pip install -r requirements.txt -q
 
 # Install packages for test
 pip install -r requirements-test.txt -q
