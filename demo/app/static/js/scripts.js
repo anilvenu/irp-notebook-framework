@@ -1,3 +1,40 @@
+// Auto-refresh functionality
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+let autoRefreshTimer = null;
+
+function toggleAutoRefresh() {
+    const checkbox = document.getElementById('auto-refresh-toggle');
+    if (checkbox.checked) {
+        startAutoRefresh();
+        localStorage.setItem('autoRefresh', 'true');
+    } else {
+        stopAutoRefresh();
+        localStorage.setItem('autoRefresh', 'false');
+    }
+}
+
+function startAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    autoRefreshTimer = setInterval(() => location.reload(), AUTO_REFRESH_INTERVAL);
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+    }
+}
+
+// Initialize auto-refresh on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const savedPref = localStorage.getItem('autoRefresh');
+    const checkbox = document.getElementById('auto-refresh-toggle');
+    if (checkbox && savedPref === 'true') {
+        checkbox.checked = true;
+        startAutoRefresh();
+    }
+});
+
 function switchTab(tabName, event) {
     document.querySelectorAll('.tab-button').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));

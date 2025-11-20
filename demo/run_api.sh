@@ -37,6 +37,28 @@ echo "  Default Schema: ${DB_SCHEMA}"
 echo "  Server Port: ${PORT}"
 echo ""
 
+
+echo ""
+# Check if venv exists - supports (venv) and (.venv)
+if [ -d "venv" ]; then
+    echo -e "${GREEN}✓${NC} Found venv directory"
+    source venv/bin/activate
+elif [ -d ".venv" ]; then
+    echo -e "${GREEN}✓${NC} Found .venv directory"
+    source .venv/bin/activate
+else
+    echo -e "${YELLOW}⚠${NC} No virtual environment found"
+    echo "  To create one, run: python -m venv venv"
+    echo "  Running with system Python..."
+fi
+
+# Install packages
+pip install -r requirements.txt -q
+
+# Install packages for test
+pip install -r requirements-test.txt -q
+
+
 # Check if required dependencies are installed
 echo "Checking dependencies..."
 
