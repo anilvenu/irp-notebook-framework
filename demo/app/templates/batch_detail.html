@@ -35,7 +35,7 @@
 
     <div class="info-card">
         <div class="info-label">Jobs Summary</div>
-        <div class="info-value">{{ summary.total_jobs }} Total</div>
+        <div class="info-value">{{ summary.total_jobs }}</div>
         <div class="info-detail">
             Finished: {{ summary.finished_jobs }},
             Unfinished: {{ summary.unfinished_jobs }},
@@ -100,10 +100,12 @@
                     <th class="sortable" onclick="sortTable('jobsTable', 2)">Moody's Job Status</th>
                     <th class="sortable" onclick="sortTable('jobsTable', 3)">Status</th>
                     <th>Job Configuration JSON</th>
-                    <th class="sortable" onclick="sortTable('jobsTable', 5)">Configuration Override</th>
-                    <th class="sortable" onclick="sortTable('jobsTable', 6)">Age (hrs)</th>
+                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 5)">Configuration Override</th> -->
+                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 6)">Age (hrs)</th> -->
+                    <th class="sortable" onclick="sortTable('jobsTable', 5)">Created</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 6)">Last Updated</th>
                     <th class="sortable" onclick="sortTable('jobsTable', 7)">Next Best Action</th>
-                    <th class="sortable" onclick="sortTable('jobsTable', 8)">Parent Job</th>
+                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 8)">Parent Job</th> -->
                 </tr>
             </thead>
             <tbody>
@@ -119,22 +121,24 @@
                                 {{ job.job_configuration_data|tojson|truncate(50) }}
                             </div>
                         </td>
-                        <td>{{ ('✓ ' ~ job.override_reason_txt) if job.overridden else '-' }}</td>
-                        <td>
+                        <!-- <td>{{ ('✓ ' ~ job.override_reason_txt) if job.overridden else '-' }}</td> -->
+                        <!-- <td>
                             {% if job.age_hours %}
                                 <span class="age-badge">{{ "%.2f"|format(job.age_hours) }}h</span>
                             {% else %}
                                 -
                             {% endif %}
-                        </td>
+                        </td> -->
+                        <td>{{ format_timestamp(job.created_ts) }}</td>
+                        <td>{{ format_timestamp(job.updated_ts) }}</td>
                         <td class="{% if job.needs_attention %}needs-attention{% endif %}">
                             {{ job.next_best_action or '-' }}
                         </td>
-                        <td>{{ job.parent_job_id or '-' }}</td>
+                        <!-- <td>{{ job.parent_job_id or '-' }}</td> -->
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="9" class="empty-state">No jobs found</td></tr>
+                    <tr><td colspan="8" class="empty-state">No jobs found</td></tr>
                 {% endif %}
             </tbody>
         </table>
