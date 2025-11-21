@@ -136,7 +136,7 @@ class JobStatus:
     @classmethod
     def ready_for_submit(cls):
         """Statuses that are ready for submission (including retry of failed submissions)"""
-        return [cls.INITIATED]
+        return [cls.INITIATED, cls.ERROR]
 
     def __str__(self):
         return self.value
