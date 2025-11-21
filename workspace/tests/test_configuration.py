@@ -561,8 +561,8 @@ def test_transform_mri_import():
     config = {
         'Metadata': {'Current Date Value': '202503'},
         'Portfolios': [
-            {'Portfolio': 'P1', 'Database': 'DB1'},
-            {'Portfolio': 'P2', 'Database': 'DB1'}
+            {'Portfolio': 'P1', 'Database': 'DB1', 'Base Portfolio?': 'Y', 'Import File': 'USEQ'},
+            {'Portfolio': 'P2', 'Database': 'DB1', 'Base Portfolio?': 'Y', 'Import File': 'USHU'}
         ]
     }
 

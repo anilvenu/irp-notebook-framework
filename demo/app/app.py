@@ -224,6 +224,7 @@ def query_batch_data(batch_id: int, schema: str) -> Optional[Dict[str, Any]]:
             j.submitted_ts,
             j.completed_ts,
             j.created_ts,
+            j.updated_ts,
             jc.job_configuration_data,
             parent_j.status as parent_job_status,
             parent_j.moodys_workflow_id as parent_moodys_id
@@ -315,8 +316,10 @@ def format_error_details(exc: Exception) -> Dict[str, str]:
 
 
 def format_timestamp(ts):
-    """Format timestamp for display"""
+    """Format timestamp for display in Eastern Time"""
     import pandas as pd
+    from zoneinfo import ZoneInfo
+    from datetime import timezone
 
     if ts is None or str(ts) == 'None':
         return 'N/A'
@@ -326,7 +329,14 @@ def format_timestamp(ts):
     if pd.isna(ts):
         return 'N/A'
     try:
-        return ts.strftime('%Y-%m-%d %H:%M:%S')
+        # Convert to Eastern Time
+        eastern = ZoneInfo('America/New_York')
+        # If timestamp is naive (no timezone), assume it's UTC
+        if hasattr(ts, 'tzinfo') and ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        # Convert to Eastern Time
+        ts_eastern = ts.astimezone(eastern)
+        return ts_eastern.strftime('%Y-%m-%d %H:%M:%S ET')
     except (ValueError, AttributeError):
         return 'N/A'
 
@@ -380,23 +390,6 @@ async def cycle_dashboard(request: Request, schema: str, cycle_name: str):
     """Cycle dashboard showing all batches"""
     try:
         batches = get_cycle_batches(cycle_name, schema)
-
-        if not batches:
-            error = {
-                'summary': f"No batches found for cycle '{cycle_name}'",
-                'details': f"Cycle '{cycle_name}' exists but has no batches yet.",
-                'hints': ["💡 Batches are created when you run workflow steps that require batch processing."]
-            }
-            return templates.TemplateResponse(
-                "cycle_dashboard.html",
-                {
-                    "request": request,
-                    "schema": schema,
-                    "cycle_name": cycle_name,
-                    "batches": [],
-                    "error": error
-                }
-            )
 
         return templates.TemplateResponse(
             "cycle_dashboard.html",

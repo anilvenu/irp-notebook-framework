@@ -127,7 +127,7 @@ def test_end_to_end_batch_workflow(test_schema, mock_irp_client):
     # Step 4: Track jobs to completion
     for job in jobs:
         for i in range(10):  # Max 10 attempts
-            status = track_job_status(job['id'], mock_irp_client, schema=test_schema)
+            status = track_job_status(job['id'], 'EDM Creation', mock_irp_client, schema=test_schema)
             if status in [JobStatus.FINISHED, JobStatus.FAILED, JobStatus.CANCELLED]:
                 break
 
@@ -212,7 +212,7 @@ def test_job_resubmission_workflow(test_schema, mock_irp_client):
     # Submit and track new job
     submit_job(new_job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
     for i in range(10):
-        status = track_job_status(new_job_id, mock_irp_client, schema=test_schema)
+        status = track_job_status(new_job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
         if status in [JobStatus.FINISHED, JobStatus.FAILED]:
             break
 

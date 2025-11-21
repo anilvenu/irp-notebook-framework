@@ -13,8 +13,7 @@
 {% block content %}
 {% if not error %}
 <div class="page-header">
-    <h2>Moody's Risk Modeling Dashboard</h2>
-    <p>Cycle: <strong>{{ cycle_name }}</strong></p>
+    <h2>Cycle: <strong>{{ cycle_name }}</strong></h2>
 </div>
 
 <!-- Summary Statistics Cards -->
@@ -65,6 +64,7 @@
 <div class="batch-list">
     <h3>Batches ({{ batches|length }})</h3>
 
+    {% if batches %}
     <div class="table-container">
         <!-- Filter Controls -->
         <div class="filter-controls">
@@ -102,13 +102,13 @@
                             {{ batch.reporting_status }}
                         </span>
                     </td>
-                    <td>{{ batch.total_jobs }}</td>
-                    <td>{{ batch.finished_jobs }}</td>
+                    <td>{{ batch.total_jobs|int }}</td>
+                    <td>{{ batch.finished_jobs|int }}</td>
                     <td class="{% if batch.failed_jobs > 0 or batch.error_jobs > 0 %}alert-cell{% endif %}">
                         {% set alerts = [] %}
-                        {% if batch.failed_jobs > 0 %}{% set _ = alerts.append('⚠ Failures (' ~ batch.failed_jobs ~ ')') %}{% endif %}
-                        {% if batch.error_jobs > 0 %}{% set _ = alerts.append('⚠ Errors (' ~ batch.error_jobs ~ ')') %}{% endif %}
-                        {% if batch.skipped_jobs > 0 %}{% set _ = alerts.append('⚠ Skipped (' ~ batch.skipped_jobs ~ ')') %}{% endif %}
+                        {% if batch.failed_jobs > 0 %}{% set _ = alerts.append('⚠ Failures (' ~ batch.failed_jobs|int ~ ')') %}{% endif %}
+                        {% if batch.error_jobs > 0 %}{% set _ = alerts.append('⚠ Errors (' ~ batch.error_jobs|int ~ ')') %}{% endif %}
+                        {% if batch.skipped_jobs > 0 %}{% set _ = alerts.append('⚠ Skipped (' ~ batch.skipped_jobs|int ~ ')') %}{% endif %}
                         {{ alerts|join(', ') if alerts else '-' }}
                     </td>
                     <td>{{ format_timestamp(batch.created_ts) }}</td>
@@ -117,6 +117,12 @@
             </tbody>
         </table>
     </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No Batches Found</h3>
+        <p>No batches have been created for cycle '<strong>{{ cycle_name }}</strong>' yet.</p>
+    </div>
+    {% endif %}
 </div>
 
 {% endif %}

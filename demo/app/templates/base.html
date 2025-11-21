@@ -17,7 +17,13 @@
             <div class="navbar-menu">
                 <a href="/{{ schema }}/" class="nav-link">Home</a>
                 <span class="nav-schema">Schema: <strong>{{ schema }}</strong></span>
-                <button id="refresh-btn" class="btn btn-small" onclick="location.reload()">Refresh</button>
+                <div class="refresh-controls">
+                    <button id="refresh-btn" class="btn btn-small" onclick="location.reload()">Refresh</button>
+                    <label class="auto-refresh-label">
+                        <input type="checkbox" id="auto-refresh-toggle" onchange="toggleAutoRefresh()">
+                        <span>Auto (5m)</span>
+                    </label>
+                </div>
             </div>
         </nav>
 

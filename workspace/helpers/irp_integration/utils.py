@@ -34,6 +34,56 @@ def get_workspace_root() -> Path:
     raise IRPAPIError(f"Cannot find workspace directory from {cwd}")
 
 
+def get_cycle_file_directories() -> Dict[str, str]:
+    """
+    Get file directories for the active cycle.
+
+    Determines the appropriate directories for data files and mapping files
+    based on whether there's an active cycle.
+
+    Returns:
+        Dict with keys:
+            - 'data': Directory for CSV data files (accounts, locations)
+            - 'mapping': Directory for mapping files (mapping.json)
+
+    Directory structure:
+        - Active cycle: {cycle_name}/files/data and {cycle_name}/files/mapping
+        - No active cycle: _Tools/files/working_files and _Tools/files/mapping
+
+    Example:
+        ```python
+        dirs = get_cycle_file_directories()
+        accounts_path = os.path.join(dirs['data'], 'accounts.csv')
+        mapping_path = os.path.join(dirs['mapping'], 'mapping.json')
+        ```
+    """
+    workspace_root = get_workspace_root()
+
+    try:
+        from helpers.cycle import get_active_cycle
+        active_cycle = get_active_cycle()
+
+        if active_cycle:
+            # Use active cycle's directories
+            cycle_name = active_cycle['cycle_name']
+            return {
+                'data': str(workspace_root / "workflows" / f"Active_{cycle_name}" / "files" / "data"),
+                'mapping': str(workspace_root / "workflows" / f"Active_{cycle_name}" / "files" / "mapping")
+            }
+        else:
+            # No active cycle, use _Tools directories
+            return {
+                'data': str(workspace_root / "workflows" / "_Tools" / "files" / "working_files"),
+                'mapping': str(workspace_root / "workflows" / "_Tools" / "files" / "mapping")
+            }
+    except Exception:
+        # Fallback to _Tools if cycle lookup fails
+        return {
+            'data': str(workspace_root / "workflows" / "_Tools" / "files" / "working_files"),
+            'mapping': str(workspace_root / "workflows" / "_Tools" / "files" / "mapping")
+        }
+
+
 def get_location_header(
     response: requests.Response,
     error_context: str = "response"
