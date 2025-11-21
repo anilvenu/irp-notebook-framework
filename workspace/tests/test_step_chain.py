@@ -30,9 +30,11 @@ def test_cycle(test_schema, request):
         schema=test_schema
     )
 
-    # Create unique cycle name for each test
+    # Create unique cycle name for each test using a counter to avoid duplicates
     test_name = request.node.name
-    cycle_name = f'TestChain-{test_name[:20]}'  # Limit length
+    import time
+    timestamp = str(int(time.time() * 1000))[-6:]  # Last 6 digits of timestamp
+    cycle_name = f'TestChain-{test_name[:14]}-{timestamp}'  # Limit length
 
     # Create new active cycle
     cycle_id = execute_insert(
@@ -58,11 +60,11 @@ def test_configuration(test_schema, test_cycle):
         INSERT INTO irp_configuration (
             cycle_id,
             configuration_file_name,
-            config_data,
+            configuration_data,
             status,
             file_last_updated_ts
         )
-        VALUES (%s, %s, %s::jsonb, %s, NOW())
+        VALUES (%s, %s, %s, %s, NOW())
         """,
         (test_cycle['id'], 'test_config.xlsx', config_data, 'ACTIVE'),
         schema=test_schema
@@ -293,7 +295,7 @@ class TestGetNextStepInfo:
             INSERT INTO irp_batch (batch_type, configuration_id, step_id, status)
             VALUES (%s, %s, %s, %s)
             """,
-            (None, test_configuration['id'], step_run_id, BatchStatus.COMPLETED),
+            ('Control Totals', test_configuration['id'], step_run_id, BatchStatus.COMPLETED),
             schema=test_schema
         )
 
@@ -301,7 +303,7 @@ class TestGetNextStepInfo:
         assert result is None
 
     @patch('helpers.step_chain._build_notebook_path')
-    def test_successful_next_step_info(self, mock_build_path, test_schema, test_batch):
+    def test_successful_next_step_info(self, mock_build_path, test_schema, test_batch, test_cycle):
         """Test returns correct next step info for valid completed batch."""
         # Mock notebook path
         mock_notebook_path = Path('/fake/path/Create_Base_Portfolios.ipynb')
@@ -321,7 +323,7 @@ class TestGetNextStepInfo:
         assert result['stage_num'] == 3
         assert result['current_step_num'] == 1
         assert result['notebook_path'] == mock_notebook_path
-        assert result['cycle_name'] == 'TestChain-2025-Q1'
+        assert result['cycle_name'] == test_cycle['name']
         assert 'Portfolio Creation' in result['description']
 
 

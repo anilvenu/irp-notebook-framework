@@ -137,12 +137,25 @@ def transform_mri_import(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     metadata = _extract_metadata(config)
     portfolios = config.get('Portfolios', [])
+    base_portfolios = get_base_portfolios(portfolios)
+
+    # Extract date_value from Metadata
+    date_value = metadata.get('Current Date Value', '')
 
     job_configs = []
-    for portfolio_row in portfolios:
+    for portfolio_row in base_portfolios:
+        # Extract import_file_value from portfolio row
+        import_file_value = portfolio_row.get('Import File', '')
+
+        # Build CSV filenames
+        accounts_import_file = f"Modeling_{date_value}_Moodys_{import_file_value}_Account.csv"
+        locations_import_file = f"Modeling_{date_value}_Moodys_{import_file_value}_Location.csv"
+
         job_config = {
             'Metadata': metadata,
-            **portfolio_row
+            **portfolio_row,
+            'accounts_import_file': accounts_import_file,
+            'locations_import_file': locations_import_file
         }
         job_configs.append(job_config)
 

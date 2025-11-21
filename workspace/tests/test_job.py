@@ -351,9 +351,9 @@ def test_track_job_status(test_schema, mock_irp_client):
     submit_job(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
 
     # Track job status multiple times
-    status1 = track_job_status(job_id, mock_irp_client, schema=test_schema)
-    status2 = track_job_status(job_id, mock_irp_client, schema=test_schema)
-    status3 = track_job_status(job_id, mock_irp_client, schema=test_schema)
+    status1 = track_job_status(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
+    status2 = track_job_status(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
+    status3 = track_job_status(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
 
     # Verify tracking logs created
     df = execute_query(
@@ -494,7 +494,7 @@ def test_job_error_track_without_submission(test_schema, mock_irp_client):
     job_id = create_job_with_config(batch_id, config_id, job_configuration_data={'test': 'data'}, schema=test_schema)
 
     with pytest.raises(JobError):
-        track_job_status(job_id, mock_irp_client, schema=test_schema)
+        track_job_status(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
 
 
 @pytest.mark.database
@@ -798,7 +798,7 @@ def test_submit_job_invalid_id(test_schema, mock_irp_client):
 def test_track_job_status_invalid_id(test_schema, mock_irp_client):
     """Test track_job_status() with invalid job_id"""
     with pytest.raises(JobError) as exc_info:
-        track_job_status(job_id=-1, irp_client=mock_irp_client, schema=test_schema)
+        track_job_status(job_id=-1, batch_type='EDM Creation', irp_client=mock_irp_client, schema=test_schema)
     assert 'invalid job_id' in str(exc_info.value).lower()
 
 

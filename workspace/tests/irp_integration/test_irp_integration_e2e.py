@@ -145,13 +145,14 @@ def test_complete_workflow_edm_to_rdm(irp_client, unique_name, cleanup_edms):
     # ========================================================================
     print("\n[Step 3/9] Executing MRI Import...")
 
-    import_response = irp_client.mri_import.import_from_files(
+    import_job_id = irp_client.mri_import.submit_mri_import_job(
         edm_name=edm_name,
         portfolio_name=portfolio_name,
-        accounts_file="test_accounts.csv",
-        locations_file="test_locations.csv",
-        mapping_file="mapping.json"
+        accounts_file_name="test_accounts.csv",
+        locations_file_name="test_locations.csv",
+        mapping_file_name="mapping.json"
     )
+    import_response = irp_client.mri_import.poll_import_job_batch_to_completion([import_job_id])
 
     assert import_response is not None, "MRI import response should not be None"
     assert import_response['status'] == 'FINISHED', f"MRI import should finish successfully, got {import_response['status']}"
