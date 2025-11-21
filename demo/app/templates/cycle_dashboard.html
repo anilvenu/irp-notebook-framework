@@ -13,8 +13,7 @@
 {% block content %}
 {% if not error %}
 <div class="page-header">
-    <h2>Moody's Risk Modeling Dashboard</h2>
-    <p>Cycle: <strong>{{ cycle_name }}</strong></p>
+    <h2>Cycle: <strong>{{ cycle_name }}</strong></h2>
 </div>
 
 <!-- Summary Statistics Cards -->
@@ -65,6 +64,7 @@
 <div class="batch-list">
     <h3>Batches ({{ batches|length }})</h3>
 
+    {% if batches %}
     <div class="table-container">
         <!-- Filter Controls -->
         <div class="filter-controls">
@@ -117,6 +117,12 @@
             </tbody>
         </table>
     </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No Batches Found</h3>
+        <p>No batches have been created for cycle '<strong>{{ cycle_name }}</strong>' yet.</p>
+    </div>
+    {% endif %}
 </div>
 
 {% endif %}
