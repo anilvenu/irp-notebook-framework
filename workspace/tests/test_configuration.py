@@ -575,21 +575,35 @@ def test_transform_mri_import():
 
 @pytest.mark.unit
 def test_transform_create_reinsurance_treaties():
-    """Test Create Reinsurance Treaties transformer"""
+    """Test Create Reinsurance Treaties transformer.
+
+    Creates one job per unique treaty-EDM combination from Analysis Table.
+    """
     config = {
         'Metadata': {'Current Date Value': '202503'},
         'Reinsurance Treaties': [
             {'Treaty Name': 'T1', 'Treaty Type': 'QS'},
             {'Treaty Name': 'T2', 'Treaty Type': 'XOL'}
+        ],
+        'Analysis Table': [
+            {'Database': 'EDM1', 'Reinsurance Treaty 1': 'T1', 'Reinsurance Treaty 2': 'T2'},
+            {'Database': 'EDM2', 'Reinsurance Treaty 1': 'T1'}
         ]
     }
 
     result = create_job_configurations('Create Reinsurance Treaties', config)
 
-    assert len(result) == 2, "Should create one job per treaty"
+    # Should create 3 unique treaty-EDM combinations: (T1, EDM1), (T1, EDM2), (T2, EDM1)
+    assert len(result) == 3, "Should create one job per unique treaty-EDM combination"
     assert result[0]['Metadata'] == config['Metadata']
+
+    # Results are sorted by (treaty_name, edm), so order is: (T1, EDM1), (T1, EDM2), (T2, EDM1)
     assert result[0]['Treaty Name'] == 'T1'
-    assert result[1]['Treaty Name'] == 'T2'
+    assert result[0]['Database'] == 'EDM1'
+    assert result[1]['Treaty Name'] == 'T1'
+    assert result[1]['Database'] == 'EDM2'
+    assert result[2]['Treaty Name'] == 'T2'
+    assert result[2]['Database'] == 'EDM1'
 
 
 @pytest.mark.unit

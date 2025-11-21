@@ -190,6 +190,10 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_mri_import_job(
                 job_id, job_config, irp_client
             )
+        elif batch_type == BatchType.CREATE_REINSURANCE_TREATIES:
+            workflow_id, request_json, response_json = _submit_create_reinsurance_treaty_job(
+                job_id, job_config, irp_client
+            )
         elif batch_type == 'Analysis':
             workflow_id, request_json, response_json = _submit_analysis_job(
                 job_id, job_config, irp_client
@@ -429,6 +433,135 @@ def _submit_mri_import_job(
     }
 
     return (str(workflow_id), request_json, response_json)
+
+
+def _submit_create_reinsurance_treaty_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Submit Create Reinsurance Treaty job to Moody's API.
+
+    Treaty creation is a synchronous process - treaties are created immediately
+    without asynchronous job tracking. Returns N/A as workflow_id on success to indicate
+    synchronous completion.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data containing:
+            - Database: EDM database name
+            - Treaty Name: Treaty name
+            - Treaty Number: Treaty number
+            - Treaty Type: Treaty type
+            - Per Risk Limit: Per risk limit amount
+            - Occurrence Limit: Occurrence limit amount
+            - Attachment Point: Attachment point amount
+            - Inception Date: Inception date
+            - Expiration Date: Expiration date
+            - Currency: Currency name
+            - Attachment Basis: Attachment basis
+            - Attachment Level: Attachment level
+            - Pct Covered: Percent covered
+            - Pct Placed: Percent placed
+            - Pct Share: Percent share
+            - Pct Retention: Percent retention
+            - Premium: Premium amount
+            - Num Reinstatements: Number of reinstatements
+            - Pct Reinstatement Charge: Percent reinstatement charge
+            - Aggregate Limit: Aggregate limit amount
+            - Aggregate Deductible: Aggregate deductible amount
+            - Priority: Priority
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+        - workflow_id: "N/A" if successful (synchronous operation), None if failed
+        - request_json: Request details
+        - response_json: Response details
+    """
+    # Extract required fields
+    edm_name = job_config.get('Database')
+    treaty_name = job_config.get('Treaty Name')
+
+    if not edm_name:
+        raise ValueError("Missing required field: Database")
+    if not treaty_name:
+        raise ValueError("Missing required field: Treaty Name")
+
+    # Extract treaty fields with defaults
+    treaty_number = job_config.get('Treaty Number', treaty_name[:20])
+    treaty_type = job_config.get('Type', 'Working Excess')
+    per_risk_limit = float(job_config.get('Per-Risk Limit', 0))
+    occurrence_limit = float(job_config.get('Occurrence Limit', 0))
+    attachment_point = float(job_config.get('Attachment Point', 0))
+    inception_date = job_config.get('Inception Date', '2025-01-01')
+    expiration_date = job_config.get('Expiration Date', '2025-12-31')
+    currency_name = job_config.get('Currency', 'US Dollar')
+    attachment_basis = job_config.get('Attachment Basis', 'Losses Occurring')
+    attachment_level = job_config.get('Exposure Level', 'Location')
+    pct_covered = float(job_config.get('% Covered', 100))
+    pct_placed = float(job_config.get('% Place', 100))
+    pct_share = float(job_config.get('% Share', 100))
+    pct_retention = float(job_config.get('% Retention', 0))
+    premium = float(job_config.get('Premium', 0))
+    num_reinstatements = int(job_config.get('Reinstatements', 0))
+    pct_reinstatement_charge = float(job_config.get('% Reinstatement Charge', 0))
+    aggregate_limit = float(job_config.get('Aggregate Limit', 0))
+    aggregate_deductible = float(job_config.get('Aggregate Deductible Amount', 0))
+    priority = int(job_config.get('Inuring Priority', 1))
+
+    # Create treaty synchronously
+    treaty_id = client.treaty.create_treaty(
+        edm_name=edm_name,
+        treaty_name=treaty_name,
+        treaty_number=treaty_number,
+        treaty_type=treaty_type,
+        per_risk_limit=per_risk_limit,
+        occurrence_limit=occurrence_limit,
+        attachment_point=attachment_point,
+        inception_date=inception_date,
+        expiration_date=expiration_date,
+        currency_name=currency_name,
+        attachment_basis=attachment_basis,
+        attachment_level=attachment_level,
+        pct_covered=pct_covered,
+        pct_placed=pct_placed,
+        pct_share=pct_share,
+        pct_retention=pct_retention,
+        premium=premium,
+        num_reinstatements=num_reinstatements,
+        pct_reinstatement_charge=pct_reinstatement_charge,
+        aggregate_limit=aggregate_limit,
+        aggregate_deductible=aggregate_deductible,
+        priority=priority
+    )
+
+    # Build workflow ID - use N/A to indicate synchronous completion
+    workflow_id = "N/A"
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.CREATE_REINSURANCE_TREATIES,
+        'configuration': job_config,
+        'api_request': {
+            'edm_name': edm_name,
+            'treaty_name': treaty_name,
+            'treaty_number': treaty_number,
+            'treaty_type': treaty_type
+        },
+        'submitted_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': workflow_id,
+        'treaty_id': treaty_id,
+        'status': 'COMPLETED',
+        'message': f'Treaty "{treaty_name}" created successfully in EDM "{edm_name}" with ID {treaty_id}'
+    }
+
+    return workflow_id, request_json, response_json
 
 
 def _submit_analysis_job(

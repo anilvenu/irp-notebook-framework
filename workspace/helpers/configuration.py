@@ -165,22 +165,47 @@ def transform_mri_import(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 def transform_create_reinsurance_treaties(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Transform configuration for Create Reinsurance Treaties batch type.
-    Creates one job configuration per treaty row.
+    Creates one job configuration per unique treaty-EDM combination.
+
+    The treaty definitions come from the "Reinsurance Treaties" sheet, but the
+    EDM associations are inferred from the "Analysis Table" sheet which has
+    columns: Database, Reinsurance Treaty 1-5.
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        List of job configurations (one per treaty)
+        List of job configurations (one per unique treaty-EDM combination)
     """
     metadata = _extract_metadata(config)
     treaties = config.get('Reinsurance Treaties', [])
+    analyses = config.get('Analysis Table', [])
 
+    # Build a lookup of treaty data by name
+    treaty_by_name = {t.get('Treaty Name'): t for t in treaties if t.get('Treaty Name')}
+
+    # Collect unique treaty-EDM combinations from Analysis Table
+    treaty_edm_combinations = set()
+    treaty_columns = ['Reinsurance Treaty 1', 'Reinsurance Treaty 2', 'Reinsurance Treaty 3',
+                      'Reinsurance Treaty 4', 'Reinsurance Treaty 5']
+
+    for analysis in analyses:
+        edm = analysis.get('Database')
+        if not edm:
+            continue
+        for col in treaty_columns:
+            treaty_name = analysis.get(col)
+            if treaty_name and treaty_name in treaty_by_name:
+                treaty_edm_combinations.add((treaty_name, edm))
+
+    # Create job configs for each unique treaty-EDM combination
     job_configs = []
-    for treaty_row in treaties:
+    for treaty_name, edm in sorted(treaty_edm_combinations):
+        treaty_data = treaty_by_name[treaty_name]
         job_config = {
             'Metadata': metadata,
-            **treaty_row
+            'Database': edm,
+            **treaty_data
         }
         job_configs.append(job_config)
 
