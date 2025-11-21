@@ -1,0 +1,486 @@
+"""
+IRP Notebook Framework - Microsoft Teams Notification Helper
+
+Provides functionality to send notifications to Microsoft Teams
+via incoming webhooks with support for:
+- Simple text messages with different styles (success, warning, error, info)
+- Adaptive Cards with formatted content
+- Configurable action buttons
+- Retry logic for reliability
+
+Environment Variables:
+    TEAMS_WEBHOOK_URL: The Microsoft Teams webhook URL
+    TEAMS_NOTIFICATION_ENABLED: Enable/disable notifications (default: true)
+    TEAMS_DEFAULT_DASHBOARD_URL: Default dashboard URL for action buttons
+    TEAMS_DEFAULT_JUPYTERLAB_URL: Default JupyterLab URL for action buttons
+
+Example:
+    >>> from helpers.teams_notification import TeamsNotificationClient
+    >>> client = TeamsNotificationClient()
+    >>> client.send_success("Deployment Complete", "Version 2.3 deployed successfully")
+"""
+
+import os
+import logging
+from typing import Dict, List, Any, Optional
+
+import requests
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+
+
+# Configure module logger
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# EXCEPTIONS
+# ============================================================================
+
+class TeamsNotificationError(Exception):
+    """Base exception for all Teams notification errors."""
+    pass
+
+
+class TeamsWebhookError(TeamsNotificationError):
+    """Webhook URL configuration or request errors."""
+    pass
+
+
+class TeamsValidationError(TeamsNotificationError):
+    """Input validation errors."""
+    pass
+
+
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+
+# Notification styles using Adaptive Card predefined colors
+# Maps style name to display properties
+NOTIFICATION_STYLES = {
+    "Attention": {"emoji": "✗", "description": "errors/critical"},
+    "Warning": {"emoji": "⚠", "description": "warnings"},
+    "Good": {"emoji": "✓", "description": "info/success"},
+    "Accent": {"emoji": "ℹ", "description": "general alerts"},
+    "Default": {"emoji": "•", "description": "neutral"},
+}
+
+
+# ============================================================================
+# CLIENT CLASS
+# ============================================================================
+
+class TeamsNotificationClient:
+    """
+    Client for sending notifications to Microsoft Teams via webhooks.
+
+    This client supports sending Adaptive Cards with different notification
+    styles, custom action buttons, and includes retry logic for reliability.
+
+    Attributes:
+        webhook_url: The Teams webhook URL
+        enabled: Whether notifications are enabled
+        timeout: Request timeout in seconds
+        default_dashboard_url: Default URL for dashboard action button
+        default_jupyterlab_url: Default URL for JupyterLab action button
+
+    Example:
+        >>> client = TeamsNotificationClient()
+        >>> client.send_success("Build Complete", "All tests passed!")
+        True
+
+        >>> # With custom webhook URL
+        >>> client = TeamsNotificationClient(webhook_url="https://...")
+        >>> client.send_error("Build Failed", "See logs for details")
+        True
+    """
+
+    def __init__(
+        self,
+        webhook_url: Optional[str] = None,
+        enabled: Optional[bool] = None,
+        timeout: int = 30,
+        max_retries: int = 3
+    ):
+        """
+        Initialize the Teams notification client.
+
+        Args:
+            webhook_url: Teams webhook URL. If not provided, reads from
+                        TEAMS_WEBHOOK_URL environment variable.
+            enabled: Enable/disable notifications. If not provided, reads from
+                    TEAMS_NOTIFICATION_ENABLED environment variable (default: true).
+            timeout: Request timeout in seconds.
+            max_retries: Maximum number of retry attempts for failed requests.
+        """
+        # Load configuration from environment or parameters
+        self.webhook_url = webhook_url or os.environ.get('TEAMS_WEBHOOK_URL')
+
+        if enabled is not None:
+            self.enabled = enabled
+        else:
+            self.enabled = os.environ.get(
+                'TEAMS_NOTIFICATION_ENABLED', 'true'
+            ).lower() == 'true'
+
+        self.timeout = timeout
+
+        # Default action button URLs
+        self.default_dashboard_url = os.environ.get(
+            'TEAMS_DEFAULT_DASHBOARD_URL', ''
+        )
+        self.default_jupyterlab_url = os.environ.get(
+            'TEAMS_DEFAULT_JUPYTERLAB_URL', ''
+        )
+
+        # Setup session with retry logic
+        self.session = requests.Session()
+        retry = Retry(
+            total=max_retries,
+            backoff_factor=0.5,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=["POST"],
+            raise_on_status=False,
+        )
+        self.session.mount("https://", HTTPAdapter(max_retries=retry))
+        self.session.mount("http://", HTTPAdapter(max_retries=retry))
+
+        logger.debug(
+            f"TeamsNotificationClient initialized: enabled={self.enabled}, "
+            f"webhook_url={'[SET]' if self.webhook_url else '[NOT SET]'}"
+        )
+
+    def _validate_style(self, style: str) -> None:
+        """
+        Validate that the notification style is supported.
+
+        Args:
+            style: The style name to validate
+
+        Raises:
+            TeamsValidationError: If the style is not supported
+        """
+        if style not in NOTIFICATION_STYLES:
+            valid_styles = ", ".join(NOTIFICATION_STYLES.keys())
+            raise TeamsValidationError(
+                f"Invalid style '{style}'. Choose from: {valid_styles}"
+            )
+
+    def _build_adaptive_card(
+        self,
+        style: str,
+        title: str,
+        message: str,
+        actions: Optional[List[Dict[str, str]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Build the Adaptive Card payload for Teams.
+
+        Args:
+            style: Notification style (Attention, Warning, Good, Accent, Default)
+            title: Title of the notification
+            message: Message body (supports Markdown)
+            actions: List of action buttons with 'title' and 'url' keys
+
+        Returns:
+            The complete message payload for Teams webhook
+        """
+        emoji = NOTIFICATION_STYLES[style]["emoji"]
+
+        # Build action buttons
+        card_actions = []
+        if actions:
+            for action in actions:
+                card_actions.append({
+                    "type": "Action.OpenUrl",
+                    "title": action.get("title", "Open"),
+                    "url": action.get("url", "")
+                })
+        elif self.default_dashboard_url or self.default_jupyterlab_url:
+            # Use default actions if no custom actions provided
+            if self.default_dashboard_url:
+                card_actions.append({
+                    "type": "Action.OpenUrl",
+                    "title": "View Dashboard",
+                    "url": self.default_dashboard_url
+                })
+            if self.default_jupyterlab_url:
+                card_actions.append({
+                    "type": "Action.OpenUrl",
+                    "title": "Launch JupyterLab",
+                    "url": self.default_jupyterlab_url
+                })
+
+        # Build Adaptive Card content
+        card_content = {
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+            "type": "AdaptiveCard",
+            "version": "1.4",
+            "body": [
+                {
+                    "type": "TextBlock",
+                    "text": f"{emoji} {title}",
+                    "weight": "Bolder",
+                    "size": "Medium",
+                    "color": style
+                },
+                {
+                    "type": "TextBlock",
+                    "text": message,
+                    "wrap": True
+                }
+            ]
+        }
+
+        # Add actions if any
+        if card_actions:
+            card_content["actions"] = card_actions
+
+        # Build complete payload
+        payload = {
+            "type": "message",
+            "attachments": [
+                {
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": card_content
+                }
+            ]
+        }
+
+        return payload
+
+    def send_notification(
+        self,
+        style: str,
+        title: str,
+        message: str,
+        actions: Optional[List[Dict[str, str]]] = None
+    ) -> bool:
+        """
+        Send a notification to Microsoft Teams via webhook.
+
+        Args:
+            style: One of "Attention", "Warning", "Good", "Accent", "Default"
+            title: Title of the notification
+            message: Message body (Markdown supported)
+            actions: Optional list of action buttons, each with 'title' and 'url'
+
+        Returns:
+            True if notification was sent successfully, False otherwise
+
+        Raises:
+            TeamsValidationError: If style is invalid
+            TeamsWebhookError: If webhook URL is not configured
+
+        Example:
+            >>> client.send_notification(
+            ...     style="Good",
+            ...     title="Build Complete",
+            ...     message="All **tests** passed!",
+            ...     actions=[
+            ...         {"title": "View Results", "url": "https://ci.example.com/123"}
+            ...     ]
+            ... )
+            True
+        """
+        # Check if notifications are enabled
+        if not self.enabled:
+            logger.info("Notifications are disabled, skipping send")
+            return True
+
+        # Validate webhook URL
+        if not self.webhook_url:
+            raise TeamsWebhookError(
+                "Webhook URL not configured. Set TEAMS_WEBHOOK_URL environment "
+                "variable or pass webhook_url to constructor."
+            )
+
+        # Validate style
+        self._validate_style(style)
+
+        # Build payload
+        payload = self._build_adaptive_card(style, title, message, actions)
+
+        # Send notification
+        try:
+            response = self.session.post(
+                self.webhook_url,
+                json=payload,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+
+            logger.info(
+                f"Notification sent successfully: style={style}, title='{title}'"
+            )
+            return True
+
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout sending notification: {self.timeout}s exceeded")
+            return False
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to send notification: {e}")
+            return False
+
+    def send_success(
+        self,
+        title: str,
+        message: str,
+        actions: Optional[List[Dict[str, str]]] = None
+    ) -> bool:
+        """
+        Send a success notification (green checkmark).
+
+        Args:
+            title: Title of the notification
+            message: Message body
+            actions: Optional action buttons
+
+        Returns:
+            True if sent successfully
+        """
+        return self.send_notification("Good", title, message, actions)
+
+    def send_warning(
+        self,
+        title: str,
+        message: str,
+        actions: Optional[List[Dict[str, str]]] = None
+    ) -> bool:
+        """
+        Send a warning notification (yellow warning symbol).
+
+        Args:
+            title: Title of the notification
+            message: Message body
+            actions: Optional action buttons
+
+        Returns:
+            True if sent successfully
+        """
+        return self.send_notification("Warning", title, message, actions)
+
+    def send_error(
+        self,
+        title: str,
+        message: str,
+        actions: Optional[List[Dict[str, str]]] = None
+    ) -> bool:
+        """
+        Send an error notification (red X).
+
+        Args:
+            title: Title of the notification
+            message: Message body
+            actions: Optional action buttons
+
+        Returns:
+            True if sent successfully
+        """
+        return self.send_notification("Attention", title, message, actions)
+
+    def send_info(
+        self,
+        title: str,
+        message: str,
+        actions: Optional[List[Dict[str, str]]] = None
+    ) -> bool:
+        """
+        Send an info notification (blue info symbol).
+
+        Args:
+            title: Title of the notification
+            message: Message body
+            actions: Optional action buttons
+
+        Returns:
+            True if sent successfully
+        """
+        return self.send_notification("Accent", title, message, actions)
+
+
+# ============================================================================
+# CONVENIENCE FUNCTIONS
+# ============================================================================
+
+def send_teams_notification(
+    style: str,
+    title: str,
+    message: str,
+    webhook_url: Optional[str] = None,
+    actions: Optional[List[Dict[str, str]]] = None
+) -> bool:
+    """
+    Send a notification to Microsoft Teams (convenience function).
+
+    This function creates a temporary client and sends the notification.
+    For multiple notifications, create a TeamsNotificationClient instance instead.
+
+    Args:
+        style: One of "Attention", "Warning", "Good", "Accent", "Default"
+        title: Title of the notification
+        message: Message body (Markdown supported)
+        webhook_url: Optional webhook URL (defaults to TEAMS_WEBHOOK_URL env var)
+        actions: Optional list of action buttons
+
+    Returns:
+        True if notification was sent successfully
+
+    Example:
+        >>> send_teams_notification(
+        ...     "Good",
+        ...     "Deployment Complete",
+        ...     "Version 2.3 deployed successfully"
+        ... )
+        True
+    """
+    client = TeamsNotificationClient(webhook_url=webhook_url)
+    return client.send_notification(style, title, message, actions)
+
+
+# ============================================================================
+# MAIN (for testing)
+# ============================================================================
+
+if __name__ == "__main__":
+    # Configure logging for testing
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+
+    # Create client
+    client = TeamsNotificationClient()
+
+    # Check configuration
+    if not client.webhook_url:
+        print("ERROR: TEAMS_WEBHOOK_URL environment variable not set")
+        print("Please set it to your Teams webhook URL")
+        exit(1)
+
+    print("Sending test notifications to Teams...")
+
+    # Send test notifications
+    client.send_error(
+        "System Failure",
+        "**Critical error occurred in service X**"
+    )
+
+    client.send_warning(
+        "High Memory Usage",
+        "Memory usage exceeded 80% threshold"
+    )
+
+    client.send_success(
+        "Deployment Complete",
+        "Version 2.3 deployed successfully"
+    )
+
+    client.send_info(
+        "Reminder",
+        "Daily backup completed successfully"
+    )
+
+    print("All notifications sent!")
