@@ -103,13 +103,18 @@ def pytest_configure(config):
 # ==============================================================================
 
 @pytest.fixture(scope="session", autouse=True)
-def verify_database_connection():
+def verify_database_connection(request):
     """
     Verify database is accessible before running any tests.
 
     This fixture runs once per test session and fails fast if database
-    is not available.
+    is not available. Skips PostgreSQL check when running SQL Server tests.
     """
+    # Skip PostgreSQL check if running SQL Server tests
+    markexpr = request.config.option.markexpr
+    if markexpr and 'sqlserver' in markexpr:
+        return  # Skip PostgreSQL verification for SQL Server tests
+
     if not test_connection():
 
         # Checking for PostgreSQL container
