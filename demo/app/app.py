@@ -381,23 +381,6 @@ async def cycle_dashboard(request: Request, schema: str, cycle_name: str):
     try:
         batches = get_cycle_batches(cycle_name, schema)
 
-        if not batches:
-            error = {
-                'summary': f"No batches found for cycle '{cycle_name}'",
-                'details': f"Cycle '{cycle_name}' exists but has no batches yet.",
-                'hints': ["💡 Batches are created when you run workflow steps that require batch processing."]
-            }
-            return templates.TemplateResponse(
-                "cycle_dashboard.html",
-                {
-                    "request": request,
-                    "schema": schema,
-                    "cycle_name": cycle_name,
-                    "batches": [],
-                    "error": error
-                }
-            )
-
         return templates.TemplateResponse(
             "cycle_dashboard.html",
             {

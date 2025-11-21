@@ -18,16 +18,16 @@ pip install -r demo/requirements-api.txt
 ./demo/run_api.sh
 ```
 
-Open your browser to: **http://localhost:8000**
+Open your browser to: **http://localhost:8000** for demo application.
 
 #### Features
 
-- ✅ **Real-time data** - No regeneration needed, always shows latest
-- ✅ **Multi-schema support** - Switch between demo, test, prod schemas via URL
-- ✅ **Cycle selector** - Browse all cycles with status indicators
-- ✅ **Live filtering** - Search and filter jobs and configurations
-- ✅ **Error transparency** - Expandable error details when issues occur
-- ✅ **Manual refresh** - Refresh button to reload data
+- **Real-time data** - No regeneration needed, always shows latest
+- **Multi-schema support** - Switch between demo, test, prod schemas via URL
+- **Cycle selector** - Browse all cycles with status indicators
+- **Live filtering** - Search and filter jobs and configurations
+- **Error transparency** - Expandable error details when issues occur
+- **Manual refresh** - Refresh button to reload data
 
 #### Configuration
 
@@ -154,17 +154,3 @@ demo/
 ├── generate_dashboards.py     # Static HTML generator (legacy)
 └── README.md                  # This file
 ```
-
-### Adding Features
-
-The web application is designed for simplicity:
-- Single file application ([app/app.py](app/app.py))
-- Server-side rendering with Jinja2
-- Reuses existing database queries
-- No complex build process
-
-To modify:
-1. Edit routes in `app.py`
-2. Update templates in `templates/`
-3. Modify styles in `static/css/style.css`
-
