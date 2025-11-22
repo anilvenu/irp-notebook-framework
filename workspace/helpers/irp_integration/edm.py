@@ -283,37 +283,42 @@ class EDMManager:
                 raise IRPAPIError(
                     f"Missing upgrade edm version data: {e}"
                 ) from e
-            
-            edms = self.search_edms(filter=f"exposureName=\"{edm_name}\"")
-            if (len(edms) != 1):
-                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-            try:
-                exposure_id = edms[0]['exposureId']
-            except (KeyError, TypeError, IndexError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract exposure ID: {e}"
-                ) from e
 
             job_ids.append(self.submit_upgrade_edm_data_version_job(
-                exposure_id=exposure_id,
+                edm_name=edm_name,
                 edm_version=edm_version
             ))
 
         return job_ids
 
 
-    def submit_upgrade_edm_data_version_job(self, exposure_id: int, edm_version: str) -> int:
+    def submit_upgrade_edm_data_version_job(self, edm_name: str, edm_version: str) -> int:
         """
         Submit job to upgrade EDM data version.
 
         Args:
-            exposure_id: ID of the exposure (EDM)
+            edm_name: Name of the EDM to upgrade
+            edm_version: Target EDM data version (e.g., "22")
 
         Returns:
             The job ID
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If EDM not found or upgrade fails
         """
-        validate_positive_int(exposure_id, "exposure_id")
+        validate_non_empty_string(edm_name, "edm_name")
         validate_non_empty_string(edm_version, "edm_version")
+
+        # Look up EDM to get exposure_id
+        edms = self.search_edms(filter=f"exposureName=\"{edm_name}\"")
+        if len(edms) != 1:
+            raise IRPAPIError(f"Expected 1 EDM with name '{edm_name}', found {len(edms)}")
+        try:
+            exposure_id = edms[0]['exposureId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(f"Failed to extract exposure ID for EDM '{edm_name}': {e}") from e
+
         try:
             data = {"edmDataVersion": edm_version}
             response = self.client.request(
@@ -324,7 +329,7 @@ class EDMManager:
             job_id = extract_id_from_location_header(response, "EDM data version upgrade")
             return int(job_id)
         except Exception as e:
-            raise IRPAPIError(f"Failed to upgrade EDM data version for exposure ID '{exposure_id}': {e}")
+            raise IRPAPIError(f"Failed to upgrade EDM data version for EDM '{edm_name}': {e}")
 
 
     def poll_data_version_upgrade_job_batch_to_completion(

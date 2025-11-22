@@ -98,74 +98,40 @@ class TreatyManager:
         treaty_ids = []
         for treaty_data in treaty_data_list:
             try:
-                edm_name = treaty_data['edm_name']
-                treaty_name = treaty_data['treaty_name']
-                treaty_number = treaty_data['treaty_number']
-                treaty_type = treaty_data['treaty_type']
-                per_risk_limit = treaty_data['per_risk_limit']
-                occurrence_limit = treaty_data['occurrence_limit']
-                attachment_point = treaty_data['attachment_point']
-                inception_date = treaty_data['inception_date']
-                expiration_date = treaty_data['expiration_date']
-                currency_name = treaty_data['currency_name']
-                attachment_basis = treaty_data['attachment_basis']
-                attachment_level = treaty_data['attachment_level']
-                pct_covered = treaty_data['pct_covered']
-                pct_placed = treaty_data['pct_placed']
-                pct_share = treaty_data['pct_share']
-                pct_retention = treaty_data['pct_retention']
-                premium = treaty_data['premium']
-                num_reinstatements = treaty_data['num_reinstatements']
-                pct_reinstatement_charge = treaty_data['pct_reinstatement_charge']
-                aggregate_limit = treaty_data['aggregate_limit']
-                aggregate_deductible = treaty_data['aggregate_deductible']
-                priority = treaty_data['priority']
-            except (KeyError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Missing data in create treaty data: {e}"
-                ) from e
-            
-            edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
-            if (len(edms) != 1):
-                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-            try:
-                exposure_id = edms[0]['exposureId']
-            except (KeyError, IndexError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
-                ) from e
-
-            treaty_ids.append(self.create_treaty(
-                exposure_id=exposure_id,
-                treaty_name=treaty_name,
-                treaty_number=treaty_number,
-                treaty_type=treaty_type,
-                per_risk_limit=per_risk_limit,
-                occurrence_limit=occurrence_limit,
-                attachment_point=attachment_point,
-                inception_date=inception_date,
-                expiration_date=expiration_date,
-                currency_name=currency_name,
-                attachment_basis=attachment_basis,
-                attachment_level=attachment_level,
-                pct_covered=pct_covered,
-                pct_placed=pct_placed,
-                pct_share=pct_share,
-                pct_retention=pct_retention,
-                premium=premium,
-                num_reinstatements=num_reinstatements,
-                pct_reinstatement_charge=pct_reinstatement_charge,
-                aggregate_limit=aggregate_limit,
-                aggregate_deductible=aggregate_deductible,
-                priority=priority
-            ))
+                treaty_id = self.create_treaty(
+                    edm_name=treaty_data['edm_name'],
+                    treaty_name=treaty_data['treaty_name'],
+                    treaty_number=treaty_data['treaty_number'],
+                    treaty_type=treaty_data['treaty_type'],
+                    per_risk_limit=treaty_data['per_risk_limit'],
+                    occurrence_limit=treaty_data['occurrence_limit'],
+                    attachment_point=treaty_data['attachment_point'],
+                    inception_date=treaty_data['inception_date'],
+                    expiration_date=treaty_data['expiration_date'],
+                    currency_name=treaty_data['currency_name'],
+                    attachment_basis=treaty_data['attachment_basis'],
+                    attachment_level=treaty_data['attachment_level'],
+                    pct_covered=treaty_data['pct_covered'],
+                    pct_placed=treaty_data['pct_placed'],
+                    pct_share=treaty_data['pct_share'],
+                    pct_retention=treaty_data['pct_retention'],
+                    premium=treaty_data['premium'],
+                    num_reinstatements=treaty_data['num_reinstatements'],
+                    pct_reinstatement_charge=treaty_data['pct_reinstatement_charge'],
+                    aggregate_limit=treaty_data['aggregate_limit'],
+                    aggregate_deductible=treaty_data['aggregate_deductible'],
+                    priority=treaty_data['priority']
+                )
+                treaty_ids.append(treaty_id)
+            except KeyError as e:
+                raise IRPAPIError(f"Missing data in create treaty data: {e}") from e
 
         return treaty_ids
 
 
     def create_treaty(
             self,
-            exposure_id: int,
+            edm_name: str,
             treaty_name: str,
             treaty_number: str,
             treaty_type: str,
@@ -192,9 +158,10 @@ class TreatyManager:
         Create a treaty with provided parameters.
 
         Args:
+            edm_name: EDM name to create the treaty in
             treaty_name: Treaty name
             treaty_number: Treaty number (max 20 chars)
-            type: Treaty type (must be in TREATY_TYPES)
+            treaty_type: Treaty type (must be in TREATY_TYPES)
             per_risk_limit: Per risk limit amount
             occurrence_limit: Occurrence limit amount
             attachment_point: Attachment point amount
@@ -219,9 +186,9 @@ class TreatyManager:
 
         Raises:
             IRPValidationError: If parameters are invalid
-            IRPAPIError: If treaty creation fails
+            IRPAPIError: If treaty creation fails or EDM not found
         """
-        validate_positive_int(exposure_id, "exposure_id")
+        validate_non_empty_string(edm_name, "edm_name")
         validate_non_empty_string(treaty_name, "treaty_name")
         validate_non_empty_string(treaty_number, "treaty_number")
         validate_non_empty_string(treaty_type, "treaty_type")
@@ -257,13 +224,22 @@ class TreatyManager:
             raise IRPValidationError(
                 f"Invalid attachment_level '{attachment_level}'. Must be one of: {list(TREATY_ATTACHMENT_LEVELS.keys())}"
             )
-        
+
+        # Look up EDM to get exposure_id
+        edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
+        if len(edms) != 1:
+            raise IRPAPIError(f"Expected 1 EDM with name '{edm_name}', found {len(edms)}")
+        try:
+            exposure_id = edms[0]['exposureId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(f"Failed to extract exposure ID for EDM '{edm_name}': {e}") from e
+
         try:
             cedant_response = self.edm_manager.get_cedants_by_edm(exposure_id)
             if not cedant_response:
-                raise IRPReferenceDataError(f"No cedants found for exposure ID '{exposure_id}'")
+                raise IRPReferenceDataError(f"No cedants found for EDM '{edm_name}'")
             if len(cedant_response) > 1:
-                raise IRPReferenceDataError(f"Multiple cedants found for exposure ID '{exposure_id}'")
+                raise IRPReferenceDataError(f"Multiple cedants found for EDM '{edm_name}'")
             cedant = cedant_response[0]
             cedant_data = {
                 "cedantId": cedant["cedantId"],
@@ -271,10 +247,12 @@ class TreatyManager:
             }
         except (KeyError, TypeError) as e:
             raise IRPAPIError(
-                f"Missing required fields in cedant data for exposure ID '{exposure_id}': {e}"
+                f"Missing required fields in cedant data for EDM '{edm_name}': {e}"
             ) from e
+        except IRPReferenceDataError:
+            raise
         except Exception as e:
-            raise IRPAPIError(f"Failed to retrieve cedants for exposure ID '{exposure_id}': {e}")
+            raise IRPAPIError(f"Failed to retrieve cedants for EDM '{edm_name}': {e}")
         
         try:
             currency_response = self.reference_data_manager.get_currency_by_name(currency_name)
