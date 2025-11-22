@@ -705,21 +705,26 @@ def test_transform_edm_db_upgrade():
 
 @pytest.mark.unit
 def test_transform_geohaz():
-    """Test GeoHaz transformer creates one job per portfolio"""
+    """Test GeoHaz transformer creates one job per base portfolio.
+    Only portfolios with 'Base Portfolio?' == 'Y' are included.
+    Geocode version is extracted from Metadata (converted from "22.0.0" to "22.0").
+    """
     config = {
-        'Metadata': {'Current Date Value': '202503'},
+        'Metadata': {'Current Date Value': '202503', 'Geocode Version': '22.0.0'},
         'Portfolios': [
-            {'Portfolio': 'PORTFOLIO_1', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file1.csv'},
-            {'Portfolio': 'PORTFOLIO_2', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file2.csv'}
+            {'Portfolio': 'PORTFOLIO_1', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file1.csv', 'Base Portfolio?': 'Y'},
+            {'Portfolio': 'PORTFOLIO_2', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file2.csv', 'Base Portfolio?': 'Y'},
+            {'Portfolio': 'PORTFOLIO_3', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'file3.csv', 'Base Portfolio?': 'N'}
         ]
     }
 
     result = create_job_configurations('GeoHaz', config)
 
-    assert len(result) == 2, "Should create one job per portfolio"
+    assert len(result) == 2, "Should create one job per base portfolio (excludes non-base)"
     assert result[0]['Metadata'] == config['Metadata']
     assert result[0]['Portfolio'] == 'PORTFOLIO_1'
     assert result[0]['Import File'] == 'file1.csv'
+    assert result[0]['geocode_version'] == '22.0', "Should convert '22.0.0' to '22.0'"
     assert result[1]['Portfolio'] == 'PORTFOLIO_2'
     assert result[1]['Import File'] == 'file2.csv'
 

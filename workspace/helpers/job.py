@@ -198,6 +198,10 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_edm_db_upgrade_job(
                 job_id, job_config, irp_client
             )
+        elif batch_type == BatchType.GEOHAZ:
+            workflow_id, request_json, response_json = _submit_geohaz_job(
+                job_id, job_config, irp_client
+            )
         elif batch_type == 'Analysis':
             workflow_id, request_json, response_json = _submit_analysis_job(
                 job_id, job_config, irp_client
@@ -624,6 +628,73 @@ def _submit_edm_db_upgrade_job(
         'moody_job_id': moody_job_id,
         'status': 'ACCEPTED',
         'message': f'EDM upgrade job submitted successfully for "{edm_name}" to version {target_version}'
+    }
+
+    return workflow_id, request_json, response_json
+
+
+def _submit_geohaz_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Submit GeoHaz (geocoding and hazard) job to Moody's API.
+
+    This is an asynchronous operation - the job will be submitted and tracked
+    via the workflow_id (Moody's job ID).
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data containing:
+            - Portfolio: Portfolio name
+            - Database: EDM database name
+            - geocode_version: Geocode version (e.g., "22.0")
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+    """
+    # Extract required fields
+    portfolio_name = job_config.get('Portfolio')
+    edm_name = job_config.get('Database')
+    geocode_version = job_config.get('geocode_version', '22.0')
+
+    if not portfolio_name:
+        raise ValueError("Missing required field: Portfolio")
+    if not edm_name:
+        raise ValueError("Missing required field: Database")
+
+    # Submit GeoHaz job
+    moody_job_id = client.portfolio.submit_geohaz_job(
+        portfolio_name=portfolio_name,
+        edm_name=edm_name,
+        version=geocode_version,
+        hazard_eq=True,
+        hazard_ws=True
+    )
+
+    # Build workflow ID
+    workflow_id = str(moody_job_id)
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.GEOHAZ,
+        'configuration': job_config,
+        'api_request': {
+            'portfolio_name': portfolio_name,
+            'edm_name': edm_name,
+            'geocode_version': geocode_version
+        },
+        'submitted_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': workflow_id,
+        'moody_job_id': moody_job_id,
+        'status': 'ACCEPTED',
+        'message': f'GeoHaz job submitted successfully for portfolio "{portfolio_name}" in EDM "{edm_name}"'
     }
 
     return workflow_id, request_json, response_json
@@ -1225,6 +1296,8 @@ def track_job_status(
             job_data = irp_client.mri_import.get_import_job(int(workflow_id))
         elif batch_type == BatchType.EDM_DB_UPGRADE:
             job_data = irp_client.client.get_workflow(int(workflow_id))
+        elif batch_type == BatchType.GEOHAZ:
+            job_data = irp_client.portfolio.get_geohaz_job(int(workflow_id))
         else:
             raise ValueError(f"Invalid batch type for tracking: {batch_type}")
 

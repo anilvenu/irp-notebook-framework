@@ -214,61 +214,21 @@ class PortfolioManager:
                 raise IRPAPIError(
                     f"Missing geohaz job data: {e}"
                 ) from e
-            
-            edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
-            if (len(edms) != 1):
-                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-            try:
-                exposure_id = edms[0]['exposureId']
-            except (KeyError, TypeError, IndexError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract exposure ID: {e}"
-                ) from e
 
-            portfolios = self.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
-            if (len(portfolios) != 1):
-                raise IRPAPIError(f"Expected 1 portfolio with name {portfolio_name}, found {len(portfolios)}")
-            try:
-                portfolio_uri = portfolios[0]['uri']
-                portfolio_id = portfolios[0]['portfolioId']
-            except (KeyError, TypeError, IndexError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract portfolio details: {e}"
-                ) from e
-            
-            # Before GeoHaz, check if the portfolio has location data to GeoHaz
-            # Get the location's accounts
-            accounts = self.search_accounts_by_portfolio(exposure_id=exposure_id, portfolio_id=portfolio_id)
-            if (len(accounts) == 0):
-                print(f"Portfolio {portfolio_name} does not have any Accounts / Locations to be GeoHaz'd; skipping...")
-                continue
-            
-            # Validate locations count
-            try:
-                locations_count = 0
-                for account in accounts:
-                    locations_count += account['locationsCount']
-                    # If there is at least one location, stop checking for existence of locations
-                    if locations_count > 0:
-                        break
-            except(KeyError, TypeError, IndexError) as e:
-                raise IRPAPIError(
-                    f"Failed to validate locations count for portfolio {portfolio_name}"
-                )
-            
-            if locations_count > 0:
-                job_ids.append(self.submit_geohaz_job(
-                    portfolio_uri=portfolio_uri,
-                    version=version,
-                    hazard_eq=hazard_eq,
-                    hazard_ws=hazard_ws
-                ))
+            job_ids.append(self.submit_geohaz_job(
+                portfolio_name=portfolio_name,
+                edm_name=edm_name,
+                version=version,
+                hazard_eq=hazard_eq,
+                hazard_ws=hazard_ws
+            ))
 
         return job_ids
         
 
     def submit_geohaz_job(self,
-                          portfolio_uri: str,
+                          portfolio_name: str,
+                          edm_name: str,
                           version: str = "22.0",
                           hazard_eq: bool = False,
                           hazard_ws: bool = False,
@@ -279,7 +239,9 @@ class PortfolioManager:
         Execute geocoding and/or hazard operations on portfolio.
 
         Args:
-            portfolio_uri: URI of the portfolio
+            portfolio_name: Name of the portfolio
+            edm_name: Name of the EDM containing the portfolio
+            version: Geocode version (default: "22.0")
             hazard_eq: Enable earthquake hazard (default: False)
             hazard_ws: Enable windstorm hazard (default: False)
 
@@ -290,7 +252,46 @@ class PortfolioManager:
             IRPValidationError: If inputs are invalid
             IRPAPIError: If workflow fails or times out
         """
-        validate_non_empty_string(portfolio_uri, "portfolio_uri")
+        validate_non_empty_string(portfolio_name, "portfolio_name")
+        validate_non_empty_string(edm_name, "edm_name")
+
+        # Look up EDM to get exposure_id
+        edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
+        if len(edms) != 1:
+            raise IRPAPIError(f"Expected 1 EDM with name '{edm_name}', found {len(edms)}")
+        try:
+            exposure_id = edms[0]['exposureId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(f"Failed to extract exposure ID for EDM '{edm_name}': {e}") from e
+
+        # Look up portfolio to get portfolio_uri and portfolio_id
+        portfolios = self.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
+        if len(portfolios) != 1:
+            raise IRPAPIError(f"Expected 1 portfolio with name '{portfolio_name}', found {len(portfolios)}")
+        try:
+            portfolio_uri = portfolios[0]['uri']
+            portfolio_id = portfolios[0]['portfolioId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(f"Failed to extract portfolio details for portfolio '{portfolio_name}': {e}") from e
+
+        # Check if portfolio has locations to GeoHaz
+        accounts = self.search_accounts_by_portfolio(exposure_id=exposure_id, portfolio_id=portfolio_id)
+        if len(accounts) == 0:
+            raise IRPAPIError(f"Portfolio '{portfolio_name}' does not have any Accounts/Locations to be GeoHaz'd")
+
+        # Validate locations count
+        try:
+            locations_count = 0
+            for account in accounts:
+                locations_count += account['locationsCount']
+                if locations_count > 0:
+                    break
+        except (KeyError, TypeError, IndexError) as e:
+            raise IRPAPIError(f"Failed to validate locations count for portfolio '{portfolio_name}': {e}") from e
+
+        if locations_count == 0:
+            raise IRPAPIError(f"Portfolio '{portfolio_name}' has accounts but no locations to be GeoHaz'd")
+
         if geocode_layer_options is None:
             geocode_layer_options = {
                 "aggregateTriggerEnabled": "true",

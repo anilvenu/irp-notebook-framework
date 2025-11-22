@@ -248,21 +248,32 @@ def transform_edm_db_upgrade(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 def transform_geohaz(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Transform configuration for GeoHaz batch type.
-    Creates one job configuration per portfolio row.
+    Creates one job configuration per base portfolio.
+
+    The geocode version is extracted from Metadata['Geocode Version'].
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        List of job configurations (one per portfolio)
+        List of job configurations (one per base portfolio)
     """
     metadata = _extract_metadata(config)
     portfolios = config.get('Portfolios', [])
 
+    # Filter to base portfolios only
+    base_portfolios = get_base_portfolios(portfolios)
+
+    # Extract geocode version from metadata (convert "22.0.0" to "22.0")
+    geocode_version_full = metadata.get('Geocode Version', '22.0')
+    version_parts = geocode_version_full.split('.')
+    geocode_version = '.'.join(version_parts[:2]) if len(version_parts) >= 2 else geocode_version_full
+
     job_configs = []
-    for portfolio_row in portfolios:
+    for portfolio_row in base_portfolios:
         job_config = {
             'Metadata': metadata,
+            'geocode_version': geocode_version,
             **portfolio_row
         }
         job_configs.append(job_config)
