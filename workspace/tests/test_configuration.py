@@ -682,9 +682,9 @@ def test_transform_staging_etl():
 
 @pytest.mark.unit
 def test_transform_edm_db_upgrade():
-    """Test EDM DB Upgrade transformer creates one job per database"""
+    """Test EDM DB Upgrade transformer creates one job per database with target version"""
     config = {
-        'Metadata': {'Current Date Value': '202503'},
+        'Metadata': {'Current Date Value': '202503', 'EDM Data Version': '22.0.0'},
         'Databases': [
             {'Database': 'RMS_EDM_202503_DB1', 'Store in Data Bridge?': 'Y'},
             {'Database': 'RMS_EDM_202503_DB2', 'Store in Data Bridge?': 'N'}
@@ -697,8 +697,10 @@ def test_transform_edm_db_upgrade():
     assert result[0]['Metadata'] == config['Metadata']
     assert result[0]['Database'] == 'RMS_EDM_202503_DB1'
     assert result[0]['Store in Data Bridge?'] == 'Y'
+    assert result[0]['target_edm_version'] == '22', "Should extract major version from '22.0.0'"
     assert result[1]['Database'] == 'RMS_EDM_202503_DB2'
     assert result[1]['Store in Data Bridge?'] == 'N'
+    assert result[1]['target_edm_version'] == '22'
 
 
 @pytest.mark.unit

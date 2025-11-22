@@ -217,6 +217,9 @@ def transform_edm_db_upgrade(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     Transform configuration for EDM DB Upgrade batch type.
     Creates one job configuration per database row.
 
+    The target EDM version is extracted from Metadata['EDM Data Version'].
+    The version format "22.0.0" is converted to "22" for the API.
+
     Args:
         config: Configuration dictionary
 
@@ -226,10 +229,15 @@ def transform_edm_db_upgrade(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     metadata = _extract_metadata(config)
     databases = config.get('Databases', [])
 
+    # Extract target version from metadata (e.g., "22.0.0" -> "22")
+    edm_version_full = metadata.get('EDM Data Version', '')
+    target_version = edm_version_full.split('.')[0] if '.' in edm_version_full else edm_version_full
+
     job_configs = []
     for db_row in databases:
         job_config = {
             'Metadata': metadata,
+            'target_edm_version': target_version,
             **db_row
         }
         job_configs.append(job_config)
