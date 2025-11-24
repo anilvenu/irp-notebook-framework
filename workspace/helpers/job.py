@@ -202,6 +202,10 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_geohaz_job(
                 job_id, job_config, irp_client
             )
+        elif batch_type == BatchType.PORTFOLIO_MAPPING:
+            workflow_id, request_json, response_json = _submit_portfolio_mapping_job(
+                job_id, job_config, irp_client
+            )
         elif batch_type == 'Analysis':
             workflow_id, request_json, response_json = _submit_analysis_job(
                 job_id, job_config, irp_client
@@ -695,6 +699,130 @@ def _submit_geohaz_job(
         'moody_job_id': moody_job_id,
         'status': 'ACCEPTED',
         'message': f'GeoHaz job submitted successfully for portfolio "{portfolio_name}" in EDM "{edm_name}"'
+    }
+
+    return workflow_id, request_json, response_json
+
+
+def _submit_portfolio_mapping_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Execute Portfolio Mapping SQL script locally.
+
+    This is a synchronous operation that executes SQL scripts to create sub-portfolios.
+    Unlike other batch types, this does not submit to Moody's API.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data containing:
+            - Portfolio: Portfolio name
+            - Database: EDM database name
+            - Import File: Import file identifier for SQL script naming
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+        workflow_id will be "N/A" since this is not an async Moody's operation
+    """
+    from helpers.sqlserver import execute_query_from_file, sql_file_exists
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    # Extract required fields
+    portfolio_name = job_config.get('Portfolio')
+    edm_name = job_config.get('Database')
+    import_file = job_config.get('Import File')
+
+    if not portfolio_name:
+        raise ValueError("Missing required field: Portfolio")
+    if not edm_name:
+        raise ValueError("Missing required field: Database")
+    if not import_file:
+        raise ValueError("Missing required field: Import File")
+
+    # Look up EDM to get full database name and portfolio ID
+    edms = client.edm.search_edms(filter=f"exposureName=\"{edm_name}\"")
+    if len(edms) != 1:
+        raise ValueError(f"Expected 1 EDM with name '{edm_name}', found {len(edms)}")
+
+    exposure_id = edms[0]['exposureId']
+    edm_full_name = edms[0]['databaseName']
+
+    # Look up portfolio ID
+    portfolios = client.portfolio.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
+    if len(portfolios) != 1:
+        raise ValueError(f"Expected 1 portfolio with name '{portfolio_name}', found {len(portfolios)}")
+
+    portfolio_id = portfolios[0]['portfolioId']
+
+    # Build SQL script path
+    sql_script_name = f"2b_Query_To_Create_Sub_Portfolios_{import_file}_RMS_BackEnd.sql"
+    sql_script_path = f"portfolio_mapping/{sql_script_name}"
+
+    # Check if script exists - if not, skip this portfolio
+    if not sql_file_exists(sql_script_path):
+        # Portfolio mapping is synchronous - no workflow ID
+        workflow_id = "N/A"
+
+        # Build request/response structures for skipped job
+        request_json = {
+            'job_id': job_id,
+            'batch_type': BatchType.PORTFOLIO_MAPPING,
+            'configuration': job_config,
+            'sql_script': {
+                'script_name': sql_script_name,
+                'script_path': sql_script_path,
+                'status': 'NOT_FOUND'
+            },
+            'executed_at': datetime.now().isoformat()
+        }
+
+        response_json = {
+            'workflow_id': workflow_id,
+            'status': 'SKIPPED',
+            'message': f'SQL script not found for "{portfolio_name}" - skipping mapping'
+        }
+
+        return workflow_id, request_json, response_json
+
+    # Prepare SQL parameters
+    params = {
+        "EDM_FULL_NAME": edm_full_name,
+        "PORTFOLIO_ID": portfolio_id,
+        "DATETIME_VALUE": datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    }
+
+    result_sets = execute_query_from_file(
+        file_path=sql_script_path,
+        params=params,
+        connection='DATABRIDGE'
+    )
+
+    # Portfolio mapping is synchronous - no workflow ID
+    workflow_id = "N/A"
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.PORTFOLIO_MAPPING,
+        'configuration': job_config,
+        'sql_script': {
+            'script_name': sql_script_name,
+            'script_path': sql_script_path,
+            'parameters': params,
+            'connection': 'DATABRIDGE'
+        },
+        'executed_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': workflow_id,
+        'status': 'FINISHED',
+        'result_sets_count': len(result_sets) if result_sets else 0,
+        'message': f'Portfolio mapping executed successfully for "{portfolio_name}"'
     }
 
     return workflow_id, request_json, response_json
