@@ -1,21 +1,15 @@
 """
-JupyterLab Notebook Scheduler Helper
-
-Provides utilities for working with JupyterLab's built-in job scheduler:
-- Cleanup old jobs
-- Get job context for notifications
-- Build notification messages with job identification
-
+Utilities for working with JupyterLab's built-in job scheduler.
 The JupyterLab scheduler stores jobs in a SQLite database at:
     ~/.local/share/jupyter/scheduler.sqlite
 
-Environment Variables:
-    JUPYTERLAB_URL: Base URL for JupyterLab (default: http://localhost:8888)
+Downloaded job outputs are stored in:
+    /jovyan/home/
 """
 
 import os
-import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from jupyter_core.paths import jupyter_data_dir
@@ -46,147 +40,6 @@ def get_db_session(db_url: Optional[str] = None):
     Session = sessionmaker(bind=engine)
     return Session
 
-
-def cleanup_old_jobs(
-    days_threshold: int = 30,
-    dry_run: bool = True,
-    db_url: Optional[str] = None,
-    delete_staging_files: bool = True
-) -> Dict[str, Any]:
-    """
-    Clean up JupyterLab scheduler jobs older than specified days.
-
-    This function deletes jobs from the scheduler database and optionally
-    removes their staging files from disk.
-
-    Args:
-        days_threshold: Number of days. Jobs older than this will be deleted.
-                       Default is 30 days.
-        dry_run: If True, returns what would be deleted without actually deleting.
-                If False, performs the actual deletion.
-        db_url: Database URL. If None, uses default JupyterLab location.
-        delete_staging_files: If True, also delete staging area files for jobs.
-
-    Returns:
-        Dictionary with cleanup results:
-        - jobs_count: Number of jobs deleted (or would be deleted)
-        - job_ids: List of job IDs affected
-        - oldest_job_date: Date of oldest job found for cleanup
-        - newest_job_date: Date of newest job found for cleanup
-        - staging_files_deleted: Number of staging directories deleted
-        - dry_run: Whether this was a dry run
-        - message: Summary message
-
-    Example:
-        >>> # Preview what would be deleted
-        >>> result = cleanup_old_jobs(days_threshold=30, dry_run=True)
-        >>> print(f"Would delete {result['jobs_count']} jobs")
-
-        >>> # Actually delete
-        >>> result = cleanup_old_jobs(days_threshold=30, dry_run=False)
-        >>> print(f"Deleted {result['jobs_count']} jobs")
-    """
-    import shutil
-
-    if db_url is None:
-        db_url = get_default_db_url()
-
-    # Calculate threshold timestamp (Unix timestamp in milliseconds)
-    threshold_date = datetime.utcnow() - timedelta(days=days_threshold)
-    threshold_ts = int(threshold_date.timestamp() * 1000)  # Scheduler uses ms
-
-    Session = get_db_session(db_url)
-
-    with Session() as session:
-        # Query jobs older than threshold
-        query = text("""
-            SELECT job_id, name, status, create_time, input_filename
-            FROM jobs
-            WHERE create_time < :threshold
-            ORDER BY create_time ASC
-        """)
-
-        result = session.execute(query, {"threshold": threshold_ts})
-        old_jobs = result.fetchall()
-
-        if not old_jobs:
-            return {
-                'jobs_count': 0,
-                'job_ids': [],
-                'oldest_job_date': None,
-                'newest_job_date': None,
-                'staging_files_deleted': 0,
-                'dry_run': dry_run,
-                'days_threshold': days_threshold,
-                'message': f'No jobs older than {days_threshold} days found'
-            }
-
-        # Collect job information
-        job_ids = [row[0] for row in old_jobs]
-        job_names = [row[1] for row in old_jobs]
-
-        # Convert timestamps to dates
-        oldest_ts = old_jobs[0][3]
-        newest_ts = old_jobs[-1][3]
-        oldest_date = datetime.fromtimestamp(oldest_ts / 1000).isoformat()
-        newest_date = datetime.fromtimestamp(newest_ts / 1000).isoformat()
-
-        result_info = {
-            'jobs_count': len(job_ids),
-            'job_ids': job_ids,
-            'job_names': job_names,
-            'oldest_job_date': oldest_date,
-            'newest_job_date': newest_date,
-            'staging_files_deleted': 0,
-            'dry_run': dry_run,
-            'days_threshold': days_threshold
-        }
-
-        if dry_run:
-            result_info['message'] = f'Dry run: Would delete {len(job_ids)} jobs'
-            return result_info
-
-        # Delete staging files if requested
-        staging_deleted = 0
-        if delete_staging_files:
-            staging_path = os.path.join(jupyter_data_dir(), "scheduler_staging_area")
-            for job_id in job_ids:
-                job_staging_dir = os.path.join(staging_path, job_id)
-                if os.path.exists(job_staging_dir):
-                    try:
-                        shutil.rmtree(job_staging_dir)
-                        staging_deleted += 1
-                    except Exception as e:
-                        print(f"Warning: Could not delete staging dir for job {job_id}: {e}")
-
-        # Delete jobs from database
-        delete_query = text("""
-            DELETE FROM jobs
-            WHERE create_time < :threshold
-        """)
-        session.execute(delete_query, {"threshold": threshold_ts})
-        session.commit()
-
-        result_info['staging_files_deleted'] = staging_deleted
-        result_info['message'] = f'Successfully deleted {len(job_ids)} jobs and {staging_deleted} staging directories'
-
-        return result_info
-
-
-def get_cleanup_preview(days_threshold: int = 30, db_url: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Preview what would be cleaned up without actually deleting.
-
-    Convenience wrapper for cleanup_old_jobs with dry_run=True.
-
-    Args:
-        days_threshold: Number of days. Jobs older than this will be previewed.
-        db_url: Database URL. If None, uses default.
-
-    Returns:
-        Dictionary with preview information
-    """
-    return cleanup_old_jobs(days_threshold=days_threshold, dry_run=True, db_url=db_url)
 
 
 def list_jobs(
@@ -293,117 +146,199 @@ def get_job_info(job_id: str, db_url: Optional[str] = None) -> Optional[Dict[str
             'parameters': row[7],
             'status_message': row[8]
         }
-
-
-def build_job_notification_message(
-    job_id: str,
-    job_name: Optional[str] = None,
-    additional_info: Optional[str] = None
-) -> str:
+    
+def cleanup_old_jobs(
+    days_threshold: int = 30,
+    dry_run: bool = True,
+    db_url: Optional[str] = None,
+    delete_staging_files: bool = True
+) -> Dict[str, Any]:
     """
-    Build a notification message that includes job identification.
+    Clean up JupyterLab scheduler jobs older than specified days.
+
+    This function deletes jobs from the scheduler database and optionally
+    removes their staging files from disk.
 
     Args:
-        job_id: The scheduler job ID
-        job_name: Optional job name
-        additional_info: Additional information to include
+        days_threshold: Number of days. Jobs older than this will be deleted.
+                       Default is 30 days.
+        dry_run: If True, returns what would be deleted without actually deleting.
+                If False, performs the actual deletion.
+        db_url: Database URL. If None, uses default JupyterLab location.
+        delete_staging_files: If True, also delete staging area files for jobs.
 
     Returns:
-        Formatted message string with job identification
+        Dictionary with cleanup results:
+        - jobs_count: Number of jobs deleted (or would be deleted)
+        - job_ids: List of job IDs affected
+        - oldest_job_date: Date of oldest job found for cleanup
+        - newest_job_date: Date of newest job found for cleanup
+        - staging_files_deleted: Number of staging directories deleted
+        - dry_run: Whether this was a dry run
+        - message: Summary message
 
     Example:
-        >>> msg = build_job_notification_message(
-        ...     job_id="abc-123-def",
-        ...     job_name="Daily Report",
-        ...     additional_info="Processed 1000 records"
-        ... )
+        >>> # Preview what would be deleted
+        >>> result = cleanup_old_jobs(days_threshold=30, dry_run=True)
+        >>> print(f"Would delete {result['jobs_count']} jobs")
+
+        >>> # Actually delete
+        >>> result = cleanup_old_jobs(days_threshold=30, dry_run=False)
+        >>> print(f"Deleted {result['jobs_count']} jobs")
     """
-    parts = []
+    import shutil
 
-    if job_name:
-        parts.append(f"**Job:** {job_name}")
+    if db_url is None:
+        db_url = get_default_db_url()
 
-    parts.append(f"**Job ID:** `{job_id}`")
+    # Calculate threshold timestamp (Unix timestamp in milliseconds)
+    threshold_date = datetime.utcnow() - timedelta(days=days_threshold)
+    threshold_ts = int(threshold_date.timestamp() * 1000)  # Scheduler uses ms
 
-    if additional_info:
-        parts.append(f"\n{additional_info}")
+    Session = get_db_session(db_url)
 
-    return "\n".join(parts)
+    with Session() as session:
+        # Query jobs older than threshold
+        query = text("""
+            SELECT job_id, name, status, create_time, input_filename
+            FROM jobs
+            WHERE create_time < :threshold
+            ORDER BY create_time ASC
+        """)
 
+        result = session.execute(query, {"threshold": threshold_ts})
+        old_jobs = result.fetchall()
 
-def get_job_actions(job_id: str, jupyterlab_url: Optional[str] = None) -> List[Dict[str, str]]:
-    """
-    Get action buttons for a job notification.
+        if not old_jobs:
+            return {
+                'jobs_count': 0,
+                'job_ids': [],
+                'oldest_job_date': None,
+                'newest_job_date': None,
+                'staging_files_deleted': 0,
+                'dry_run': dry_run,
+                'days_threshold': days_threshold,
+                'message': f'No jobs older than {days_threshold} days found'
+            }
 
-    Args:
-        job_id: The scheduler job ID
-        jupyterlab_url: Base URL for JupyterLab. If None, uses JUPYTERLAB_URL env var.
+        # Collect job information
+        job_ids = [row[0] for row in old_jobs]
+        job_names = [row[1] for row in old_jobs]
 
-    Returns:
-        List of action button dictionaries with 'title' and 'url' keys
+        # Convert timestamps to dates
+        oldest_ts = old_jobs[0][3]
+        newest_ts = old_jobs[-1][3]
+        oldest_date = datetime.fromtimestamp(oldest_ts / 1000).isoformat()
+        newest_date = datetime.fromtimestamp(newest_ts / 1000).isoformat()
 
-    Example:
-        >>> actions = get_job_actions("abc-123-def")
-        >>> # [{"title": "View Job", "url": "http://localhost:8888/lab/workspaces/jobs/abc-123-def"}]
-    """
-    if jupyterlab_url is None:
-        jupyterlab_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', 'http://localhost:8888')
-
-    # Remove trailing slash if present
-    jupyterlab_url = jupyterlab_url.rstrip('/')
-
-    return [
-        {
-            "title": "View Job",
-            "url": f"{jupyterlab_url}/lab/workspaces/auto-g/tree?file-browser-path=jobs/{job_id}"
+        result_info = {
+            'jobs_count': len(job_ids),
+            'job_ids': job_ids,
+            'job_names': job_names,
+            'oldest_job_date': oldest_date,
+            'newest_job_date': newest_date,
+            'staging_files_deleted': 0,
+            'dry_run': dry_run,
+            'days_threshold': days_threshold
         }
-    ]
 
+        if dry_run:
+            result_info['message'] = f'Dry run. Detected {len(job_ids)} jobs for deletion.'
+            return result_info
 
-# Convenience function for notebooks to get their job context
-def get_current_job_context() -> Dict[str, Any]:
+        # Delete staging files if requested
+        staging_deleted = 0
+        if delete_staging_files:
+            staging_path = os.path.join(jupyter_data_dir(), "scheduler_staging_area")
+            for job_id in job_ids:
+                job_staging_dir = os.path.join(staging_path, job_id)
+                if os.path.exists(job_staging_dir):
+                    try:
+                        shutil.rmtree(job_staging_dir)
+                        staging_deleted += 1
+                    except Exception as e:
+                        print(f"Warning: Could not delete staging dir for job {job_id}: {e}")
+
+        # Delete jobs from database
+        delete_query = text("""
+            DELETE FROM jobs
+            WHERE create_time < :threshold
+        """)
+        session.execute(delete_query, {"threshold": threshold_ts})
+        session.commit()
+
+        result_info['staging_files_deleted'] = staging_deleted
+        result_info['message'] = f'Successfully deleted {len(job_ids)} jobs and {staging_deleted} staging directories'
+
+        return result_info
+    
+
+def get_downloaded_output_directory():
     """
-    Get the current job context from injected parameters.
+    Get information about downloaded job output directories."""
+    jupyter_home = Path.home()  # /home/jovyan in container
+    jobs_output_dir = jupyter_home / "jobs"
 
-    When a notebook is run by the scheduler with job_id passed as a parameter,
-    this function retrieves that information.
+    if jobs_output_dir.exists():
+        # List all downloaded job output directories
+        output_dirs = sorted(jobs_output_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)
 
-    This should be called from within a scheduled notebook that was created
-    with `_scheduler_job_id` and `_scheduler_job_name` parameters.
+        directories = []
+        total_size = 0
+        for d in output_dirs:
+            if d.is_dir():
+                # Calculate directory size
+                dir_size = sum(f.stat().st_size for f in d.rglob('*') if f.is_file())
+                total_size += dir_size
 
+                # Get modification time
+                mtime = datetime.fromtimestamp(d.stat().st_mtime).strftime('%Y-%m-%d %H:%M')
+
+                # Count files
+                file_count = len(list(d.rglob('*')))
+
+                directories.append({
+                    'directory': str(d),
+                    'size': f"{dir_size / 1024:.1f} KB",
+                    'file_count': file_count,
+                    'modified': mtime
+                })
+
+        print(f"\nTotal size: {total_size / 1024 / 1024:.2f} MB")
+
+        return {
+            'jobs_output_directory': str(jobs_output_dir),
+            'directories': directories,
+            'total_size': f"{total_size / 1024 / 1024:.2f} MB"
+        }
+    else:
+        raise FileNotFoundError(f"Jobs output directory does not exist: {jobs_output_dir}")
+
+
+def find_orphaned_outputs(jobs_output_dir: Path) -> list:
+    """
+    Find downloaded output directories for jobs that no longer exist in the database.
+    
     Returns:
-        Dictionary with job context:
-        - job_id: The scheduler job ID (or 'INTERACTIVE' if not scheduled)
-        - job_name: The job name (or 'Interactive Session' if not scheduled)
-        - is_scheduled: Whether this is a scheduled run
-
-    Example:
-        In your notebook:
-        >>> from helpers.notebook_scheduler import get_current_job_context
-        >>> ctx = get_current_job_context()
-        >>> print(f"Running as job: {ctx['job_id']}")
+        List of (directory_path, job_id) tuples for orphaned directories
     """
-    import builtins
-
-    # Check for injected parameters (these are injected as global variables)
-    # We use the naming convention _scheduler_* for our injected params
-    job_id = getattr(builtins, '_scheduler_job_id', None)
-    job_name = getattr(builtins, '_scheduler_job_name', None)
-
-    # Also check globals() of the calling frame
-    import inspect
-    frame = inspect.currentframe()
-    if frame and frame.f_back:
-        caller_globals = frame.f_back.f_globals
-        if job_id is None:
-            job_id = caller_globals.get('_scheduler_job_id')
-        if job_name is None:
-            job_name = caller_globals.get('_scheduler_job_name')
-
-    is_scheduled = job_id is not None
-
-    return {
-        'job_id': job_id or 'INTERACTIVE',
-        'job_name': job_name or 'Interactive Session',
-        'is_scheduled': is_scheduled
-    }
+    if not jobs_output_dir.exists():
+        return []
+    
+    # Get all job IDs from database
+    all_jobs = list_jobs(limit=1000000)  # Get all jobs
+    existing_job_ids = {job['job_id'] for job in all_jobs}
+    
+    orphaned = []
+    for d in jobs_output_dir.iterdir():
+        if d.is_dir():
+            # Extract job_id from directory name (format: notebook_name-job_id)
+            # The job_id is a UUID like "abc12345-def6-7890-ghij-klmnopqrstuv"
+            name_parts = d.name.rsplit('-', 5)  # UUID has 5 parts separated by -
+            if len(name_parts) >= 5:
+                # Reconstruct the job_id (last 5 parts)
+                job_id = '-'.join(name_parts[-5:])
+                if job_id not in existing_job_ids:
+                    orphaned.append((d, job_id))
+    
+    return orphaned
