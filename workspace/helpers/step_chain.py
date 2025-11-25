@@ -68,6 +68,29 @@ STAGE_03_CHAIN = {
     }
 }
 
+# Stage 04 Step Chain Configuration
+# Maps step numbers to their next step and execution conditions
+STAGE_04_CHAIN = {
+    1: {
+        'next_step': 2,
+        'batch_type': 'Analysis',
+        'wait_for': BatchStatus.COMPLETED,
+        'description': 'Execute Analysis → Analysis Summary'
+    },
+    2: {
+        'next_step': None,  # Final step in Stage 04
+        'batch_type': None,
+        'wait_for': None,
+        'description': 'Analysis Summary (Final Step)'
+    }
+}
+
+# Combined chain configuration by stage
+STAGE_CHAINS = {
+    3: STAGE_03_CHAIN,
+    4: STAGE_04_CHAIN,
+}
+
 
 def get_next_step_info(batch_id: int, schema: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
@@ -124,17 +147,19 @@ def get_next_step_info(batch_id: int, schema: Optional[str] = None) -> Optional[
         logger.info(f"Cycle {cycle_name} is not ACTIVE (status={cycle_status}), skipping chain")
         return None
 
-    # Only support Stage 03 chaining for now
-    if stage_num != 3:
-        logger.debug(f"Step chaining only configured for Stage 03, current stage={stage_num}")
+    # Check if stage has chain configuration
+    if stage_num not in STAGE_CHAINS:
+        logger.debug(f"Step chaining not configured for Stage {stage_num}")
         return None
+
+    stage_chain = STAGE_CHAINS[stage_num]
 
     # Check if current step has a next step defined
-    if step_num not in STAGE_03_CHAIN:
-        logger.warning(f"Step {step_num} not found in STAGE_03_CHAIN configuration")
+    if step_num not in stage_chain:
+        logger.warning(f"Step {step_num} not found in Stage {stage_num} chain configuration")
         return None
 
-    chain_config = STAGE_03_CHAIN[step_num]
+    chain_config = stage_chain[step_num]
 
     # Validate batch type matches expected
     if chain_config['batch_type'] != batch_type:
@@ -241,19 +266,29 @@ def _build_notebook_path(cycle_name: str, stage_num: int, step_num: int) -> Path
     Returns:
         Path object pointing to the notebook file
     """
-    # Map step numbers to notebook filenames for Stage 03
-    STAGE_03_NOTEBOOKS = {
-        1: 'Submit_Create_EDM_Batch.ipynb',
-        2: 'Create_Base_Portfolios.ipynb',
-        3: 'Submit_MRI_Import_Batch.ipynb',
-        4: 'Create_Reinsurance_Treaties.ipynb',
-        5: 'Submit_EDM_Version_Upgrade_Batch.ipynb',
-        6: 'Submit_GeoHaz_Batch.ipynb',
-        7: 'Execute_Portfolio_Mapping.ipynb',
-        8: 'Control_Totals.ipynb'
+    # Map step numbers to notebook filenames by stage
+    STAGE_NOTEBOOKS = {
+        3: {
+            1: 'Submit_Create_EDM_Batch.ipynb',
+            2: 'Create_Base_Portfolios.ipynb',
+            3: 'Submit_MRI_Import_Batch.ipynb',
+            4: 'Create_Reinsurance_Treaties.ipynb',
+            5: 'Submit_EDM_Version_Upgrade_Batch.ipynb',
+            6: 'Submit_GeoHaz_Batch.ipynb',
+            7: 'Execute_Portfolio_Mapping.ipynb',
+            8: 'Control_Totals.ipynb'
+        },
+        4: {
+            1: 'Execute_Analysis.ipynb',
+            2: 'Analysis_Summary.ipynb'
+        }
     }
 
-    notebook_filename = STAGE_03_NOTEBOOKS.get(step_num)
+    if stage_num not in STAGE_NOTEBOOKS:
+        raise ValueError(f"No notebooks configured for Stage {stage_num}")
+
+    stage_notebooks = STAGE_NOTEBOOKS[stage_num]
+    notebook_filename = stage_notebooks.get(step_num)
     if notebook_filename is None:
         raise ValueError(f"No notebook configured for Stage {stage_num} Step {step_num}")
 
