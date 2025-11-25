@@ -70,11 +70,12 @@ STAGE_03_CHAIN = {
 
 # Stage 04 Step Chain Configuration
 # Maps step numbers to their next step and execution conditions
+# Note: wait_for can be a single status or a list of statuses
 STAGE_04_CHAIN = {
     1: {
         'next_step': 2,
         'batch_type': 'Analysis',
-        'wait_for': BatchStatus.COMPLETED,
+        'wait_for': [BatchStatus.COMPLETED, BatchStatus.FAILED],  # Chain on success OR failure
         'description': 'Execute Analysis → Analysis Summary'
     },
     2: {
@@ -169,10 +170,17 @@ def get_next_step_info(batch_id: int, schema: Optional[str] = None) -> Optional[
         return None
 
     # Check if batch reached required status
-    if chain_config['wait_for'] != batch_status:
+    # wait_for can be a single status or a list of statuses
+    wait_for = chain_config['wait_for']
+    if isinstance(wait_for, list):
+        status_match = batch_status in wait_for
+    else:
+        status_match = batch_status == wait_for
+
+    if not status_match:
         logger.debug(
             f"Batch {batch_id} status {batch_status} does not match required "
-            f"{chain_config['wait_for']}, skipping chain"
+            f"{wait_for}, skipping chain"
         )
         return None
 
