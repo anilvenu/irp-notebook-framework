@@ -202,6 +202,10 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_geohaz_job(
                 job_id, job_config, irp_client
             )
+        elif batch_type == BatchType.PORTFOLIO_MAPPING:
+            workflow_id, request_json, response_json = _submit_portfolio_mapping_job(
+                job_id, job_config, irp_client
+            )
         elif batch_type == 'Analysis':
             workflow_id, request_json, response_json = _submit_analysis_job(
                 job_id, job_config, irp_client
@@ -696,6 +700,78 @@ def _submit_geohaz_job(
         'status': 'ACCEPTED',
         'message': f'GeoHaz job submitted successfully for portfolio "{portfolio_name}" in EDM "{edm_name}"'
     }
+
+    return workflow_id, request_json, response_json
+
+
+def _submit_portfolio_mapping_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Execute Portfolio Mapping SQL script locally.
+
+    This is a synchronous operation that executes SQL scripts to create sub-portfolios.
+    Unlike other batch types, this does not submit to Moody's API.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data containing:
+            - Portfolio: Portfolio name
+            - Database: EDM database name
+            - Import File: Import file identifier for SQL script naming
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+        workflow_id will be "N/A" since this is not an async Moody's operation
+    """
+    from datetime import datetime
+
+    # Extract required fields
+    portfolio_name = job_config.get('Portfolio')
+    edm_name = job_config.get('Database')
+    import_file = job_config.get('Import File')
+
+    if not portfolio_name:
+        raise ValueError("Missing required field: Portfolio")
+    if not edm_name:
+        raise ValueError("Missing required field: Database")
+    if not import_file:
+        raise ValueError("Missing required field: Import File")
+
+    # Execute portfolio mapping via IRP integration layer
+    result = client.portfolio.execute_portfolio_mapping(
+        portfolio_name=portfolio_name,
+        edm_name=edm_name,
+        import_file=import_file,
+        connection_name='DATABRIDGE'
+    )
+
+    # Portfolio mapping is synchronous - no workflow ID
+    workflow_id = "N/A"
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.PORTFOLIO_MAPPING,
+        'configuration': job_config,
+        'sql_script': result.get('sql_script', {}),
+        'executed_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': workflow_id,
+        'status': result['status'],
+        'message': result['message']
+    }
+
+    # Add optional fields if present
+    if 'result_sets_count' in result:
+        response_json['result_sets_count'] = result['result_sets_count']
+    if 'parameters' in result:
+        request_json['sql_script']['parameters'] = result['parameters']
 
     return workflow_id, request_json, response_json
 

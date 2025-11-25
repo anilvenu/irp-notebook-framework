@@ -731,26 +731,29 @@ def test_transform_geohaz():
 
 @pytest.mark.unit
 def test_transform_portfolio_mapping():
-    """Test Portfolio Mapping transformer creates one job per portfolio"""
+    """Test Portfolio Mapping transformer creates one job per base portfolio.
+    Only portfolios with 'Base Portfolio?' == 'Y' are included.
+    """
     config = {
         'Metadata': {'Current Date Value': '202503', 'EDM Data Version': 'v1.2.3'},
         'Portfolios': [
-            {'Portfolio': 'PORTFOLIO_A', 'Database': 'RMS_EDM_202503_DB1', 'Base Portfolio?': 'Y'},
-            {'Portfolio': 'PORTFOLIO_B', 'Database': 'RMS_EDM_202503_DB1', 'Base Portfolio?': 'N'},
-            {'Portfolio': 'PORTFOLIO_C', 'Database': 'RMS_EDM_202503_DB2', 'Base Portfolio?': 'Y'}
+            {'Portfolio': 'PORTFOLIO_A', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'USEQ', 'Base Portfolio?': 'Y'},
+            {'Portfolio': 'PORTFOLIO_B', 'Database': 'RMS_EDM_202503_DB1', 'Import File': 'USFL', 'Base Portfolio?': 'N'},
+            {'Portfolio': 'PORTFOLIO_C', 'Database': 'RMS_EDM_202503_DB2', 'Import File': 'USHU', 'Base Portfolio?': 'Y'}
         ]
     }
 
     result = create_job_configurations('Portfolio Mapping', config)
 
-    assert len(result) == 3, "Should create one job per portfolio"
+    assert len(result) == 2, "Should create one job per base portfolio (excludes non-base)"
     assert result[0]['Metadata'] == config['Metadata']
     assert result[0]['Portfolio'] == 'PORTFOLIO_A'
+    assert result[0]['Database'] == 'RMS_EDM_202503_DB1'
+    assert result[0]['Import File'] == 'USEQ'
     assert result[0]['Base Portfolio?'] == 'Y'
-    assert result[1]['Portfolio'] == 'PORTFOLIO_B'
-    assert result[1]['Base Portfolio?'] == 'N'
-    assert result[2]['Portfolio'] == 'PORTFOLIO_C'
-    assert result[2]['Database'] == 'RMS_EDM_202503_DB2'
+    assert result[1]['Portfolio'] == 'PORTFOLIO_C'
+    assert result[1]['Database'] == 'RMS_EDM_202503_DB2'
+    assert result[1]['Import File'] == 'USHU'
 
 
 @pytest.mark.unit

@@ -480,3 +480,107 @@ class PortfolioManager:
                     f"Batch geohaz jobs did not complete within {timeout} seconds"
                 )
             time.sleep(interval)
+
+
+    def execute_portfolio_mapping(
+        self,
+        portfolio_name: str,
+        edm_name: str,
+        import_file: str,
+        connection_name: str = 'DATABRIDGE'
+    ) -> Dict[str, Any]:
+        """
+        Execute portfolio mapping SQL script to create sub-portfolios.
+
+        This is a synchronous operation that executes SQL scripts stored in
+        workspace/sql/portfolio_mapping/ directory.
+
+        Args:
+            portfolio_name: Name of the portfolio to map
+            edm_name: Name of the EDM containing the portfolio
+            import_file: Import file identifier (used to locate SQL script)
+            connection_name: SQL Server connection name (default: 'DATABRIDGE')
+
+        Returns:
+            Dict containing:
+                - status: 'FINISHED' or 'SKIPPED'
+                - message: Description of result
+                - result_sets_count: Number of result sets returned (if executed)
+                - sql_script: Script details
+                - parameters: SQL parameters used (if executed)
+
+        Raises:
+            IRPValidationError: If inputs are invalid
+            IRPAPIError: If EDM or portfolio lookup fails, or SQL execution fails
+        """
+        from helpers.sqlserver import execute_query_from_file, sql_file_exists
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        validate_non_empty_string(portfolio_name, "portfolio_name")
+        validate_non_empty_string(edm_name, "edm_name")
+        validate_non_empty_string(import_file, "import_file")
+
+        # Look up EDM to get exposure_id and full database name
+        edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
+        if len(edms) != 1:
+            raise IRPAPIError(f"Expected 1 EDM with name '{edm_name}', found {len(edms)}")
+        try:
+            exposure_id = edms[0]['exposureId']
+            edm_full_name = edms[0]['databaseName']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(f"Failed to extract EDM details for '{edm_name}': {e}") from e
+
+        # Look up portfolio to get portfolio_id
+        portfolios = self.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
+        if len(portfolios) != 1:
+            raise IRPAPIError(f"Expected 1 portfolio with name '{portfolio_name}', found {len(portfolios)}")
+        try:
+            portfolio_id = portfolios[0]['portfolioId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(f"Failed to extract portfolio ID for '{portfolio_name}': {e}") from e
+
+        # Build SQL script path
+        sql_script_name = f"2b_Query_To_Create_Sub_Portfolios_{import_file}_RMS_BackEnd.sql"
+        sql_script_path = f"portfolio_mapping/{sql_script_name}"
+
+        # Check if script exists - if not, skip this portfolio
+        if not sql_file_exists(sql_script_path):
+            return {
+                'status': 'SKIPPED',
+                'message': f'SQL script not found for "{portfolio_name}" - skipping mapping',
+                'sql_script': {
+                    'script_name': sql_script_name,
+                    'script_path': sql_script_path,
+                    'status': 'NOT_FOUND'
+                }
+            }
+
+        # Prepare SQL parameters
+        params = {
+            "EDM_FULL_NAME": edm_full_name,
+            "PORTFOLIO_ID": portfolio_id,
+            "DATETIME_VALUE": datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        }
+
+        # Execute SQL script
+        try:
+            result_sets = execute_query_from_file(
+                file_path=sql_script_path,
+                params=params,
+                connection=connection_name
+            )
+
+            return {
+                'status': 'FINISHED',
+                'message': f'Portfolio mapping executed successfully for "{portfolio_name}"',
+                'result_sets_count': len(result_sets) if result_sets else 0,
+                'sql_script': {
+                    'script_name': sql_script_name,
+                    'script_path': sql_script_path,
+                    'status': 'EXECUTED'
+                },
+                'parameters': params
+            }
+        except Exception as e:
+            raise IRPAPIError(f"Failed to execute portfolio mapping for '{portfolio_name}': {e}") from e

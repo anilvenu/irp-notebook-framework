@@ -284,19 +284,22 @@ def transform_geohaz(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 def transform_portfolio_mapping(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Transform configuration for Portfolio Mapping batch type.
-    Creates one job configuration per portfolio row.
+    Creates one job configuration per base portfolio.
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        List of job configurations (one per portfolio)
+        List of job configurations (one per base portfolio)
     """
     metadata = _extract_metadata(config)
     portfolios = config.get('Portfolios', [])
 
+    # Filter to base portfolios only
+    base_portfolios = get_base_portfolios(portfolios)
+
     job_configs = []
-    for portfolio_row in portfolios:
+    for portfolio_row in base_portfolios:
         job_config = {
             'Metadata': metadata,
             **portfolio_row
