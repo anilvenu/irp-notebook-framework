@@ -68,6 +68,7 @@ Proposed → Under Review → Approved → In Progress → Implemented
 | ID | Title | Status | Priority | Effort |
 |----|-------|--------|----------|--------|
 | 001 | [Eliminate Circular Import Dependencies](001-eliminate-circular-imports.md) | Proposed | Medium | 2-3 hours |
+| 002 | [Prevent Duplicate Batch Creation](002-prevent-duplicate-batch-creation.md) | Proposed | High | 3-4 hours |
 
 ## Implementation Notes
 
