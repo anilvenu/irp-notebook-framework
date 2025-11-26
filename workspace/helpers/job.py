@@ -214,6 +214,12 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_grouping_job(
                 job_id, job_config, irp_client
             )
+        elif batch_type == BatchType.GROUPING_ROLLUP:
+            # Rollup groups use the same submission logic as regular grouping
+            # The items list can contain group names (not just analysis names)
+            workflow_id, request_json, response_json = _submit_grouping_job(
+                job_id, job_config, irp_client
+            )
         # Add more batch types as needed
 
         return workflow_id, request_json, response_json
@@ -1542,6 +1548,9 @@ def track_job_status(
         elif batch_type == BatchType.ANALYSIS:
             job_data = irp_client.analysis.get_analysis_job(int(workflow_id))
         elif batch_type == BatchType.GROUPING:
+            job_data = irp_client.analysis.get_analysis_grouping_job(int(workflow_id))
+        elif batch_type == BatchType.GROUPING_ROLLUP:
+            # Rollup groups use the same tracking API as regular grouping
             job_data = irp_client.analysis.get_analysis_grouping_job(int(workflow_id))
         else:
             raise ValueError(f"Invalid batch type for tracking: {batch_type}")

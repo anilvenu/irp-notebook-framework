@@ -334,22 +334,102 @@ def transform_analysis(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     return job_configs
 
 
-def transform_grouping(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def classify_groupings(config: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
-    Transform configuration for Grouping batch type.
-    Creates one job configuration per group.
+    Classify groupings into analysis-only groups and rollup groups.
+
+    Analysis-only groups: All items reference analysis names (from Analysis Table)
+    Rollup groups: At least one item references another group name (from Groupings)
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        List of job configurations (one per group)
+        Tuple of (analysis_only_groups, rollup_groups)
+    """
+    groupings = config.get('Groupings', [])
+    analysis_table = config.get('Analysis Table', [])
+
+    # Build set of valid analysis names
+    analysis_names = {
+        a.get('Analysis Name') for a in analysis_table
+        if a.get('Analysis Name') and pd.notna(a.get('Analysis Name'))
+    }
+
+    # Build set of group names
+    group_names = {
+        g.get('Group_Name') for g in groupings
+        if g.get('Group_Name') and pd.notna(g.get('Group_Name'))
+    }
+
+    analysis_only_groups = []
+    rollup_groups = []
+
+    for group in groupings:
+        items = group.get('items', [])
+        if not items:
+            continue
+
+        # Check if any item is a group name
+        has_group_reference = any(item in group_names for item in items)
+
+        if has_group_reference:
+            rollup_groups.append(group)
+        else:
+            # All items must be analysis names (or portfolios, but we treat as analysis-only)
+            analysis_only_groups.append(group)
+
+    return analysis_only_groups, rollup_groups
+
+
+def transform_grouping(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Grouping batch type.
+    Creates one job configuration per ANALYSIS-ONLY group.
+
+    Analysis-only groups are groups where ALL items reference analysis names
+    (not other group names). These can be created immediately since analyses
+    already exist.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per analysis-only group)
     """
     metadata = _extract_metadata(config)
-    groupings = config.get('Groupings', [])
+    analysis_only_groups, _ = classify_groupings(config)
 
     job_configs = []
-    for group_row in groupings:
+    for group_row in analysis_only_groups:
+        job_config = {
+            'Metadata': metadata,
+            **group_row
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
+def transform_grouping_rollup(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Grouping Rollup batch type.
+    Creates one job configuration per ROLLUP group.
+
+    Rollup groups are groups that contain references to other groups.
+    These must be created AFTER the child groups exist (requires chaining).
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per rollup group)
+    """
+    metadata = _extract_metadata(config)
+    _, rollup_groups = classify_groupings(config)
+
+    job_configs = []
+    for group_row in rollup_groups:
         job_config = {
             'Metadata': metadata,
             **group_row
@@ -451,7 +531,7 @@ def transform_test_multi_job(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 # ============================================================================
 
 BATCH_TYPE_TRANSFORMERS = {
-    # Business transformers (11)
+    # Business transformers (12)
     BatchType.EDM_CREATION: transform_edm_creation,
     BatchType.PORTFOLIO_CREATION: transform_portfolio_creation,
     BatchType.MRI_IMPORT: transform_mri_import,
@@ -461,6 +541,7 @@ BATCH_TYPE_TRANSFORMERS = {
     BatchType.PORTFOLIO_MAPPING: transform_portfolio_mapping,
     BatchType.ANALYSIS: transform_analysis,
     BatchType.GROUPING: transform_grouping,
+    BatchType.GROUPING_ROLLUP: transform_grouping_rollup,
     BatchType.EXPORT_TO_RDM: transform_export_to_rdm,
     BatchType.STAGING_ETL: transform_staging_etl,
     # Test-only transformers (2)
