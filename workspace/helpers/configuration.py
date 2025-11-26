@@ -442,26 +442,48 @@ def transform_grouping_rollup(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Transform configuration for Export to RDM batch type.
-    Creates one job configuration per group.
+    Creates a SINGLE job configuration that exports ALL analyses and ALL groups.
+
+    The job exports to the RDM specified in Metadata['Export RDM Name'].
+    Analysis names come from the Analysis Table sheet.
+    Group names come from the Groupings sheet.
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        List of job configurations (one per group)
+        List containing a single job configuration with all analysis and group names
     """
     metadata = _extract_metadata(config)
+    analysis_table = config.get('Analysis Table', [])
     groupings = config.get('Groupings', [])
 
-    job_configs = []
-    for group_row in groupings:
-        job_config = {
-            'Metadata': metadata,
-            **group_row
-        }
-        job_configs.append(job_config)
+    # Collect all analysis names
+    analysis_names = [
+        a.get('Analysis Name') for a in analysis_table
+        if a.get('Analysis Name') and pd.notna(a.get('Analysis Name'))
+    ]
 
-    return job_configs
+    # Collect all group names
+    group_names = [
+        g.get('Group_Name') for g in groupings
+        if g.get('Group_Name') and pd.notna(g.get('Group_Name'))
+    ]
+
+    # Combine into single export list (analyses + groups)
+    all_export_names = analysis_names + group_names
+
+    # Create single job configuration
+    job_config = {
+        'Metadata': metadata,
+        'rdm_name': metadata.get('Export RDM Name'),
+        'server_name': 'databridge-1',
+        'analysis_names': all_export_names,
+        'analysis_count': len(analysis_names),
+        'group_count': len(group_names)
+    }
+
+    return [job_config]
 
 
 def transform_staging_etl(config: Dict[str, Any]) -> List[Dict[str, Any]]:

@@ -53,7 +53,7 @@ class RDMManager:
             analysis_names: List[str]
     ) -> Dict[str, Any]:
         """
-        Export multiple analyses to RDM (Risk Data Model).
+        Export multiple analyses to RDM (Risk Data Model) and poll to completion.
 
         Args:
             server_name: Database server name
@@ -67,57 +67,30 @@ class RDMManager:
             IRPValidationError: If parameters are invalid
             IRPAPIError: If export fails or analyses not found
         """
-        validate_non_empty_string(server_name, "server_name")
-        validate_non_empty_string(rdm_name, "rdm_name")
-        validate_list_not_empty(analysis_names, "analysis_names")
-
-        database_servers = self.edm_manager.search_database_servers(filter=f"serverName=\"{server_name}\"")
-        try:
-            database_server_id = database_servers[0]['serverId']
-        except (KeyError, IndexError, TypeError) as e:
-            raise IRPAPIError(
-                f"Failed to extract server ID for server '{server_name}': {e}"
-            ) from e
-
-        rdms = self.edm_manager.search_edms(filter=f"exposureName=\"{rdm_name}\"")
-        if (len(rdms) > 0):
-            raise IRPAPIError(f"RDM with name {rdm_name} already exists")
-
-        analysis_uris = []
-        for name in analysis_names:
-            analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
-            if (len(analysis_response) == 0):
-                raise IRPAPIError(f"Analysis with this name does not exist: {name}")
-            if (len(analysis_response) > 1):
-                raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
-            try:
-                analysis_uris.append(analysis_response[0]['uri'])
-            except (KeyError, IndexError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract analysis URI for analysis '{name}': {e}"
-                ) from e
-
         rdm_export_job_id = self.submit_rdm_export_job(
+            server_name=server_name,
             rdm_name=rdm_name,
-            server_id=database_server_id,
-            resource_uris=analysis_uris
+            analysis_names=analysis_names
         )
         return self.poll_rdm_export_job_to_completion(rdm_export_job_id)
 
 
     def submit_rdm_export_job(
             self,
+            server_name: str,
             rdm_name: str,
-            server_id: int,
-            resource_uris: List[str]
+            analysis_names: List[str]
     ) -> int:
         """
         Submit RDM export job.
 
+        Performs validation (server lookup, RDM existence check, analysis URI
+        resolution) and submits the export job.
+
         Args:
+            server_name: Database server name
             rdm_name: Name for the RDM
-            server_id: Database server ID
-            resource_uris: List of analysis resource URIs to export
+            analysis_names: List of analysis names to export
 
         Returns:
             Job ID
@@ -126,8 +99,38 @@ class RDMManager:
             IRPValidationError: If parameters are invalid
             IRPAPIError: If job submission fails
         """
+        validate_non_empty_string(server_name, "server_name")
         validate_non_empty_string(rdm_name, "rdm_name")
-        validate_positive_int(server_id, "server_id")
+        validate_list_not_empty(analysis_names, "analysis_names")
+
+        # Look up server ID
+        database_servers = self.edm_manager.search_database_servers(filter=f"serverName=\"{server_name}\"")
+        try:
+            server_id = database_servers[0]['serverId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract server ID for server '{server_name}': {e}"
+            ) from e
+
+        # Check RDM doesn't already exist
+        rdms = self.edm_manager.search_edms(filter=f"exposureName=\"{rdm_name}\"")
+        if len(rdms) > 0:
+            raise IRPAPIError(f"RDM with name {rdm_name} already exists")
+
+        # Resolve analysis names to URIs
+        resource_uris = []
+        for name in analysis_names:
+            analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
+            if len(analysis_response) == 0:
+                raise IRPAPIError(f"Analysis with this name does not exist: {name}")
+            if len(analysis_response) > 1:
+                raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
+            try:
+                resource_uris.append(analysis_response[0]['uri'])
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract analysis URI for analysis '{name}': {e}"
+                ) from e
 
         data = {
             "exportType": "RDM_DATABRIDGE",
