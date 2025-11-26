@@ -22,9 +22,9 @@ RUN apt-get update && apt-get install -y \
 # Create directory for Kerberos keytabs
 RUN mkdir -p /etc/krb5 && chmod 755 /etc/krb5
 
-# Copy Kerberos initialization script
-COPY scripts/kerberos-init.sh /usr/local/bin/kerberos-init.sh
-RUN chmod +x /usr/local/bin/kerberos-init.sh
+# Copy startup scripts to /usr/local/bin/
+COPY scripts/kerberos-init.sh scripts/jupyter-entrypoint.sh /usr/local/bin/
+RUN chmod 755 /usr/local/bin/kerberos-init.sh /usr/local/bin/jupyter-entrypoint.sh
 
 USER ${NB_UID}
 # Install Python packages
@@ -32,3 +32,6 @@ COPY requirements.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 RUN pip install jupyterlab-spreadsheet-editor
 RUN pip install jupyter_scheduler
+
+# Use custom entrypoint for Kerberos initialization
+ENTRYPOINT ["/usr/local/bin/jupyter-entrypoint.sh"]

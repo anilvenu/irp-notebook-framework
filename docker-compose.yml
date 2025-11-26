@@ -47,26 +47,23 @@ services:
       - KRB5_PRINCIPAL=${KRB5_PRINCIPAL:-}
       - KRB5_KEYTAB=${KRB5_KEYTAB:-/etc/krb5/svc_jupyter.keytab}
       - KRB5_CONFIG=/etc/krb5.conf
+    # DEV ONLY: Map AD/SQL Server hostname to Docker host (port-forwarded to Hyper-V VM)
+    # In production, remove this - the container should be on a network that can
+    # directly resolve and reach the AD domain controller and SQL Server.
+    extra_hosts:
+      - "irp-adlab01.irplab.local:host-gateway"
+      - "irp-adlab01:host-gateway"
     volumes:
       - ./workspace:${NOTEBOOK_HOME_DIR:-/home/jovyan}/workspace
-      # Kerberos configuration files (optional - only mount if files exist)
-      # Uncomment these lines when using Windows Authentication:
-      # - ./config/krb5.conf:/etc/krb5.conf:ro
-      # - ./keytabs:/etc/krb5:ro
+      # Kerberos configuration files for Windows Authentication
+      - ./config/krb5.conf:/etc/krb5.conf:ro
+      - ./keytabs:/etc/krb5:ro
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - irp-network
     restart: unless-stopped
-    command: >
-      bash -c "
-        /usr/local/bin/kerberos-init.sh || true;
-        start-notebook.sh
-        --NotebookApp.token=''
-        --NotebookApp.password=''
-        --NotebookApp.notebook_dir='${NOTEBOOK_HOME_DIR:-/home/jovyan}'
-      "
 
   # FastAPI Application Service
   # This service runs the IRP Dashboard FastAPI application in Docker
