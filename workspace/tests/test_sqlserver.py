@@ -1082,6 +1082,210 @@ def test_initialize_database_file_not_found():
 
 
 # ==============================================================================
+# AUTHENTICATION TYPE TESTS
+# ==============================================================================
+
+def test_get_connection_config_sql_auth_default(monkeypatch):
+    """Test that SQL authentication is the default when AUTH_TYPE is not set"""
+    monkeypatch.setenv('MSSQL_TEST_SERVER', 'testserver')
+    monkeypatch.setenv('MSSQL_TEST_USER', 'testuser')
+    monkeypatch.setenv('MSSQL_TEST_PASSWORD', 'testpass')
+    monkeypatch.delenv('MSSQL_TEST_AUTH_TYPE', raising=False)
+
+    config = get_connection_config('TEST')
+
+    assert config['auth_type'] == 'SQL'
+    assert config['user'] == 'testuser'
+    assert config['password'] == 'testpass'
+
+
+def test_get_connection_config_sql_auth_explicit(monkeypatch):
+    """Test explicit SQL Server authentication configuration"""
+    monkeypatch.setenv('MSSQL_TEST_SERVER', 'testserver')
+    monkeypatch.setenv('MSSQL_TEST_AUTH_TYPE', 'SQL')
+    monkeypatch.setenv('MSSQL_TEST_USER', 'testuser')
+    monkeypatch.setenv('MSSQL_TEST_PASSWORD', 'testpass')
+
+    config = get_connection_config('TEST')
+
+    assert config['auth_type'] == 'SQL'
+    assert config['user'] == 'testuser'
+    assert config['password'] == 'testpass'
+
+
+def test_get_connection_config_windows_auth(monkeypatch):
+    """Test Windows Authentication configuration"""
+    monkeypatch.setenv('MSSQL_TEST_SERVER', 'testserver')
+    monkeypatch.setenv('MSSQL_TEST_AUTH_TYPE', 'WINDOWS')
+    monkeypatch.delenv('MSSQL_TEST_USER', raising=False)
+    monkeypatch.delenv('MSSQL_TEST_PASSWORD', raising=False)
+
+    config = get_connection_config('TEST')
+
+    assert config['auth_type'] == 'WINDOWS'
+    assert 'user' not in config
+    assert 'password' not in config
+
+
+def test_get_connection_config_windows_auth_lowercase(monkeypatch):
+    """Test Windows Authentication configuration with lowercase auth_type"""
+    monkeypatch.setenv('MSSQL_TEST_SERVER', 'testserver')
+    monkeypatch.setenv('MSSQL_TEST_AUTH_TYPE', 'windows')
+
+    config = get_connection_config('TEST')
+
+    assert config['auth_type'] == 'WINDOWS'
+
+
+def test_get_connection_config_invalid_auth_type(monkeypatch):
+    """Test error when invalid authentication type is specified"""
+    monkeypatch.setenv('MSSQL_TEST_SERVER', 'testserver')
+    monkeypatch.setenv('MSSQL_TEST_AUTH_TYPE', 'INVALID')
+
+    with pytest.raises(SQLServerConfigurationError) as exc_info:
+        get_connection_config('TEST')
+
+    assert 'Invalid authentication type' in str(exc_info.value)
+    assert 'INVALID' in str(exc_info.value)
+
+
+def test_get_connection_config_windows_auth_missing_server(monkeypatch):
+    """Test error when Windows auth is used but server is missing"""
+    monkeypatch.setenv('MSSQL_TEST_AUTH_TYPE', 'WINDOWS')
+    monkeypatch.delenv('MSSQL_TEST_SERVER', raising=False)
+
+    with pytest.raises(SQLServerConfigurationError) as exc_info:
+        get_connection_config('TEST')
+
+    assert 'WINDOWS' in str(exc_info.value)
+    assert 'SERVER' in str(exc_info.value)
+
+
+def test_build_connection_string_sql_auth(monkeypatch):
+    """Test connection string for SQL authentication"""
+    monkeypatch.setenv('MSSQL_TEST_SERVER', 'testserver')
+    monkeypatch.setenv('MSSQL_TEST_AUTH_TYPE', 'SQL')
+    monkeypatch.setenv('MSSQL_TEST_USER', 'testuser')
+    monkeypatch.setenv('MSSQL_TEST_PASSWORD', 'testpass')
+
+    conn_str = build_connection_string('TEST')
+
+    assert 'UID=testuser' in conn_str
+    assert 'PWD=testpass' in conn_str
+    assert 'Trusted_Connection' not in conn_str
+
+
+def test_build_connection_string_windows_auth(monkeypatch):
+    """Test connection string for Windows authentication"""
+    monkeypatch.setenv('MSSQL_TEST_SERVER', 'testserver')
+    monkeypatch.setenv('MSSQL_TEST_AUTH_TYPE', 'WINDOWS')
+
+    conn_str = build_connection_string('TEST')
+
+    assert 'Trusted_Connection=yes' in conn_str
+    assert 'UID=' not in conn_str
+    assert 'PWD=' not in conn_str
+
+
+def test_build_connection_string_windows_auth_with_database(monkeypatch):
+    """Test Windows auth connection string with database"""
+    monkeypatch.setenv('MSSQL_TEST_SERVER', 'testserver')
+    monkeypatch.setenv('MSSQL_TEST_AUTH_TYPE', 'WINDOWS')
+
+    conn_str = build_connection_string('TEST', database='test_db')
+
+    assert 'Trusted_Connection=yes' in conn_str
+    assert 'DATABASE=test_db' in conn_str
+
+
+# ==============================================================================
+# KERBEROS FUNCTION TESTS
+# ==============================================================================
+
+def test_check_kerberos_status_disabled(monkeypatch):
+    """Test Kerberos status when disabled"""
+    from helpers.sqlserver import check_kerberos_status
+
+    monkeypatch.setenv('KERBEROS_ENABLED', 'false')
+
+    status = check_kerberos_status()
+
+    assert status['enabled'] == False
+    assert status['has_ticket'] == False
+    assert 'not enabled' in status['error']
+
+
+def test_check_kerberos_status_not_set(monkeypatch):
+    """Test Kerberos status when env var not set"""
+    from helpers.sqlserver import check_kerberos_status
+
+    monkeypatch.delenv('KERBEROS_ENABLED', raising=False)
+
+    status = check_kerberos_status()
+
+    assert status['enabled'] == False
+    assert 'not enabled' in status['error']
+
+
+def test_init_kerberos_missing_keytab(monkeypatch):
+    """Test init_kerberos error when keytab not specified"""
+    from helpers.sqlserver import init_kerberos
+
+    monkeypatch.delenv('KRB5_KEYTAB', raising=False)
+    monkeypatch.setenv('KRB5_PRINCIPAL', 'user@REALM')
+
+    with pytest.raises(SQLServerConfigurationError) as exc_info:
+        init_kerberos()
+
+    assert 'keytab path not specified' in str(exc_info.value)
+
+
+def test_init_kerberos_missing_principal(monkeypatch, tmp_path):
+    """Test init_kerberos error when principal not specified"""
+    from helpers.sqlserver import init_kerberos
+
+    # Create a temp keytab file
+    keytab_file = tmp_path / "test.keytab"
+    keytab_file.write_text("dummy")
+
+    monkeypatch.setenv('KRB5_KEYTAB', str(keytab_file))
+    monkeypatch.delenv('KRB5_PRINCIPAL', raising=False)
+
+    with pytest.raises(SQLServerConfigurationError) as exc_info:
+        init_kerberos()
+
+    assert 'principal not specified' in str(exc_info.value)
+
+
+def test_init_kerberos_keytab_not_found(monkeypatch):
+    """Test init_kerberos error when keytab file doesn't exist"""
+    from helpers.sqlserver import init_kerberos
+
+    monkeypatch.setenv('KRB5_KEYTAB', '/nonexistent/path/test.keytab')
+    monkeypatch.setenv('KRB5_PRINCIPAL', 'user@REALM')
+
+    with pytest.raises(SQLServerConfigurationError) as exc_info:
+        init_kerberos()
+
+    assert 'keytab file not found' in str(exc_info.value)
+
+
+def test_init_kerberos_explicit_params(monkeypatch, tmp_path):
+    """Test init_kerberos with explicit parameters (kinit not available)"""
+    from helpers.sqlserver import init_kerberos
+
+    # Create a temp keytab file
+    keytab_file = tmp_path / "test.keytab"
+    keytab_file.write_text("dummy")
+
+    # In CI/test environment, kinit is not available, so this should raise
+    with pytest.raises(SQLServerConfigurationError) as exc_info:
+        init_kerberos(str(keytab_file), 'user@REALM')
+
+    assert 'kinit command not found' in str(exc_info.value)
+
+
+# ==============================================================================
 # CONNECTION ERROR PATH TESTS
 # ==============================================================================
 

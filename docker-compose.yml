@@ -39,8 +39,20 @@ services:
       - TEAMS_NOTIFICATION_ENABLED=${TEAMS_NOTIFICATION_ENABLED:-true}
       - TEAMS_DEFAULT_DASHBOARD_URL=${TEAMS_DEFAULT_DASHBOARD_URL}
       - TEAMS_DEFAULT_JUPYTERLAB_URL=${TEAMS_DEFAULT_JUPYTERLAB_URL}
+      # Kerberos configuration for Windows Authentication
+      - KERBEROS_ENABLED=${KERBEROS_ENABLED:-false}
+      - KRB5_REALM=${KRB5_REALM:-}
+      - KRB5_KDC=${KRB5_KDC:-}
+      - KRB5_ADMIN_SERVER=${KRB5_ADMIN_SERVER:-}
+      - KRB5_PRINCIPAL=${KRB5_PRINCIPAL:-}
+      - KRB5_KEYTAB=${KRB5_KEYTAB:-/etc/krb5/svc_jupyter.keytab}
+      - KRB5_CONFIG=/etc/krb5.conf
     volumes:
       - ./workspace:${NOTEBOOK_HOME_DIR:-/home/jovyan}/workspace
+      # Kerberos configuration files (optional - only mount if files exist)
+      # Uncomment these lines when using Windows Authentication:
+      # - ./config/krb5.conf:/etc/krb5.conf:ro
+      # - ./keytabs:/etc/krb5:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,10 +60,13 @@ services:
       - irp-network
     restart: unless-stopped
     command: >
-      start-notebook.sh 
-      --NotebookApp.token='' 
-      --NotebookApp.password='' 
-      --NotebookApp.notebook_dir='${NOTEBOOK_HOME_DIR:-/home/jovyan}'   
+      bash -c "
+        /usr/local/bin/kerberos-init.sh || true;
+        start-notebook.sh
+        --NotebookApp.token=''
+        --NotebookApp.password=''
+        --NotebookApp.notebook_dir='${NOTEBOOK_HOME_DIR:-/home/jovyan}'
+      "
 
   # FastAPI Application Service
   # This service runs the IRP Dashboard FastAPI application in Docker
