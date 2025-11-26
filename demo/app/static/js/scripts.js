@@ -1,38 +1,13 @@
-// Auto-refresh functionality
-const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
-let autoRefreshTimer = null;
-
-function toggleAutoRefresh() {
-    const checkbox = document.getElementById('auto-refresh-toggle');
-    if (checkbox.checked) {
-        startAutoRefresh();
-        localStorage.setItem('autoRefresh', 'true');
-    } else {
-        stopAutoRefresh();
-        localStorage.setItem('autoRefresh', 'false');
-    }
-}
+// Auto-refresh functionality (1 minute interval, always on)
+const AUTO_REFRESH_INTERVAL = 60 * 1000; // 1 minute
 
 function startAutoRefresh() {
-    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-    autoRefreshTimer = setInterval(() => location.reload(), AUTO_REFRESH_INTERVAL);
-}
-
-function stopAutoRefresh() {
-    if (autoRefreshTimer) {
-        clearInterval(autoRefreshTimer);
-        autoRefreshTimer = null;
-    }
+    setInterval(() => location.reload(), AUTO_REFRESH_INTERVAL);
 }
 
 // Initialize auto-refresh on page load
 document.addEventListener('DOMContentLoaded', function() {
-    const savedPref = localStorage.getItem('autoRefresh');
-    const checkbox = document.getElementById('auto-refresh-toggle');
-    if (checkbox && savedPref === 'true') {
-        checkbox.checked = true;
-        startAutoRefresh();
-    }
+    startAutoRefresh();
 });
 
 function switchTab(tabName, event) {
