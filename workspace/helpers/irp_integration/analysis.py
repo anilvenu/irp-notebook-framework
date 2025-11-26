@@ -144,17 +144,17 @@ class AnalysisManager:
         return job_ids
 
     def submit_portfolio_analysis_job(
-            self,
-            edm_name: str,
-            portfolio_name: str,
-            job_name: str,
-            analysis_profile_name: str,
-            output_profile_name: str,
-            event_rate_scheme_name: str,
-            treaty_names: List[str],
-            tag_names: List[str],
-            currency: Dict[str, str] = None,
-            skip_duplicate_check: bool = False
+        self,
+        edm_name: str,
+        portfolio_name: str,
+        job_name: str,
+        analysis_profile_name: str,
+        output_profile_name: str,
+        event_rate_scheme_name: str,
+        treaty_names: List[str],
+        tag_names: List[str],
+        currency: Dict[str, str] = None,
+        skip_duplicate_check: bool = False
     ) -> int:
         """
         Submit portfolio analysis job (submits but doesn't wait).
@@ -335,63 +335,65 @@ class AnalysisManager:
                 raise IRPAPIError(
                     f"Missing analysis job data: {e}"
                 ) from e
-            
-            analysis_uris = []
-            for name in analysis_names:
-                analysis_response = self.search_analyses(filter=f"analysisName = \"{name}\"")
-                if (len(analysis_response) == 0):
-                    raise IRPAPIError(f"Analysis with this name does not exist: {name}")
-                if (len(analysis_response) > 1):
-                    raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
-                try:
-                    analysis_uris.append(analysis_response[0]['uri'])
-                except (KeyError, IndexError, TypeError) as e:
-                    raise IRPAPIError(
-                        f"Failed to extract analysis URI for analysis '{name}': {e}"
-                    ) from e
-            
-            analysis_response = self.search_analyses(filter=f"analysisName = \"{group_name}\"")
-            if (len(analysis_response) > 0):
-                raise IRPAPIError(f"Analysis Group with this name already exists: {group_name}")
 
             job_ids.append(self.submit_analysis_grouping_job(
                 group_name=group_name,
-                analysis_uris=analysis_uris
+                analysis_names=analysis_names
             ))
 
         return job_ids
 
 
     def submit_analysis_grouping_job(
-            self,
-            group_name: str,
-            analysis_uris: List[str],
-            simulate_to_plt: bool = True,
-            num_simulations: int = 50000,
-            propagate_detailed_losses: bool = False,
-            reporting_window_start: str = "01/01/2021",
-            simulation_window_start: str = "01/01/2021",
-            simulation_window_end: str = "12/31/2021",
-            region_peril_simulation_set: List[Dict[str, Any]] = None,
-            description: str = "",
-            currency: Dict[str, str] = None
+        self,
+        group_name: str,
+        analysis_names: List[str],
+        simulate_to_plt: bool = True,
+        num_simulations: int = 50000,
+        propagate_detailed_losses: bool = False,
+        reporting_window_start: str = "01/01/2021",
+        simulation_window_start: str = "01/01/2021",
+        simulation_window_end: str = "12/31/2021",
+        region_peril_simulation_set: List[Dict[str, Any]] = None,
+        description: str = "",
+        currency: Dict[str, str] = None
     ) -> int:
         """
         Submit analysis grouping job.
 
         Args:
             group_name: Name for analysis group
-            analysis_uris: List of analysis URIs to include in the group
+            analysis_names: List of analysis names to include in the group
 
         Returns:
             Analysis group job ID
 
         Raises:
             IRPValidationError: If inputs are invalid
-            IRPAPIError: If request fails
+            IRPAPIError: If request fails or analysis names not found
         """
         validate_non_empty_string(group_name, "group_name")
-        validate_list_not_empty(analysis_uris, "analysis_uris")
+        validate_list_not_empty(analysis_names, "analysis_names")
+
+        # Check if analysis group with this name already exists
+        analysis_response = self.search_analyses(filter=f"analysisName = \"{group_name}\"")
+        if len(analysis_response) > 0:
+            raise IRPAPIError(f"Analysis Group with this name already exists: {group_name}")
+
+        # Resolve analysis names to URIs
+        analysis_uris = []
+        for name in analysis_names:
+            analysis_response = self.search_analyses(filter=f"analysisName = \"{name}\"")
+            if len(analysis_response) == 0:
+                raise IRPAPIError(f"Analysis with this name does not exist: {name}")
+            if len(analysis_response) > 1:
+                raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
+            try:
+                analysis_uris.append(analysis_response[0]['uri'])
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract analysis URI for analysis '{name}': {e}"
+                ) from e
 
         if currency is None:
             currency = build_analysis_currency_dict()

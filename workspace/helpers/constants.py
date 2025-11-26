@@ -163,6 +163,7 @@ class BatchType:
     PORTFOLIO_MAPPING = 'Portfolio Mapping'
     ANALYSIS = 'Analysis'
     GROUPING = 'Grouping'
+    GROUPING_ROLLUP = 'Grouping Rollup'
     EXPORT_TO_RDM = 'Export to RDM'
     STAGING_ETL = 'Staging ETL'
     # Test-only batch types
@@ -184,6 +185,7 @@ class BatchType:
         PORTFOLIO_MAPPING: SYNCHRONOUS,
         ANALYSIS: ASYNCHRONOUS,
         GROUPING: ASYNCHRONOUS,
+        GROUPING_ROLLUP: ASYNCHRONOUS,
         EXPORT_TO_RDM: ASYNCHRONOUS,
         STAGING_ETL: ASYNCHRONOUS,
         # Test-only

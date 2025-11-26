@@ -210,6 +210,16 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_analysis_job(
                 job_id, job_config, irp_client
             )
+        elif batch_type == BatchType.GROUPING:
+            workflow_id, request_json, response_json = _submit_grouping_job(
+                job_id, job_config, irp_client
+            )
+        elif batch_type == BatchType.GROUPING_ROLLUP:
+            # Rollup groups use the same submission logic as regular grouping
+            # The items list can contain group names (not just analysis names)
+            workflow_id, request_json, response_json = _submit_grouping_job(
+                job_id, job_config, irp_client
+            )
         # Add more batch types as needed
 
         return workflow_id, request_json, response_json
@@ -889,6 +899,75 @@ def _submit_analysis_job(
     return workflow_id, request_json, response_json
 
 
+def _submit_grouping_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Submit Grouping job to Moody's API.
+
+    Extracts grouping configuration from job_config and submits
+    the grouping job using the analysis manager.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data containing:
+            - Group_Name: Name for the analysis group
+            - items: List of analysis names to include in the group
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+
+    Raises:
+        ValueError: If required fields are missing
+        JobError: If submission fails
+    """
+    # Extract required fields
+    group_name = job_config.get('Group_Name')
+    analysis_names = job_config.get('items', [])
+
+    # Validate required fields
+    if not group_name:
+        raise ValueError("Missing required field: Group_Name")
+    if not analysis_names:
+        raise ValueError("Missing required field: items (analysis names)")
+
+    # Submit grouping job
+    try:
+        moody_job_id = client.analysis.submit_analysis_grouping_job(
+            group_name=group_name,
+            analysis_names=analysis_names
+        )
+    except Exception as e:
+        raise JobError(f"Failed to submit grouping job: {str(e)}")
+
+    # Build workflow ID
+    workflow_id = str(moody_job_id)
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.GROUPING,
+        'configuration': job_config,
+        'api_request': {
+            'group_name': group_name,
+            'analysis_names': analysis_names
+        },
+        'submitted_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': workflow_id,
+        'moody_job_id': moody_job_id,
+        'status': 'ACCEPTED',
+        'message': f'Grouping job "{group_name}" submitted successfully with {len(analysis_names)} analyses'
+    }
+
+    return workflow_id, request_json, response_json
+
+
 def _register_job_submission(
     job_id: int,
     workflow_id: str,
@@ -1468,6 +1547,11 @@ def track_job_status(
             job_data = irp_client.portfolio.get_geohaz_job(int(workflow_id))
         elif batch_type == BatchType.ANALYSIS:
             job_data = irp_client.analysis.get_analysis_job(int(workflow_id))
+        elif batch_type == BatchType.GROUPING:
+            job_data = irp_client.analysis.get_analysis_grouping_job(int(workflow_id))
+        elif batch_type == BatchType.GROUPING_ROLLUP:
+            # Rollup groups use the same tracking API as regular grouping
+            job_data = irp_client.analysis.get_analysis_grouping_job(int(workflow_id))
         else:
             raise ValueError(f"Invalid batch type for tracking: {batch_type}")
 
