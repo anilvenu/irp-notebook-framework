@@ -4,24 +4,18 @@
 
 Add Windows Authentication (Kerberos) support to the JupyterLab Docker container for SQL Server connections, while maintaining backward compatibility with existing SQL Server native authentication.
 
-## Status
-
-- **Code Changes**: ✅ Complete (all code implemented and committed)
-- **Dev Environment**: ✅ Complete (Hyper-V lab working with Kerberos authentication)
-
 ---
-
 ## Development Environment Setup
 
 ### Hyper-V Lab Architecture (Single VM)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Windows 11 Pro Host                                                     │
-│                                                                          │
+│  Windows 11 Pro Host                                                    │
+│                                                                         │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │  Hyper-V Internal Network: IRP-Lab-Network (192.168.100.0/24)   │    │
-│  │                                                                  │    │
+│  │                                                                 │    │
 │  │  ┌─────────────────────────────────────────┐                    │    │
 │  │  │ IRP-ADLAB01                             │                    │    │
 │  │  │ Windows Server 2022 Evaluation          │                    │    │
@@ -30,20 +24,20 @@ Add Windows Authentication (Kerberos) support to the JupyterLab Docker container
 │  │  │ - SQL Server (on same VM)               │                    │    │
 │  │  └─────────────────────────────────────────┘                    │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
-│                           ↑                                              │
-│                    Port Forwarding                                       │
-│                    (netsh portproxy)                                     │
-│                    Port 88 (Kerberos)                                    │
-│                    Port 1433 (SQL Server)                                │
-│                           ↑                                              │
+│                           ↑                                             │
+│                    Port Forwarding                                      │
+│                    (netsh portproxy)                                    │
+│                    Port 88 (Kerberos)                                   │
+│                    Port 1433 (SQL Server)                               │
+│                           ↑                                             │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │  Docker Desktop (WSL2) - Network: 172.18.0.x                    │    │
-│  │                                                                  │    │
+│  │                                                                 │    │
 │  │  ┌─────────────────────────────────────────────────────┐        │    │
-│  │  │ irp-notebook container                               │        │    │
-│  │  │ - krb5.conf uses host.docker.internal as KDC         │        │    │
-│  │  │ - extra_hosts maps irp-adlab01 → host-gateway        │        │    │
-│  │  │ - keytab for svc_jupyter@IRPLAB.LOCAL                │        │    │
+│  │  │ irp-notebook container                               │       │    │
+│  │  │ - krb5.conf uses host.docker.internal as KDC         │       │    │
+│  │  │ - extra_hosts maps irp-adlab01 → host-gateway        │       │    │
+│  │  │ - keytab for svc_jupyter@IRPLAB.LOCAL                │       │    │
 │  │  └─────────────────────────────────────────────────────┘        │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -103,7 +97,7 @@ Get-NetNat
 1. Go to: https://www.microsoft.com/en-us/evalcenter/evaluate-windows-server-2022
 2. Fill out the registration form
 3. Select **ISO** download, **64-bit edition**, **English**
-4. Save to `C:\ISO\WindowsServer2022.iso` (or note the download location)
+4. Save to `C:\ISO\WindowsServer2022.iso` (note the real download location)
 
 ---
 
@@ -286,32 +280,10 @@ ktpass -princ svc_jupyter@IRPLAB.LOCAL `
 
 Transfer the keytab file from the VM to your project's `keytabs/` directory.
 
-**Option 1: Enhanced Session Mode (Easiest)**
-1. In Hyper-V Manager, connect to VM and enable Enhanced Session Mode
-2. In the VM, open File Explorer and navigate to `C:\keytabs\`
-3. Right-click `svc_jupyter.keytab` → Copy
-4. In your Windows host, navigate to the project's `keytabs\` folder
-5. Paste the file
-
-**Option 2: Network Share**
-1. In the VM, right-click `C:\keytabs` → Properties → Sharing → Share
-2. From Windows host: `copy \\192.168.100.10\keytabs\svc_jupyter.keytab .\keytabs\`
-
-**Option 3: PowerShell Remoting**
-```powershell
-# Enable remoting on VM first (run in VM):
-Enable-PSRemoting -Force
-
-# Then from Windows host:
-$session = New-PSSession -ComputerName 192.168.100.10 -Credential (Get-Credential)
-Copy-Item -FromSession $session -Path "C:\keytabs\svc_jupyter.keytab" -Destination ".\keytabs\"
-```
-
-**Verify the keytab exists:**
-```bash
-ls -la keytabs/
-# Should show: svc_jupyter.keytab
-```
+1. In the VM, open File Explorer and navigate to `C:\keytabs\`
+2. Right-click `svc_jupyter.keytab` → Copy
+3. In your Windows host, navigate to the project's `keytabs\` folder
+4. Paste the file
 
 ---
 
@@ -336,10 +308,6 @@ KRB5_REALM=IRPLAB.LOCAL
 KRB5_KDC=irp-adlab01.irplab.local
 KRB5_PRINCIPAL=svc_jupyter@IRPLAB.LOCAL
 KRB5_KEYTAB=/etc/krb5/svc_jupyter.keytab
-
-# Use Windows auth for a connection
-MSSQL_LAB_AUTH_TYPE=WINDOWS
-MSSQL_LAB_SERVER=irp-adlab01.irplab.local
 ```
 
 ### Network Bridge: Docker to Hyper-V VM
@@ -451,19 +419,18 @@ print(df)
 
 ## Code Changes Summary
 
-All code changes have been implemented:
 
-| File | Status | Changes |
-|------|--------|---------|
-| `workspace/helpers/sqlserver.py` | ✅ | AUTH_TYPE support, Trusted_Connection, Kerberos helpers |
-| `Dockerfile.jupyter` | ✅ | krb5-user, libkrb5-3, libgssapi-krb5-2 packages |
-| `scripts/kerberos-init.sh` | ✅ | Container startup Kerberos initialization |
-| `docker-compose.yml` | ✅ | Kerberos env vars and volume mounts |
-| `config/krb5.conf.example` | ✅ | Kerberos configuration template |
-| `.env.example` | ✅ | Kerberos configuration documentation |
-| `workspace/tests/test_sqlserver.py` | ✅ | Auth type and Kerberos tests |
-| `keytabs/.gitkeep` | ✅ | Keytab directory (gitignored) |
-| `.gitignore` | ✅ | Exclude keytabs and krb5.conf |
+| File | Changes |
+|------|---------|
+| `workspace/helpers/sqlserver.py` | AUTH_TYPE support, Trusted_Connection, Kerberos helpers |
+| `Dockerfile.jupyter` | krb5-user, libkrb5-3, libgssapi-krb5-2 packages |
+| `scripts/kerberos-init.sh` | Container startup Kerberos initialization |
+| `docker-compose.yml` | Kerberos env vars and volume mounts |
+| `config/krb5.conf.example` | Kerberos configuration template |
+| `.env.example` | Kerberos configuration documentation |
+| `workspace/tests/test_sqlserver.py` | Auth type and Kerberos tests |
+| `keytabs/.gitkeep` | Keytab directory (gitignored) |
+| `.gitignore` | Exclude keytabs and krb5.conf |
 
 ---
 
