@@ -206,7 +206,7 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_portfolio_mapping_job(
                 job_id, job_config, irp_client
             )
-        elif batch_type == 'Analysis':
+        elif batch_type == BatchType.ANALYSIS:
             workflow_id, request_json, response_json = _submit_analysis_job(
                 job_id, job_config, irp_client
             )
@@ -784,17 +784,109 @@ def _submit_analysis_job(
     """
     Submit Analysis job to Moody's API.
 
-    TODO: Implement analysis submission logic.
+    Extracts analysis configuration from job_config and submits
+    the analysis job using the analysis manager.
 
     Args:
         job_id: Job ID
-        job_config: Job configuration data
+        job_config: Job configuration data containing:
+            - Database: EDM name
+            - Portfolio: Portfolio name
+            - Analysis Name: Name for the analysis job
+            - Analysis Profile: Model profile name
+            - Output Profile: Output profile name
+            - Event Rate: Event rate scheme name
+            - Reinsurance Treaty 1-5: Optional treaty names
+            - Tag 1-5: Optional tag names
         client: IRPClient instance
 
     Returns:
         Tuple of (workflow_id, request_json, response_json)
+
+    Raises:
+        ValueError: If required fields are missing
+        JobError: If submission fails
     """
-    raise NotImplementedError("Analysis job submission not yet implemented")
+    # Extract required fields
+    edm_name = job_config.get('Database')
+    portfolio_name = job_config.get('Portfolio')
+    analysis_name = job_config.get('Analysis Name')
+    analysis_profile = job_config.get('Analysis Profile')
+    output_profile = job_config.get('Output Profile')
+    event_rate = job_config.get('Event Rate')
+
+    # Validate required fields
+    if not edm_name:
+        raise ValueError("Missing required field: Database")
+    if not portfolio_name:
+        raise ValueError("Missing required field: Portfolio")
+    if not analysis_name:
+        raise ValueError("Missing required field: Analysis Name")
+    if not analysis_profile:
+        raise ValueError("Missing required field: Analysis Profile")
+    if not output_profile:
+        raise ValueError("Missing required field: Output Profile")
+    if not event_rate:
+        raise ValueError("Missing required field: Event Rate")
+
+    # Extract treaty names (up to 5)
+    treaty_names = []
+    for i in range(1, 6):
+        treaty = job_config.get(f'Reinsurance Treaty {i}')
+        if treaty:
+            treaty_names.append(treaty)
+
+    # Extract tag names (up to 5)
+    tag_names = []
+    for i in range(1, 6):
+        tag = job_config.get(f'Tag {i}')
+        if tag:
+            tag_names.append(tag)
+
+    # Submit analysis job
+    try:
+        moody_job_id = client.analysis.submit_portfolio_analysis_job(
+            edm_name=edm_name,
+            portfolio_name=portfolio_name,
+            job_name=analysis_name,
+            analysis_profile_name=analysis_profile,
+            output_profile_name=output_profile,
+            event_rate_scheme_name=event_rate,
+            treaty_names=treaty_names,
+            tag_names=tag_names
+        )
+    except Exception as e:
+        raise JobError(f"Failed to submit analysis job: {str(e)}")
+
+    # Build workflow ID
+    workflow_id = str(moody_job_id)
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.ANALYSIS,
+        'configuration': job_config,
+        'api_request': {
+            'edm_name': edm_name,
+            'portfolio_name': portfolio_name,
+            'analysis_name': analysis_name,
+            'analysis_profile': analysis_profile,
+            'output_profile': output_profile,
+            'event_rate': event_rate,
+            'treaty_names': treaty_names,
+            'tag_names': tag_names
+        },
+        'submitted_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': workflow_id,
+        'moody_job_id': moody_job_id,
+        'status': 'ACCEPTED',
+        'message': f'Analysis job "{analysis_name}" submitted successfully for portfolio "{portfolio_name}"'
+    }
+
+    return workflow_id, request_json, response_json
 
 
 def _register_job_submission(
@@ -1374,6 +1466,8 @@ def track_job_status(
             job_data = irp_client.client.get_workflow(int(workflow_id))
         elif batch_type == BatchType.GEOHAZ:
             job_data = irp_client.portfolio.get_geohaz_job(int(workflow_id))
+        elif batch_type == BatchType.ANALYSIS:
+            job_data = irp_client.analysis.get_analysis_job(int(workflow_id))
         else:
             raise ValueError(f"Invalid batch type for tracking: {batch_type}")
 

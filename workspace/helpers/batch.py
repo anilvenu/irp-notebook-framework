@@ -636,27 +636,32 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
     Logic:
     1. Get all non-skipped job configurations
     2. Get all non-skipped jobs
-    3. Determine batch status:
-       - CANCELLED: All jobs are CANCELLED
-       - FAILED: At least one job is FAILED
-       - ERROR: At least one job is ERROR (TODO)
-       - COMPLETED: All configs have at least one FINISHED job OR skipped job
-       - ACTIVE: Otherwise
-    4. Create recon log entry with detailed summary
-    5. Update batch status
+    3. Check if all jobs are in terminal states (FINISHED, FAILED, CANCELLED, ERROR)
+    4. Determine batch status:
+       - If jobs still in progress: ACTIVE (continue polling)
+       - If all jobs terminal:
+         - CANCELLED: All jobs are CANCELLED
+         - ERROR: At least one job is ERROR
+         - FAILED: At least one job is FAILED (but not all cancelled)
+         - COMPLETED: All configs have at least one FINISHED job
+    5. Create recon log entry with detailed summary
+    6. Update batch status
 
     Args:
         batch_id: Batch ID
         schema: Database schema
 
     Returns:
-        New batch status (CANCELLED, FAILED, COMPLETED, or ACTIVE)
+        New batch status (CANCELLED, FAILED, ERROR, COMPLETED, or ACTIVE)
 
     Raises:
         BatchError: If batch not found
     """
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise BatchError(f"Invalid batch_id: {batch_id}")
+
+    # Terminal job statuses - jobs that won't change status anymore
+    TERMINAL_JOB_STATUSES = [JobStatus.FINISHED, JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.ERROR]
 
     # Get all job configurations (including skipped for counting)
     all_configs = get_batch_job_configurations(batch_id, schema=schema)
@@ -683,44 +688,57 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
     unfulfilled_configs = 0
     unfulfilled_config_ids = []
 
-    # Check for all CANCELLED (only if there are non-skipped jobs)
-    if non_skipped_jobs and all(j['status'] == JobStatus.CANCELLED for j in non_skipped_jobs):
-        recon_result = BatchStatus.CANCELLED
+    # Group jobs by configuration (needed for config fulfillment check)
+    jobs_by_config = {}
+    for job in all_jobs:
+        config_id = job['job_configuration_id']
+        if config_id not in jobs_by_config:
+            jobs_by_config[config_id] = []
+        jobs_by_config[config_id].append(job)
 
-    # Check for any ERROR
-    elif any(j['status'] == JobStatus.ERROR for j in non_skipped_jobs):
-        recon_result = BatchStatus.ERROR
+    # Check each non-skipped config has at least one successful job
+    for config in non_skipped_configs:
+        config_jobs = jobs_by_config.get(config['id'], [])
+        has_success = config_jobs and any(
+            j['status'] in [JobStatus.FINISHED]
+            for j in config_jobs
+        )
+        if has_success:
+            fulfilled_configs += 1
+        else:
+            unfulfilled_configs += 1
+            unfulfilled_config_ids.append(config['id'])
 
-    # Check for any FAILED
-    elif any(j['status'] == JobStatus.FAILED for j in non_skipped_jobs):
-        recon_result = BatchStatus.FAILED
+    # First, check if all non-skipped jobs are in terminal states
+    # If any job is still in progress, batch remains ACTIVE
+    all_jobs_terminal = non_skipped_jobs and all(
+        j['status'] in TERMINAL_JOB_STATUSES for j in non_skipped_jobs
+    )
 
+    if not all_jobs_terminal:
+        # Jobs still in progress (or no non-skipped jobs) - batch remains ACTIVE
+        recon_result = BatchStatus.ACTIVE
     else:
-        # Check if all configs are fulfilled
-        # Group jobs by configuration
-        jobs_by_config = {}
-        for job in all_jobs:
-            config_id = job['job_configuration_id']
-            if config_id not in jobs_by_config:
-                jobs_by_config[config_id] = []
-            jobs_by_config[config_id].append(job)
+        # All jobs are in terminal states - determine final batch status
 
-        # Check each non-skipped config has at least one successful job
-        for config in non_skipped_configs:
-            config_jobs = jobs_by_config.get(config['id'], [])
-            has_success = config_jobs and any(
-                j['status'] in [JobStatus.FINISHED]
-                for j in config_jobs
-            )
-            if has_success:
-                fulfilled_configs += 1
-            else:
-                unfulfilled_configs += 1
-                unfulfilled_config_ids.append(config['id'])
+        # Check for all CANCELLED
+        if all(j['status'] == JobStatus.CANCELLED for j in non_skipped_jobs):
+            recon_result = BatchStatus.CANCELLED
 
-        if unfulfilled_configs == 0 and len(non_skipped_configs) > 0:
+        # Check for any ERROR
+        elif any(j['status'] == JobStatus.ERROR for j in non_skipped_jobs):
+            recon_result = BatchStatus.ERROR
+
+        # Check for any FAILED
+        elif any(j['status'] == JobStatus.FAILED for j in non_skipped_jobs):
+            recon_result = BatchStatus.FAILED
+
+        # All jobs finished successfully - check config fulfillment
+        elif unfulfilled_configs == 0 and len(non_skipped_configs) > 0:
             recon_result = BatchStatus.COMPLETED
         else:
+            # This shouldn't happen if all jobs are terminal and none failed
+            # But keep as safety fallback
             recon_result = BatchStatus.ACTIVE
 
     # Build recon summary

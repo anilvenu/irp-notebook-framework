@@ -116,122 +116,134 @@ class AnalysisManager:
         """
         validate_list_not_empty(analysis_data_list, "analysis_data_list")
 
+        # Pre-validate that no analysis names already exist
         analysis_names = list(a['job_name'] for a in analysis_data_list)
         for name in analysis_names:
             analysis_response = self.search_analyses(filter=f"analysisName = \"{name}\"")
-            if (len(analysis_response) > 0):
+            if len(analysis_response) > 0:
                 raise IRPAPIError(f"Analysis with this name already exists: {name}")
-
 
         job_ids = []
         for analysis_data in analysis_data_list:
             try:
-                edm_name = analysis_data['edm_name']
-                portfolio_name = analysis_data['portfolio_name']
-                job_name = analysis_data['job_name']
-                analysis_profile_name = analysis_data['analysis_profile_name']
-                output_profile_name = analysis_data['output_profile_name']
-                event_rate_scheme_name = analysis_data['event_rate_scheme_name']
-                treaty_names = analysis_data['treaty_names']
-                tag_names = analysis_data['tag_names']
-            except (KeyError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Missing analysis job data: {e}"
-                ) from e
-            
-            edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
-            if (len(edms) != 1):
-                raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
-            try:
-                exposure_id = edms[0]['exposureId']
-            except (KeyError, IndexError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
-                ) from e
-
-            portfolios = self.portfolio_manager.search_portfolios(exposure_id=exposure_id, filter=f"portfolioName=\"{portfolio_name}\"")
-            if (len(portfolios) != 1):
-                raise IRPAPIError(f"Expected 1 portfolio with name {portfolio_name}, found {len(portfolios)}")
-            try:
-                portfolio_uri = portfolios[0]['uri']
-            except (KeyError, IndexError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract portfolio URI for portfolio '{portfolio_name}': {e}"
-                ) from e
-
-            job_ids.append(self.submit_portfolio_analysis_job(
-                exposure_id=exposure_id,
-                job_name=job_name,
-                portfolio_uri=portfolio_uri,
-                analysis_profile_name=analysis_profile_name,
-                output_profile_name=output_profile_name,
-                event_rate_scheme_name=event_rate_scheme_name,
-                treaty_names=treaty_names,
-                tag_names=tag_names
-            ))
+                job_id = self.submit_portfolio_analysis_job(
+                    edm_name=analysis_data['edm_name'],
+                    portfolio_name=analysis_data['portfolio_name'],
+                    job_name=analysis_data['job_name'],
+                    analysis_profile_name=analysis_data['analysis_profile_name'],
+                    output_profile_name=analysis_data['output_profile_name'],
+                    event_rate_scheme_name=analysis_data['event_rate_scheme_name'],
+                    treaty_names=analysis_data['treaty_names'],
+                    tag_names=analysis_data['tag_names'],
+                    skip_duplicate_check=True  # Already validated above
+                )
+                job_ids.append(job_id)
+            except KeyError as e:
+                raise IRPAPIError(f"Missing analysis job data: {e}") from e
 
         return job_ids
 
-    
     def submit_portfolio_analysis_job(
             self,
-            exposure_id: int,
+            edm_name: str,
+            portfolio_name: str,
             job_name: str,
-            portfolio_uri: str,
             analysis_profile_name: str,
             output_profile_name: str,
             event_rate_scheme_name: str,
             treaty_names: List[str],
             tag_names: List[str],
-            currency: Dict[str, str] = None
+            currency: Dict[str, str] = None,
+            skip_duplicate_check: bool = False
     ) -> int:
         """
         Submit portfolio analysis job (submits but doesn't wait).
 
         Args:
-            job_name: Name for analysis job
-            portfolio_uri: URI of the portfolio to analyze
-            analysis_profile_name: Model profile ID
-            output_profile_name: Output profile ID
-            event_rate_scheme_id: Event rate scheme ID
-            treaty_ids: List of treaty IDs
-            tag_ids: List of tag IDs
+            edm_name: Name of the EDM (exposure database)
+            portfolio_name: Name of the portfolio to analyze
+            job_name: Name for analysis job (must be unique)
+            analysis_profile_name: Model profile name
+            output_profile_name: Output profile name
+            event_rate_scheme_name: Event rate scheme name
+            treaty_names: List of treaty names to apply
+            tag_names: List of tag names to apply
+            currency: Optional currency configuration
+            skip_duplicate_check: Skip checking if analysis name already exists (for batch operations)
 
         Returns:
-            Workflow ID
+            Workflow ID (Moody's job ID)
 
         Raises:
             IRPValidationError: If inputs are invalid
-            IRPAPIError: If request fails
+            IRPAPIError: If request fails or EDM/portfolio not found
         """
+        validate_non_empty_string(edm_name, "edm_name")
+        validate_non_empty_string(portfolio_name, "portfolio_name")
         validate_non_empty_string(job_name, "job_name")
-        validate_non_empty_string(portfolio_uri, "portfolio_uri")
         validate_non_empty_string(analysis_profile_name, "analysis_profile_name")
         validate_non_empty_string(output_profile_name, "output_profile_name")
-        validate_non_empty_string(event_rate_scheme_name, "job_nevent_rate_scheme_nameame")
+        validate_non_empty_string(event_rate_scheme_name, "event_rate_scheme_name")
 
+        # Check if analysis name already exists (unless skipped for batch operations)
+        if not skip_duplicate_check:
+            analysis_response = self.search_analyses(filter=f"analysisName = \"{job_name}\"")
+            if len(analysis_response) > 0:
+                raise IRPAPIError(f"Analysis with this name already exists: {job_name}")
+
+        # Look up EDM to get exposure_id
+        edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
+        if len(edms) != 1:
+            raise IRPAPIError(f"Expected 1 EDM with name {edm_name}, found {len(edms)}")
         try:
-            quoted = ", ".join(json.dumps(s) for s in treaty_names)
-            filter_statement = f"treatyName IN ({quoted})"
-            treaties_response = self.treaty_manager.search_treaties(
-                exposure_id=exposure_id, 
-                filter=filter_statement
-            )
-        except Exception as e:
-            raise IRPAPIError(f"Failed to search treaties with names {treaty_names} : {e}")
-        
-        if (len(treaties_response) != len(treaty_names)):
-            raise IRPAPIError(f"Expected {len(treaty_names)} treaties, found {len(treaties_response)}")
-        try:
-            treaty_ids = [treaty['treatyId'] for treaty in treaties_response]
-        except (KeyError, TypeError) as e:
+            exposure_id = edms[0]['exposureId']
+        except (KeyError, IndexError, TypeError) as e:
             raise IRPAPIError(
-                f"Failed to extract treaty IDs from treaty search response: {e}"
+                f"Failed to extract exposure ID for EDM '{edm_name}': {e}"
             ) from e
 
+        # Look up portfolio to get portfolio_uri
+        portfolios = self.portfolio_manager.search_portfolios(
+            exposure_id=exposure_id,
+            filter=f"portfolioName=\"{portfolio_name}\""
+        )
+        if len(portfolios) != 1:
+            raise IRPAPIError(f"Expected 1 portfolio with name {portfolio_name}, found {len(portfolios)}")
+        try:
+            portfolio_uri = portfolios[0]['uri']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract portfolio URI for portfolio '{portfolio_name}': {e}"
+            ) from e
+
+        # Look up treaties by name
+        if treaty_names:
+            try:
+                quoted = ", ".join(json.dumps(s) for s in treaty_names)
+                filter_statement = f"treatyName IN ({quoted})"
+                treaties_response = self.treaty_manager.search_treaties(
+                    exposure_id=exposure_id,
+                    filter=filter_statement
+                )
+            except Exception as e:
+                raise IRPAPIError(f"Failed to search treaties with names {treaty_names}: {e}")
+
+            if len(treaties_response) != len(treaty_names):
+                raise IRPAPIError(f"Expected {len(treaty_names)} treaties, found {len(treaties_response)}")
+            try:
+                treaty_ids = [treaty['treatyId'] for treaty in treaties_response]
+            except (KeyError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract treaty IDs from treaty search response: {e}"
+                ) from e
+        else:
+            treaty_ids = []
+
+        # Look up reference data
         model_profile_response = self.reference_data_manager.get_model_profile_by_name(analysis_profile_name)
         output_profile_response = self.reference_data_manager.get_output_profile_by_name(output_profile_name)
         event_rate_scheme_response = self.reference_data_manager.get_event_rate_scheme_by_name(event_rate_scheme_name)
+
         if model_profile_response.get('count', 0) == 0:
             raise IRPReferenceDataError(f"Analysis profile '{analysis_profile_name}' not found")
         if len(output_profile_response) == 0:
@@ -264,10 +276,11 @@ class AnalysisManager:
                 f"Failed to extract event rate scheme ID for '{event_rate_scheme_name}': {e}"
             ) from e
 
+        # Look up tag IDs
         try:
             tag_ids = self.reference_data_manager.get_tag_ids_from_tag_names(tag_names)
         except IRPAPIError as e:
-            raise IRPAPIError(f"Failed to get tag ids for tag names {tag_names} : {e}")
+            raise IRPAPIError(f"Failed to get tag ids for tag names {tag_names}: {e}")
 
         if currency is None:
             currency = build_analysis_currency_dict()
@@ -292,7 +305,7 @@ class AnalysisManager:
             job_id = extract_id_from_location_header(response, "analysis job submission")
             return int(job_id)
         except Exception as e:
-            raise IRPAPIError(f"Failed to submit analysis job '{job_name}' for portfolio {portfolio_uri}: {e}")
+            raise IRPAPIError(f"Failed to submit analysis job '{job_name}' for portfolio {portfolio_name}: {e}")
 
 
     def submit_analysis_grouping_jobs(self, grouping_data_list: List[Dict[str, Any]]) -> List[int]:

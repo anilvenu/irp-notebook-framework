@@ -270,7 +270,11 @@ def test_configuration_override_workflow(test_schema, mock_irp_client):
 @pytest.mark.database
 @pytest.mark.e2e
 def test_mixed_job_states_recon(test_schema, mock_irp_client):
-    """Test batch reconciliation with mixed job states"""
+    """Test batch reconciliation with mixed job states.
+
+    Batch stays ACTIVE while any job is still in progress.
+    Only transitions to FAILED when all jobs are in terminal states.
+    """
     # Create config with multiple jobs
     config_data = {
         'jobs': [
@@ -289,7 +293,7 @@ def test_mixed_job_states_recon(test_schema, mock_irp_client):
 
     jobs = get_batch_jobs(batch_id, schema=test_schema)
 
-    # Set jobs to different states
+    # Set jobs to different states - one still RUNNING
     update_job_status(jobs[0]['id'], JobStatus.FINISHED, schema=test_schema)
     update_job_status(jobs[1]['id'], JobStatus.FINISHED, schema=test_schema)
     update_job_status(jobs[2]['id'], JobStatus.RUNNING, schema=test_schema)
@@ -299,7 +303,17 @@ def test_mixed_job_states_recon(test_schema, mock_irp_client):
     # Reconcile batch
     result_status = recon_batch(batch_id, schema=test_schema)
 
-    # With FAILED jobs, batch should be FAILED
+    # With a RUNNING job, batch should stay ACTIVE (even though one job failed)
+    # This allows continued polling until all jobs reach terminal state
+    assert result_status == BatchStatus.ACTIVE
+
+    # Now complete the running job
+    update_job_status(jobs[2]['id'], JobStatus.FINISHED, schema=test_schema)
+
+    # Reconcile again - now all jobs are terminal
+    result_status = recon_batch(batch_id, schema=test_schema)
+
+    # Now with all jobs terminal and one FAILED, batch should be FAILED
     assert result_status == BatchStatus.FAILED
 
     # Verify recon summary
