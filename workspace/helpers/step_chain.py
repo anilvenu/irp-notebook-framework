@@ -87,7 +87,7 @@ STAGE_04_CHAIN = {
 }
 
 # Stage 05 Step Chain Configuration
-# Grouping → Grouping Rollup chaining
+# Grouping → Grouping Rollup → Grouping Summary chaining
 # Rollup groups (groups of groups) can only be created AFTER base groups exist
 STAGE_05_CHAIN = {
     1: {
@@ -97,10 +97,16 @@ STAGE_05_CHAIN = {
         'description': 'Group Analysis Results → Group Rollup'
     },
     2: {
-        'next_step': None,  # Final step in Stage 05 (for now)
+        'next_step': 3,
         'batch_type': 'Grouping Rollup',
-        'wait_for': BatchStatus.COMPLETED,
-        'description': 'Group Rollup (Final Step)'
+        'wait_for': [BatchStatus.COMPLETED, BatchStatus.FAILED],  # Chain on success OR failure
+        'description': 'Group Rollup → Grouping Summary'
+    },
+    3: {
+        'next_step': None,  # Final step in Stage 05
+        'batch_type': None,
+        'wait_for': None,
+        'description': 'Grouping Summary (Final Step)'
     }
 }
 
@@ -311,7 +317,8 @@ def _build_notebook_path(cycle_name: str, stage_num: int, step_num: int) -> Path
         },
         5: {
             1: 'Group_Analysis_Results.ipynb',
-            2: 'Group_Rollup.ipynb'
+            2: 'Group_Rollup.ipynb',
+            3: 'Grouping_Summary.ipynb'
         }
     }
 
