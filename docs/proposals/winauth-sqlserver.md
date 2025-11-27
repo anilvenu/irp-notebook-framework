@@ -580,6 +580,63 @@ docker-compose up -d jupyter
 - Fix with: `sed -i 's/\r$//' scripts/kerberos-init.sh`
 - Then rebuild: `docker-compose build --no-cache jupyter`
 
+### Kerberos Ticket Expiration
+
+**"Ticket expired" error after idle period**:
+
+Kerberos tickets have a finite lifetime (typically 10 hours by default). This is a security feature, not a bug. If you leave the container idle overnight, the ticket will expire.
+
+**Automatic Renewal (Built-in)**:
+
+The `sqlserver.py` module automatically checks and renews tickets before each Windows Authentication connection. This happens transparently - you don't need to do anything. The module:
+1. Checks if the ticket is valid and has at least 5 minutes remaining
+2. If expired or expiring soon, renews using the keytab file
+3. Proceeds with the connection
+
+**Manual Renewal** (if needed):
+
+```bash
+# From host machine
+docker exec irp-notebook kinit -kt /etc/krb5/svc_jupyter.keytab svc_jupyter@IRPLAB.LOCAL
+
+# Or restart the container (runs kerberos-init.sh on startup)
+docker-compose restart jupyter
+```
+
+**Check Ticket Status**:
+
+```python
+from helpers.sqlserver import check_kerberos_status
+
+status = check_kerberos_status()
+print(f"Has valid ticket: {status['has_ticket']}")
+print(f"Principal: {status['principal']}")
+print(f"Expires: {status['expiration']}")
+```
+
+**Manually Ensure Valid Ticket**:
+
+```python
+from helpers.sqlserver import ensure_valid_kerberos_ticket
+
+# Check and renew if needed
+if ensure_valid_kerberos_ticket():
+    print("Ticket is valid (or was renewed)")
+else:
+    print("Failed to get valid ticket")
+```
+
+**Ticket Lifetime Configuration**:
+
+The default ticket lifetime is set by Active Directory (typically 10 hours). To increase it:
+- On the Domain Controller, open "Active Directory Users and Computers"
+- Right-click the domain → Properties → Group Policy
+- Edit the Default Domain Policy
+- Navigate to: Computer Configuration → Policies → Windows Settings → Security Settings → Account Policies → Kerberos Policy
+- Modify "Maximum lifetime for user ticket" (default: 10 hours)
+
+Note: Increasing ticket lifetime reduces security. The automatic renewal feature in `sqlserver.py` is the recommended approach.
+
 ### SQL Server Connection Fails
 
 **"Login timeout expired" from Docker container**:

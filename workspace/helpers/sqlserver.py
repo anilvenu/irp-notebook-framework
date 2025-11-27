@@ -362,6 +362,10 @@ def get_connection(connection_name: str = 'TEST', database: Optional[str] = None
     - Yields connection for use
     - Closes connection on exit (even if exception occurs)
 
+    For Windows Authentication connections, this function automatically
+    checks if the Kerberos ticket is valid and renews it if necessary
+    (using the configured keytab file).
+
     Args:
         connection_name: Name of the connection to use
         database: Optional database name to connect to
@@ -383,6 +387,22 @@ def get_connection(connection_name: str = 'TEST', database: Optional[str] = None
             cursor.execute("SELECT * FROM portfolios")
             rows = cursor.fetchall()
     """
+    # Check if this is a Windows auth connection - if so, ensure valid ticket
+    try:
+        config = get_connection_config(connection_name)
+        if config.get('auth_type') == 'WINDOWS':
+            if not ensure_valid_kerberos_ticket():
+                raise SQLServerConnectionError(
+                    f"Windows Authentication requires a valid Kerberos ticket.\n"
+                    f"Automatic renewal failed. Please check:\n"
+                    f"  - KERBEROS_ENABLED=true in environment\n"
+                    f"  - KRB5_KEYTAB points to valid keytab file\n"
+                    f"  - KRB5_PRINCIPAL is set correctly\n"
+                    f"Or manually renew with: kinit -kt <keytab> <principal>"
+                )
+    except SQLServerConfigurationError:
+        raise  # Re-raise config errors
+
     connection_string = build_connection_string(connection_name, database=database)
     conn = None
 
@@ -582,6 +602,127 @@ def init_kerberos(keytab_path: Optional[str] = None, principal: Optional[str] = 
         )
     except Exception as e:
         logger.error(f"Kerberos initialization failed: {e}")
+        return False
+
+
+def is_ticket_valid(min_remaining_minutes: int = 5) -> bool:
+    """
+    Check if the current Kerberos ticket is valid and not expiring soon.
+
+    Args:
+        min_remaining_minutes: Minimum minutes of validity required (default: 5)
+
+    Returns:
+        True if ticket exists and has at least min_remaining_minutes before expiry
+    """
+    import subprocess
+    import re
+    from datetime import datetime
+
+    try:
+        result = subprocess.run(
+            ['klist'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            return False
+
+        output = result.stdout
+
+        # Parse expiration time from klist output
+        # Format: "11/27/2025 08:01:31" or "Nov 27 2025 08:01:31"
+        # Look for line with "Expires" or parse the ticket entry
+        expires_match = re.search(
+            r'(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})',
+            output
+        )
+
+        if not expires_match:
+            # Try alternative format (some systems)
+            expires_match = re.search(
+                r'(\w{3}\s+\d{1,2}\s+\d{4}\s+\d{2}:\d{2}:\d{2})',
+                output
+            )
+
+        if not expires_match:
+            logger.warning("Could not parse ticket expiration time")
+            return False
+
+        expiry_str = expires_match.group(1)
+
+        # Parse the expiration time
+        try:
+            # Try MM/DD/YYYY HH:MM:SS format first
+            expiry_time = datetime.strptime(expiry_str, '%m/%d/%Y %H:%M:%S')
+        except ValueError:
+            try:
+                # Try "Mon DD YYYY HH:MM:SS" format
+                expiry_time = datetime.strptime(expiry_str, '%b %d %Y %H:%M:%S')
+            except ValueError:
+                logger.warning(f"Could not parse expiration time: {expiry_str}")
+                return False
+
+        # Check if ticket has enough time remaining
+        now = datetime.now()
+        remaining = expiry_time - now
+        remaining_minutes = remaining.total_seconds() / 60
+
+        if remaining_minutes < min_remaining_minutes:
+            logger.info(f"Kerberos ticket expiring soon ({remaining_minutes:.1f} minutes remaining)")
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"Error checking ticket validity: {e}")
+        return False
+
+
+def ensure_valid_kerberos_ticket(min_remaining_minutes: int = 5) -> bool:
+    """
+    Ensure a valid Kerberos ticket exists, renewing if necessary.
+
+    This function checks if the current ticket is valid and has sufficient
+    time remaining. If not, it automatically renews the ticket using the
+    configured keytab file.
+
+    Args:
+        min_remaining_minutes: Minimum minutes of validity required (default: 5)
+
+    Returns:
+        True if a valid ticket exists (or was successfully renewed)
+
+    Example:
+        # Called automatically by get_connection() for Windows auth
+        # Can also be called manually:
+        if ensure_valid_kerberos_ticket():
+            print("Kerberos ticket is valid")
+    """
+    # Check if Kerberos is enabled
+    if os.getenv('KERBEROS_ENABLED', 'false').lower() != 'true':
+        logger.debug("Kerberos not enabled, skipping ticket check")
+        return True  # Not an error - Kerberos simply not configured
+
+    # Check if current ticket is valid
+    if is_ticket_valid(min_remaining_minutes):
+        logger.debug("Kerberos ticket is valid")
+        return True
+
+    # Ticket expired or expiring - try to renew
+    logger.info("Kerberos ticket expired or expiring, attempting renewal...")
+
+    try:
+        if init_kerberos():
+            logger.info("Kerberos ticket renewed successfully")
+            return True
+        else:
+            logger.error("Failed to renew Kerberos ticket")
+            return False
+    except SQLServerConfigurationError as e:
+        logger.error(f"Cannot renew Kerberos ticket: {e}")
         return False
 
 
@@ -1264,6 +1405,8 @@ __all__ = [
     # Kerberos support
     'check_kerberos_status',
     'init_kerberos',
+    'is_ticket_valid',
+    'ensure_valid_kerberos_ticket',
 
     # Query operations
     'execute_query',
