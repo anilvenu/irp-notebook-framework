@@ -208,8 +208,8 @@ SELECT
         WHEN bs.has_error_report_status THEN 'ERROR'
         -- Rule 5: If at least one job is in FAILED reporting status, then FAILED
         WHEN bs.has_failed_report_status THEN 'FAILED'
-        -- Rule 6: Otherwise INCOMPLETE
-        ELSE 'INCOMPLETE'
+        -- Rule 6: Otherwise IN PROGRESS
+        ELSE 'IN PROGRESS'
     END AS reporting_status,
     -- Completion percentage
     CASE
