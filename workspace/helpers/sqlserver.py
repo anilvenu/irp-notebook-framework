@@ -14,21 +14,28 @@ via environment variables. Each connection requires:
 
 Environment Variable Pattern:
     MSSQL_{CONNECTION_NAME}_SERVER    - Server hostname or IP (required)
-    MSSQL_{CONNECTION_NAME}_USER      - SQL Server authentication username (required)
-    MSSQL_{CONNECTION_NAME}_PASSWORD  - SQL Server authentication password (required)
+    MSSQL_{CONNECTION_NAME}_AUTH_TYPE - Authentication type: 'SQL' or 'WINDOWS' (optional, defaults to SQL)
+    MSSQL_{CONNECTION_NAME}_USER      - SQL Server authentication username (required for SQL auth)
+    MSSQL_{CONNECTION_NAME}_PASSWORD  - SQL Server authentication password (required for SQL auth)
     MSSQL_{CONNECTION_NAME}_PORT      - Port (optional, defaults to 1433)
     MSSQL_{CONNECTION_NAME}_DATABASE  - Database name (optional, use USE statements in SQL scripts)
 
+Authentication Types:
+    SQL     - Standard SQL Server authentication with username/password (default)
+    WINDOWS - Windows Authentication using Kerberos (Trusted_Connection)
+              Requires valid Kerberos ticket (kinit or keytab)
+
 Example Configuration:
-    # AWS Data Warehouse connection (no default database, use USE statements in SQL)
+    # SQL Server authentication (default)
     MSSQL_AWS_DW_SERVER=aws-db.company.com
+    MSSQL_AWS_DW_AUTH_TYPE=SQL
     MSSQL_AWS_DW_USER=irp_service
     MSSQL_AWS_DW_PASSWORD=secretpassword
 
-    # Analytics Database connection (no default database, use USE statements in SQL)
-    MSSQL_ANALYTICS_SERVER=analytics.company.com
-    MSSQL_ANALYTICS_USER=irp_service
-    MSSQL_ANALYTICS_PASSWORD=secretpassword
+    # Windows Authentication (Kerberos)
+    MSSQL_CORP_SQL_SERVER=sqlserver.corp.company.com
+    MSSQL_CORP_SQL_AUTH_TYPE=WINDOWS
+    # No USER/PASSWORD needed - uses Kerberos ticket
 
 Usage in Notebooks:
     from helpers.sqlserver import execute_query, execute_query_from_file
@@ -187,22 +194,47 @@ def get_connection_config(connection_name: str = 'TEST') -> Dict[str, str]:
     """
     Get connection configuration for a named MSSQL connection.
 
+    Supports both SQL Server native authentication and Windows Authentication (Kerberos).
+
+    Authentication Types:
+        SQL     - Standard SQL Server authentication with username/password (default)
+        WINDOWS - Windows Authentication using Kerberos (Trusted_Connection)
+
     Args:
         connection_name: Name of the connection (e.g., 'AWS_DW', 'ANALYTICS', 'TEST')
 
     Returns:
-        Dictionary with connection parameters
+        Dictionary with connection parameters including 'auth_type'
 
     Raises:
         SQLServerConfigurationError: If required environment variables are missing
 
+    Environment Variables:
+        MSSQL_{CONNECTION_NAME}_SERVER      - Server hostname or IP (required)
+        MSSQL_{CONNECTION_NAME}_AUTH_TYPE   - 'SQL' or 'WINDOWS' (default: SQL)
+        MSSQL_{CONNECTION_NAME}_USER        - Username (required for SQL auth)
+        MSSQL_{CONNECTION_NAME}_PASSWORD    - Password (required for SQL auth)
+        MSSQL_{CONNECTION_NAME}_PORT        - Port (optional, defaults to 1433)
+
     Example:
+        # SQL authentication
         config = get_connection_config('AWS_DW')
         # Returns: {
         #     'server': 'aws-db.company.com',
+        #     'auth_type': 'SQL',
         #     'user': 'irp_service',
         #     'password': 'secret',
-        #     'port': '1433'
+        #     'port': '1433',
+        #     ...
+        # }
+
+        # Windows authentication
+        config = get_connection_config('CORP_SQL')
+        # Returns: {
+        #     'server': 'sqlserver.corp.local',
+        #     'auth_type': 'WINDOWS',
+        #     'port': '1433',
+        #     ...
         # }
     """
     connection_name = connection_name.upper()
@@ -210,29 +242,54 @@ def get_connection_config(connection_name: str = 'TEST') -> Dict[str, str]:
     # Build environment variable names
     prefix = f'MSSQL_{connection_name}_'
 
+    # Determine authentication type (default to SQL for backward compatibility)
+    auth_type = os.getenv(f'{prefix}AUTH_TYPE', 'SQL').upper()
+
+    if auth_type not in ('SQL', 'WINDOWS'):
+        raise SQLServerConfigurationError(
+            f"Invalid authentication type '{auth_type}' for connection '{connection_name}'.\n"
+            f"Valid values are: SQL, WINDOWS"
+        )
+
     config = {
         'server': os.getenv(f'{prefix}SERVER'),
-        'user': os.getenv(f'{prefix}USER'),
-        'password': os.getenv(f'{prefix}PASSWORD'),
         'port': os.getenv(f'{prefix}PORT', '1433'),
         'driver': os.getenv('MSSQL_DRIVER', 'ODBC Driver 18 for SQL Server'),
         'trust_cert': os.getenv('MSSQL_TRUST_CERT', 'yes'),
-        'timeout': os.getenv('MSSQL_TIMEOUT', '30')
+        'timeout': os.getenv('MSSQL_TIMEOUT', '30'),
+        'auth_type': auth_type,
     }
 
-    # Validate required fields
-    required = ['server', 'user', 'password']
-    missing = [field for field in required if not config[field]]
+    # For SQL authentication, require user and password
+    if auth_type == 'SQL':
+        config['user'] = os.getenv(f'{prefix}USER')
+        config['password'] = os.getenv(f'{prefix}PASSWORD')
 
-    if missing:
-        raise SQLServerConfigurationError(
-            f"SQL Server connection '{connection_name}' is not properly configured.\n"
-            f"Missing environment variables: {', '.join([f'{prefix}{f.upper()}' for f in missing])}\n"
-            f"Required format:\n"
-            f"  MSSQL_{connection_name}_SERVER=<server>\n"
-            f"  MSSQL_{connection_name}_USER=<user>\n"
-            f"  MSSQL_{connection_name}_PASSWORD=<password>\n"
-        )
+        # Validate required fields for SQL auth
+        required = ['server', 'user', 'password']
+        missing = [field for field in required if not config.get(field)]
+
+        if missing:
+            raise SQLServerConfigurationError(
+                f"SQL Server connection '{connection_name}' is not properly configured.\n"
+                f"Authentication type: SQL\n"
+                f"Missing environment variables: {', '.join([f'{prefix}{f.upper()}' for f in missing])}\n"
+                f"Required format:\n"
+                f"  MSSQL_{connection_name}_SERVER=<server>\n"
+                f"  MSSQL_{connection_name}_USER=<user>\n"
+                f"  MSSQL_{connection_name}_PASSWORD=<password>\n"
+            )
+
+    else:  # WINDOWS authentication
+        # For Windows auth, only server is required
+        if not config.get('server'):
+            raise SQLServerConfigurationError(
+                f"SQL Server connection '{connection_name}' is not properly configured.\n"
+                f"Authentication type: WINDOWS\n"
+                f"Missing environment variable: {prefix}SERVER\n"
+                f"\nNote: Windows Authentication requires valid Kerberos credentials.\n"
+                f"Ensure you have run 'kinit' or have a valid keytab configured."
+            )
 
     return config
 
@@ -240,6 +297,8 @@ def get_connection_config(connection_name: str = 'TEST') -> Dict[str, str]:
 def build_connection_string(connection_name: str = 'TEST', database: Optional[str] = None) -> str:
     """
     Build ODBC connection string for SQL Server.
+
+    Supports both SQL Server native authentication and Windows Authentication (Kerberos).
 
     Args:
         connection_name: Name of the connection
@@ -249,13 +308,21 @@ def build_connection_string(connection_name: str = 'TEST', database: Optional[st
         ODBC connection string
 
     Example:
+        # SQL authentication
         conn_str = build_connection_string('AWS_DW')
-        # Returns: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=aws-db.company.com,1433;..."
+        # Returns: "DRIVER={...};SERVER=...;UID=user;PWD=pass;..."
 
+        # Windows authentication
+        conn_str = build_connection_string('CORP_SQL')
+        # Returns: "DRIVER={...};SERVER=...;Trusted_Connection=yes;..."
+
+        # With database
         conn_str = build_connection_string('AWS_DW', database='DataWarehouse')
         # Returns: "...DATABASE=DataWarehouse;..."
     """
     config = get_connection_config(connection_name)
+
+    auth_type = config.get('auth_type', 'SQL')
 
     connection_string = (
         f"DRIVER={{{config['driver']}}};"
@@ -266,9 +333,18 @@ def build_connection_string(connection_name: str = 'TEST', database: Optional[st
     if database:
         connection_string += f"DATABASE={database};"
 
+    # Authentication-specific connection string parts
+    if auth_type == 'WINDOWS':
+        # Windows Authentication (Kerberos)
+        connection_string += "Trusted_Connection=yes;"
+    else:
+        # SQL Server Authentication
+        connection_string += (
+            f"UID={config['user']};"
+            f"PWD={config['password']};"
+        )
+
     connection_string += (
-        f"UID={config['user']};"
-        f"PWD={config['password']};"
         f"TrustServerCertificate={config['trust_cert']};"
         f"Connection Timeout={config['timeout']};"
     )
@@ -285,6 +361,10 @@ def get_connection(connection_name: str = 'TEST', database: Optional[str] = None
     - Opens connection
     - Yields connection for use
     - Closes connection on exit (even if exception occurs)
+
+    For Windows Authentication connections, this function automatically
+    checks if the Kerberos ticket is valid and renews it if necessary
+    (using the configured keytab file).
 
     Args:
         connection_name: Name of the connection to use
@@ -307,6 +387,22 @@ def get_connection(connection_name: str = 'TEST', database: Optional[str] = None
             cursor.execute("SELECT * FROM portfolios")
             rows = cursor.fetchall()
     """
+    # Check if this is a Windows auth connection - if so, ensure valid ticket
+    try:
+        config = get_connection_config(connection_name)
+        if config.get('auth_type') == 'WINDOWS':
+            if not ensure_valid_kerberos_ticket():
+                raise SQLServerConnectionError(
+                    f"Windows Authentication requires a valid Kerberos ticket.\n"
+                    f"Automatic renewal failed. Please check:\n"
+                    f"  - KERBEROS_ENABLED=true in environment\n"
+                    f"  - KRB5_KEYTAB points to valid keytab file\n"
+                    f"  - KRB5_PRINCIPAL is set correctly\n"
+                    f"Or manually renew with: kinit -kt <keytab> <principal>"
+                )
+    except SQLServerConfigurationError:
+        raise  # Re-raise config errors
+
     connection_string = build_connection_string(connection_name, database=database)
     conn = None
 
@@ -355,6 +451,278 @@ def test_connection(connection_name: str = 'TEST') -> bool:
         return True
     except Exception as e:
         print(e)
+        return False
+
+
+# ============================================================================
+# KERBEROS SUPPORT
+# ============================================================================
+
+def check_kerberos_status() -> Dict[str, Any]:
+    """
+    Check the status of Kerberos configuration and credentials.
+
+    This function checks if Kerberos is enabled and if there is a valid
+    Kerberos ticket available for Windows Authentication.
+
+    Returns:
+        Dictionary with Kerberos status information:
+        - enabled: Whether Kerberos is enabled (KERBEROS_ENABLED env var)
+        - has_ticket: Whether a valid Kerberos ticket exists
+        - principal: Current principal (if ticket exists)
+        - expiration: Ticket expiration time (if ticket exists)
+        - error: Error message (if any)
+
+    Example:
+        status = check_kerberos_status()
+        if status['has_ticket']:
+            print(f"Authenticated as: {status['principal']}")
+        else:
+            print(f"No ticket: {status['error']}")
+    """
+    import subprocess
+    import re
+
+    result = {
+        'enabled': os.getenv('KERBEROS_ENABLED', 'false').lower() == 'true',
+        'has_ticket': False,
+        'principal': None,
+        'expiration': None,
+        'error': None,
+    }
+
+    if not result['enabled']:
+        result['error'] = "Kerberos is not enabled (KERBEROS_ENABLED != true)"
+        return result
+
+    try:
+        klist_output = subprocess.run(
+            ['klist'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if klist_output.returncode == 0:
+            output = klist_output.stdout
+
+            # Parse principal from klist output
+            principal_match = re.search(r'Default principal:\s+(\S+)', output)
+            if principal_match:
+                result['principal'] = principal_match.group(1)
+
+            # Parse expiration time
+            expires_match = re.search(r'(\d{2}/\d{2}/\d{2,4}\s+\d{2}:\d{2}:\d{2})', output)
+            if expires_match:
+                result['expiration'] = expires_match.group(1)
+
+            result['has_ticket'] = True
+        else:
+            result['error'] = klist_output.stderr.strip() or "No valid Kerberos ticket found"
+
+    except subprocess.TimeoutExpired:
+        result['error'] = "klist command timed out"
+    except FileNotFoundError:
+        result['error'] = "klist command not found. Kerberos tools may not be installed."
+    except Exception as e:
+        result['error'] = str(e)
+
+    return result
+
+
+def init_kerberos(keytab_path: Optional[str] = None, principal: Optional[str] = None) -> bool:
+    """
+    Initialize Kerberos credentials using a keytab file.
+
+    This function runs 'kinit' with the specified keytab and principal to
+    obtain a Kerberos ticket for Windows Authentication.
+
+    Args:
+        keytab_path: Path to the keytab file. Defaults to KRB5_KEYTAB env var.
+        principal: Kerberos principal. Defaults to KRB5_PRINCIPAL env var.
+
+    Returns:
+        True if successful, False otherwise
+
+    Raises:
+        SQLServerConfigurationError: If keytab or principal not specified
+
+    Example:
+        # Using environment variables
+        if init_kerberos():
+            print("Kerberos initialized successfully")
+
+        # Explicit parameters
+        if init_kerberos('/etc/krb5/svc_jupyter.keytab', 'svc_jupyter@CORP.LOCAL'):
+            print("Kerberos initialized successfully")
+    """
+    import subprocess
+
+    keytab = keytab_path or os.getenv('KRB5_KEYTAB')
+    princ = principal or os.getenv('KRB5_PRINCIPAL')
+
+    if not keytab:
+        raise SQLServerConfigurationError(
+            "Kerberos keytab path not specified.\n"
+            "Set KRB5_KEYTAB environment variable or pass keytab_path parameter."
+        )
+
+    if not princ:
+        raise SQLServerConfigurationError(
+            "Kerberos principal not specified.\n"
+            "Set KRB5_PRINCIPAL environment variable or pass principal parameter."
+        )
+
+    if not os.path.exists(keytab):
+        raise SQLServerConfigurationError(
+            f"Kerberos keytab file not found: {keytab}"
+        )
+
+    try:
+        result = subprocess.run(
+            ['kinit', '-k', '-t', keytab, princ],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode == 0:
+            logger.info(f"Kerberos initialized successfully for principal: {princ}")
+            return True
+        else:
+            logger.error(f"kinit failed: {result.stderr}")
+            return False
+
+    except subprocess.TimeoutExpired:
+        logger.error("kinit command timed out")
+        return False
+    except FileNotFoundError:
+        raise SQLServerConfigurationError(
+            "kinit command not found. Kerberos tools may not be installed."
+        )
+    except Exception as e:
+        logger.error(f"Kerberos initialization failed: {e}")
+        return False
+
+
+def is_ticket_valid(min_remaining_minutes: int = 5) -> bool:
+    """
+    Check if the current Kerberos ticket is valid and not expiring soon.
+
+    Args:
+        min_remaining_minutes: Minimum minutes of validity required (default: 5)
+
+    Returns:
+        True if ticket exists and has at least min_remaining_minutes before expiry
+    """
+    import subprocess
+    import re
+    from datetime import datetime
+
+    try:
+        result = subprocess.run(
+            ['klist'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            return False
+
+        output = result.stdout
+
+        # Parse expiration time from klist output
+        # Format: "11/27/2025 08:01:31" or "Nov 27 2025 08:01:31"
+        # Look for line with "Expires" or parse the ticket entry
+        expires_match = re.search(
+            r'(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})',
+            output
+        )
+
+        if not expires_match:
+            # Try alternative format (some systems)
+            expires_match = re.search(
+                r'(\w{3}\s+\d{1,2}\s+\d{4}\s+\d{2}:\d{2}:\d{2})',
+                output
+            )
+
+        if not expires_match:
+            logger.warning("Could not parse ticket expiration time")
+            return False
+
+        expiry_str = expires_match.group(1)
+
+        # Parse the expiration time
+        try:
+            # Try MM/DD/YYYY HH:MM:SS format first
+            expiry_time = datetime.strptime(expiry_str, '%m/%d/%Y %H:%M:%S')
+        except ValueError:
+            try:
+                # Try "Mon DD YYYY HH:MM:SS" format
+                expiry_time = datetime.strptime(expiry_str, '%b %d %Y %H:%M:%S')
+            except ValueError:
+                logger.warning(f"Could not parse expiration time: {expiry_str}")
+                return False
+
+        # Check if ticket has enough time remaining
+        now = datetime.now()
+        remaining = expiry_time - now
+        remaining_minutes = remaining.total_seconds() / 60
+
+        if remaining_minutes < min_remaining_minutes:
+            logger.info(f"Kerberos ticket expiring soon ({remaining_minutes:.1f} minutes remaining)")
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"Error checking ticket validity: {e}")
+        return False
+
+
+def ensure_valid_kerberos_ticket(min_remaining_minutes: int = 5) -> bool:
+    """
+    Ensure a valid Kerberos ticket exists, renewing if necessary.
+
+    This function checks if the current ticket is valid and has sufficient
+    time remaining. If not, it automatically renews the ticket using the
+    configured keytab file.
+
+    Args:
+        min_remaining_minutes: Minimum minutes of validity required (default: 5)
+
+    Returns:
+        True if a valid ticket exists (or was successfully renewed)
+
+    Example:
+        # Called automatically by get_connection() for Windows auth
+        # Can also be called manually:
+        if ensure_valid_kerberos_ticket():
+            print("Kerberos ticket is valid")
+    """
+    # Check if Kerberos is enabled
+    if os.getenv('KERBEROS_ENABLED', 'false').lower() != 'true':
+        logger.debug("Kerberos not enabled, skipping ticket check")
+        return True  # Not an error - Kerberos simply not configured
+
+    # Check if current ticket is valid
+    if is_ticket_valid(min_remaining_minutes):
+        logger.debug("Kerberos ticket is valid")
+        return True
+
+    # Ticket expired or expiring - try to renew
+    logger.info("Kerberos ticket expired or expiring, attempting renewal...")
+
+    try:
+        if init_kerberos():
+            logger.info("Kerberos ticket renewed successfully")
+            return True
+        else:
+            logger.error("Failed to renew Kerberos ticket")
+            return False
+    except SQLServerConfigurationError as e:
+        logger.error(f"Cannot renew Kerberos ticket: {e}")
         return False
 
 
@@ -1033,6 +1401,12 @@ __all__ = [
     'build_connection_string',
     'get_connection',
     'test_connection',
+
+    # Kerberos support
+    'check_kerberos_status',
+    'init_kerberos',
+    'is_ticket_valid',
+    'ensure_valid_kerberos_ticket',
 
     # Query operations
     'execute_query',
