@@ -31,7 +31,7 @@
 } %}
 {% set stats = stats.update({'not_completed_batches': stats.total_batches - stats.completed_batches}) or stats %}
 {% set stats = stats.update({'not_finished_jobs': stats.total_jobs - stats.finished_jobs}) or stats %}
-{% set stats = stats.update({'cycle_status': 'COMPLETED' if stats.not_completed_batches == 0 else 'IN PROGRESS'}) or stats %}
+{% set stats = stats.update({'cycle_status': 'COMPLETED' if stats.not_completed_batches == 0 else 'IN-PROGRESS'}) or stats %}
 
 <div class="info-grid">
     <div class="info-card">

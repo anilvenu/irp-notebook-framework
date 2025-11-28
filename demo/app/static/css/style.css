@@ -270,7 +270,7 @@ footer a:hover {
 .status-UNSUBMITTED { background: #fff3e0; color: #f57c00; }
 .status-FULFILLED { background: #e8f5e9; color: #2e7d32; }
 .status-UNFULFILLED { background: #fff3e0; color: #f57c00; }
-.status-IN\ PROGRESS { background: #e1f5fe; color: #0288d1; }
+.status-IN-PROGRESS { background: #e1f5fe; color: #0288d1; }
 
 /* Tabs */
 .tabs {
