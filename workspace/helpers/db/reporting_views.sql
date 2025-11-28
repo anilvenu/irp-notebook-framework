@@ -1,5 +1,14 @@
--- Store job-level reporting rules
+-- ---------------------------------------------------------------------------------------------
+-- Helper SQL script to create reporting views for IRP jobs, job configurations, and batches
+-- ----------------------------------------------------------------------------------------------
+
+-- Drop existing views and table if they exist
+DROP VIEW IF EXISTS v_irp_batch;
+DROP VIEW IF EXISTS v_irp_job_configuration;
+DROP VIEW IF EXISTS v_irp_job;
 DROP TABLE IF EXISTS irp_job_status_rule;
+
+-- Store job-level reporting rules
 CREATE TABLE irp_job_status_rule (
     id SERIAL PRIMARY KEY,
     skipped BOOLEAN NOT NULL,
@@ -35,7 +44,8 @@ INSERT INTO irp_job_status_rule (skipped, status, report_status, age_calculation
 (TRUE, 'CANCELLED', 'SKIPPED', 'updated_ts - created_ts', 'Recon Batch OR Check for Manually Completed Job on Moody''s', TRUE),
 (TRUE, 'ERROR', 'SKIPPED', 'updated_ts - created_ts', 'Recon Batch OR Check for Manually Completed Job on Moody''s', TRUE);
 
-DROP VIEW IF EXISTS v_irp_job;
+-- View for job-level reporting
+-- This view enriches the irp_job table with derived reporting fields based on the irp_job_status_rule table
 CREATE VIEW v_irp_job AS
 SELECT 
     -- Derived reporting fields from rule table
@@ -77,7 +87,7 @@ COMMENT ON VIEW v_irp_job IS
 'Enhanced job view with derived reporting status, age calculations, and actionable recommendations based on job_status_rule table';
 
 -- View for job configuration-level reporting
-DROP VIEW IF EXISTS v_irp_job_configuration;
+-- This view aggregates job-level data to provide configuration-level reporting metrics and status
 CREATE VIEW v_irp_job_configuration AS
 WITH job_stats AS (
     SELECT 
@@ -151,7 +161,7 @@ COMMENT ON VIEW v_irp_job_configuration IS
 'Job configuration view with aggregated job statistics and derived reporting status (FULFILLED/UNFULFILLED/SKIPPED)';
 
 -- View for batch-level reporting
-DROP VIEW IF EXISTS v_irp_batch;
+-- This view aggregates job configuration and job-level data to provide batch-level reporting metrics and status
 CREATE VIEW v_irp_batch AS
 WITH batch_stats AS (
     SELECT
@@ -208,8 +218,8 @@ SELECT
         WHEN bs.has_error_report_status THEN 'ERROR'
         -- Rule 5: If at least one job is in FAILED reporting status, then FAILED
         WHEN bs.has_failed_report_status THEN 'FAILED'
-        -- Rule 6: Otherwise INCOMPLETE
-        ELSE 'INCOMPLETE'
+        -- Rule 6: Otherwise IN-PROGRESS
+        ELSE 'IN-PROGRESS'
     END AS reporting_status,
     -- Completion percentage
     CASE
