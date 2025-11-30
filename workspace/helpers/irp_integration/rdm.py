@@ -253,7 +253,35 @@ class RDMManager:
             return databases[0]['databaseId']
         except (KeyError, IndexError) as e:
             raise IRPAPIError(f"Failed to extract databaseId for RDM '{rdm_name}': {e}")
-        
+
+    def get_rdm_database_full_name(self, rdm_name: str, server_name: str = "databridge-1") -> str:
+        """
+        Get full database name for an existing RDM by name prefix.
+
+        Args:
+            rdm_name: Name prefix of the RDM
+            server_name: Name of the database server (default: "databridge-1")
+
+        Returns:
+            Full database name
+
+        Raises:
+            IRPAPIError: If RDM not found
+        """
+        databases = self.search_databases(
+            server_name=server_name,
+            filter=f"databaseName LIKE \"{rdm_name}*\""
+        )
+        if not databases:
+            raise IRPAPIError(f"RDM '{rdm_name}' not found on server '{server_name}'")
+        elif len(databases) > 1:
+            raise IRPAPIError(f"Multiple RDMs found with name '{rdm_name}' on server '{server_name}'")
+
+        try:
+            return databases[0]['databaseName']
+        except (KeyError, IndexError) as e:
+            raise IRPAPIError(f"Failed to extract databaseName for RDM '{rdm_name}': {e}")
+
     def search_databases(self, server_name: str, filter: str = "") -> List[Dict[str, Any]]:
         """
         Search databases on a server.

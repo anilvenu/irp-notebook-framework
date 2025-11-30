@@ -110,11 +110,29 @@ STAGE_05_CHAIN = {
     }
 }
 
+# Stage 06 Step Chain Configuration
+# Export to RDM → Verify RDM Export chaining
+STAGE_06_CHAIN = {
+    1: {
+        'next_step': 2,
+        'batch_type': 'Export to RDM',
+        'wait_for': [BatchStatus.COMPLETED, BatchStatus.FAILED],  # Chain on success OR failure
+        'description': 'Export to RDM → Verify RDM Export'
+    },
+    2: {
+        'next_step': None,  # Final step in Stage 06
+        'batch_type': None,
+        'wait_for': None,
+        'description': 'Verify RDM Export (Final Step)'
+    }
+}
+
 # Combined chain configuration by stage
 STAGE_CHAINS = {
     3: STAGE_03_CHAIN,
     4: STAGE_04_CHAIN,
     5: STAGE_05_CHAIN,
+    6: STAGE_06_CHAIN,
 }
 
 
@@ -319,6 +337,10 @@ def _build_notebook_path(cycle_name: str, stage_num: int, step_num: int) -> Path
             1: 'Group_Analysis_Results.ipynb',
             2: 'Group_Rollup.ipynb',
             3: 'Grouping_Summary.ipynb'
+        },
+        6: {
+            1: 'Export_to_RDM.ipynb',
+            2: 'Verify_RDM_Export.ipynb'
         }
     }
 
