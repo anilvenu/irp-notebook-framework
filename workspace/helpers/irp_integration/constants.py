@@ -58,7 +58,7 @@ TREATY_ATTACHMENT_LEVELS = {
     'Policy': 'POL',
     'Location': 'LOC'
 }
-CREATE_TREATY_LOB = 'platform/riskdata/v1/exposures/{exposureId}/treaties/{id}/lob'
+CREATE_TREATY_LOB = '/platform/riskdata/v1/exposures/{exposureId}/treaties/{id}/lob'
 
 # Analysis endpoints
 SEARCH_ANALYSIS_JOBS = '/platform/model/v1/jobs'
@@ -81,6 +81,7 @@ CREATE_TAG = '/platform/referencedata/v1/tags'
 # RDM endpoints
 CREATE_RDM_EXPORT_JOB = '/platform/export/v1/jobs'
 GET_EXPORT_JOB = '/platform/export/v1/jobs/{jobId}'
+SEARCH_DATABASES = '/platform/riskdata/v1/dataservers/{serverId}/databases'
 
 # Currency endpoints
-SEARCH_CURRENCIES = 'data-store/referencetables/currency'
+SEARCH_CURRENCIES = '/data-store/referencetables/currency'

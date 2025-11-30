@@ -999,6 +999,7 @@ def _submit_export_to_rdm_job(
     rdm_name = job_config.get('rdm_name')
     server_name = job_config.get('server_name')
     analysis_names = job_config.get('analysis_names', [])
+    database_id = job_config.get('database_id')  # May be None for seed job
 
     # Validate required fields
     if not rdm_name:
@@ -1013,7 +1014,8 @@ def _submit_export_to_rdm_job(
         moody_job_id = client.rdm.submit_rdm_export_job(
             server_name=server_name,
             rdm_name=rdm_name,
-            analysis_names=analysis_names
+            analysis_names=analysis_names,
+            database_id=database_id
         )
     except Exception as e:
         raise JobError(f"Failed to submit RDM export job: {str(e)}")
@@ -1288,6 +1290,61 @@ def get_job_config(job_id: int, schema: str = 'public') -> Dict[str, Any]:
     return config
 
 
+def update_job_configuration_data(
+    job_configuration_id: int,
+    updates: Dict[str, Any],
+    schema: str = 'public'
+) -> None:
+    """
+    Update specific fields in a job configuration's JSON data.
+
+    Merges the provided updates into the existing job_configuration_data,
+    preserving fields not included in updates.
+
+    LAYER: 2 (Compound - read + update)
+
+    Args:
+        job_configuration_id: ID of the job configuration to update
+        updates: Dict of fields to update/add to the configuration
+        schema: Database schema
+
+    Raises:
+        JobError: If job configuration not found
+    """
+    if not isinstance(job_configuration_id, int) or job_configuration_id <= 0:
+        raise JobError(f"Invalid job_configuration_id: {job_configuration_id}")
+
+    # Get current configuration
+    current = execute_query(
+        "SELECT job_configuration_data FROM irp_job_configuration WHERE id = %s",
+        (job_configuration_id,),
+        schema=schema
+    )
+
+    if current.empty:
+        raise JobError(f"Job configuration {job_configuration_id} not found")
+
+    config_data = current.iloc[0]['job_configuration_data']
+
+    # Handle if stored as string
+    if isinstance(config_data, str):
+        config_data = json.loads(config_data)
+
+    # Merge updates
+    config_data.update(updates)
+
+    # Save back
+    execute_command(
+        """
+        UPDATE irp_job_configuration
+        SET job_configuration_data = %s, updated_ts = NOW()
+        WHERE id = %s
+        """,
+        (json.dumps(config_data), job_configuration_id),
+        schema=schema
+    )
+
+
 # ============================================================================
 # JOB WORKFLOW OPERATIONS (Layer 3)
 # ============================================================================
@@ -1512,8 +1569,9 @@ def submit_job(
     # Read job
     job = read_job(job_id, schema=schema)
 
-    # Check if already submitted
-    already_submitted = job.get('moodys_workflow_id') is not None
+    # Check if already submitted (must have a non-empty workflow ID)
+    workflow_id_value = job.get('moodys_workflow_id')
+    already_submitted = workflow_id_value is not None and workflow_id_value != ''
 
     if not already_submitted or force:
         # Get job configuration

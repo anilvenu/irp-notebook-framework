@@ -467,6 +467,19 @@ def submit_batch(
     # Get all jobs for this batch
     jobs = get_batch_jobs(batch_id, schema=schema)
 
+    # Special handling for RDM export with multiple jobs (seed job pattern)
+    # When >100 analyses need to be exported, we create a seed job (1 analysis)
+    # that creates the RDM, then submit remaining jobs with the databaseId
+    if batch['batch_type'] == BatchType.EXPORT_TO_RDM and len(jobs) > 1:
+        return _submit_rdm_export_batch_with_seed(
+            batch_id=batch_id,
+            batch=batch,
+            jobs=jobs,
+            irp_client=irp_client,
+            job_module=job,
+            schema=schema
+        )
+
     # Submit eligible jobs
     submitted_jobs = []
     for job_record in jobs:
@@ -502,6 +515,151 @@ def submit_batch(
         'submitted_jobs': len(submitted_jobs),
         'jobs': submitted_jobs
     }
+
+
+def _submit_rdm_export_batch_with_seed(
+    batch_id: int,
+    batch: Dict[str, Any],
+    jobs: List[Dict[str, Any]],
+    irp_client: IRPClient,
+    job_module,
+    schema: str = 'public'
+) -> Dict[str, Any]:
+    """
+    Submit RDM export batch using seed job pattern.
+
+    When exporting more than 100 analyses to RDM, the Moody's API requires
+    multiple requests. To ensure all exports go to the same RDM, we:
+    1. Submit seed job (first job with is_seed_job=True, contains 1 analysis)
+    2. Wait for seed job to complete (creates the RDM)
+    3. Get databaseId from created RDM
+    4. Update remaining jobs with databaseId
+    5. Submit remaining jobs (they append to the existing RDM)
+
+    This introduces a blocking wait for the seed job (~1-5 minutes) but
+    allows the remaining jobs to be tracked asynchronously.
+
+    Args:
+        batch_id: Batch ID
+        batch: Batch record dict
+        jobs: List of job records from get_batch_jobs()
+        irp_client: IRP client for Moody's API
+        job_module: The helpers.job module (passed to avoid re-importing)
+        schema: Database schema
+
+    Returns:
+        Dictionary with submission summary
+
+    Raises:
+        BatchError: If seed job not found or submission fails
+    """
+    # Separate seed job from remaining jobs
+    seed_job = None
+    remaining_jobs = []
+
+    for job_record in jobs:
+        if job_record['skipped']:
+            continue
+
+        # Read job configuration to check is_seed_job flag
+        job_config = job_module.get_job_config(job_record['id'], schema=schema)
+        config_data = job_config.get('job_configuration_data', {})
+
+        if config_data.get('is_seed_job'):
+            seed_job = job_record
+        else:
+            remaining_jobs.append(job_record)
+
+    if not seed_job:
+        raise BatchError("RDM export batch with multiple jobs must have a seed job")
+
+    submitted_jobs = []
+
+    # 1. Submit seed job
+    try:
+        job_module.submit_job(seed_job['id'], BatchType.EXPORT_TO_RDM, irp_client, schema=schema)
+        submitted_jobs.append({
+            'job_id': seed_job['id'],
+            'status': 'SUBMITTED',
+            'is_seed': True
+        })
+    except Exception as e:
+        raise BatchError(f"Failed to submit seed job {seed_job['id']}: {str(e)}")
+
+    # 2. Wait for seed job to complete
+    # Re-read job to get moodys_workflow_id after submission
+    seed_job_record = job_module.read_job(seed_job['id'], schema=schema)
+    moodys_job_id = seed_job_record['moodys_workflow_id']
+
+    if not moodys_job_id:
+        raise BatchError(f"Seed job {seed_job['id']} has no moodys_workflow_id after submission")
+
+    # Poll until complete (blocking wait ~1-5 minutes for single analysis)
+    job_result = irp_client.rdm.poll_rdm_export_job_to_completion(int(moodys_job_id))
+
+    # Update seed job status based on result
+    final_status = job_result.get('status', 'FINISHED')
+    if final_status == 'FINISHED':
+        job_module.update_job_status(seed_job['id'], JobStatus.FINISHED, schema=schema)
+        submitted_jobs[0]['status'] = 'FINISHED'
+    else:
+        job_module.update_job_status(seed_job['id'], JobStatus.FAILED, schema=schema)
+        raise BatchError(f"Seed job failed with status: {final_status}")
+
+    # 3. Get databaseId from created RDM
+    seed_config = job_module.get_job_config(seed_job['id'], schema=schema)
+    rdm_name = seed_config['job_configuration_data'].get('rdm_name')
+    server_name = seed_config['job_configuration_data'].get('server_name', 'databridge-1')
+
+    database_id = irp_client.rdm.get_rdm_database_id(rdm_name, server_name)
+
+    # 4. Update remaining jobs with databaseId and submit them
+    for job_record in remaining_jobs:
+        if job_record['status'] not in JobStatus.ready_for_submit():
+            continue
+
+        try:
+            # Update job configuration with database_id
+            job_module.update_job_configuration_data(
+                job_record['job_configuration_id'],
+                {'database_id': database_id},
+                schema=schema
+            )
+
+            # Submit job
+            job_module.submit_job(job_record['id'], BatchType.EXPORT_TO_RDM, irp_client, schema=schema)
+            submitted_jobs.append({
+                'job_id': job_record['id'],
+                'status': 'SUBMITTED',
+                'is_seed': False
+            })
+        except Exception as e:
+            submitted_jobs.append({
+                'job_id': job_record['id'],
+                'status': 'FAILED',
+                'error': str(e),
+                'is_seed': False
+            })
+
+    # 5. Update batch status to ACTIVE
+    query = """
+        UPDATE irp_batch
+        SET status = %s, submitted_ts = NOW()
+        WHERE id = %s
+    """
+    execute_command(query, (BatchStatus.ACTIVE, batch_id), schema=schema)
+
+    # Update configuration status to ACTIVE
+    update_configuration_status(batch['configuration_id'], ConfigurationStatus.ACTIVE, schema=schema)
+
+    return {
+        'batch_id': batch_id,
+        'batch_status': BatchStatus.ACTIVE,
+        'submitted_jobs': len(submitted_jobs),
+        'jobs': submitted_jobs,
+        'database_id': database_id
+    }
+
 
 # ============================================================================
 # BATCH QUERIES
