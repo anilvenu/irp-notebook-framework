@@ -633,6 +633,150 @@
         {
             "source": "PRIMARYBLDG",
             "destination": "PRIMARYBLDG"
+        },
+        {
+            "source": "FRCV4VAL",
+            "destination": "FRCV4VAL"
+        },
+        {
+            "source": "FRCV4VCUR",
+            "destination": "FRCV4VCUR"
+        },
+        {
+            "source": "FRCV5VAL",
+            "destination": "FRCV5VAL"
+        },
+        {
+            "source": "FRCV5VCUR",
+            "destination": "FRCV5VCUR"
+        },
+        {
+            "source": "FRCV6VAL",
+            "destination": "FRCV6VAL"
+        },
+        {
+            "source": "FRCV6VCUR",
+            "destination": "FRCV6VCUR"
+        },
+        {
+            "source": "FRCV7VAL",
+            "destination": "FRCV7VAL"
+        },
+        {
+            "source": "FRCV7VCUR",
+            "destination": "FRCV7VCUR"
+        },
+        {
+            "source": "FRCV4LIMIT",
+            "destination": "FRCV4LIMIT"
+        },
+        {
+            "source": "FRCV4LCUR",
+            "destination": "FRCV4LCUR"
+        },
+        {
+            "source": "FRCV5LIMIT",
+            "destination": "FRCV5LIMIT"
+        },
+        {
+            "source": "FRCV5LCUR",
+            "destination": "FRCV5LCUR"
+        },
+        {
+            "source": "FRCV6LIMIT",
+            "destination": "FRCV6LIMIT"
+        },
+        {
+            "source": "FRCV6LCUR",
+            "destination": "FRCV6LCUR"
+        },
+        {
+            "source": "FRCV7LIMIT",
+            "destination": "FRCV7LIMIT"
+        },
+        {
+            "source": "FRCV7LCUR",
+            "destination": "FRCV7LCUR"
+        },
+        {
+            "source": "FRCV4DED",
+            "destination": "FRCV4DED"
+        },
+        {
+            "source": "FRCV4DCUR",
+            "destination": "FRCV4DCUR"
+        },
+        {
+            "source": "FRCV5DED",
+            "destination": "FRCV5DED"
+        },
+        {
+            "source": "FRCV5DCUR",
+            "destination": "FRCV5DCUR"
+        },
+        {
+            "source": "FRCV6DED",
+            "destination": "FRCV6DED"
+        },
+        {
+            "source": "FRCV6DCUR",
+            "destination": "FRCV6DCUR"
+        },
+        {
+            "source": "FRCV7DED",
+            "destination": "FRCV7DED"
+        },
+        {
+            "source": "FRCV7DCUR",
+            "destination": "FRCV7DCUR"
+        },
+        {
+            "source": "FRSITELIM",
+            "destination": "FRSITELIM"
+        },
+        {
+            "source": "FRSITELCUR",
+            "destination": "FRSITELCUR"
+        },
+        {
+            "source": "FRSITEDED",
+            "destination": "FRSITEDED"
+        },
+        {
+            "source": "FRSITEDCUR",
+            "destination": "FRSITEDCUR"
+        },
+        {
+            "source": "FRCOMBINEDLIM",
+            "destination": "FRCOMBINEDLIM"
+        },
+        {
+            "source": "FRCOMBINEDLCUR",
+            "destination": "FRCOMBINEDLCUR"
+        },
+        {
+            "source": "FRCOMBINEDDED",
+            "destination": "FRCOMBINEDDED"
+        },
+        {
+            "source": "FRCOMBINEDDCUR",
+            "destination": "FRCOMBINEDDCUR"
+        },
+        {
+            "source": "WFROOFSYS",
+            "destination": "WFROOFSYS"
+        },
+        {
+            "source": "WFROOFGEOM",
+            "destination": "WFROOFGEOM"
+        },
+        {
+            "source": "WFROOFAGE",
+            "destination": "WFROOFAGE"
+        },
+        {
+            "source": "WFSUPPRESS",
+            "destination": "WFSUPPRESS"
         }
     ],
     "reinsuranceItems": [],
