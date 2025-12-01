@@ -70,6 +70,15 @@ CREATE_ANALYSIS_GROUP = '/platform/grouping/v1/jobs'
 GET_ANALYSIS_GROUPING_JOB = '/platform/grouping/v1/jobs/{jobId}'
 DELETE_ANALYSIS = '/platform/riskdata/v1/analyses/{analysisId}'
 
+# Analysis results endpoints (ELT, EP, Stats, PLT)
+GET_ANALYSIS_ELT = '/platform/riskdata/v1/analyses/{analysisId}/elt'
+GET_ANALYSIS_EP = '/platform/riskdata/v1/analyses/{analysisId}/ep'
+GET_ANALYSIS_STATS = '/platform/riskdata/v1/analyses/{analysisId}/stats'
+GET_ANALYSIS_PLT = '/platform/riskdata/v1/analyses/{analysisId}/plt'
+
+# Perspective codes for analysis results
+PERSPECTIVE_CODES = ['GR', 'GU', 'RL']  # Gross, Ground-Up, Reinsurance Layer
+
 GET_MODEL_PROFILES = '/analysis-settings/modelprofiles'
 GET_OUTPUT_PROFILES = '/analysis-settings/outputprofiles'
 GET_EVENT_RATE_SCHEME = '/data-store/referencetables/eventratescheme'
