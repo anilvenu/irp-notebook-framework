@@ -8,8 +8,15 @@ import json
 import time
 from typing import Dict, List, Any, Optional
 from .client import Client
-from .constants import CREATE_ANALYSIS_JOB, DELETE_ANALYSIS, GET_ANALYSIS_GROUPING_JOB, GET_ANALYSIS_JOB, GET_ANALYSIS_RESULT, CREATE_ANALYSIS_GROUP, SEARCH_ANALYSIS_JOBS, SEARCH_ANALYSIS_RESULTS, WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES
-from .exceptions import IRPAPIError, IRPJobError, IRPReferenceDataError
+from .constants import (
+    CREATE_ANALYSIS_JOB, DELETE_ANALYSIS, GET_ANALYSIS_GROUPING_JOB,
+    GET_ANALYSIS_JOB, GET_ANALYSIS_RESULT, CREATE_ANALYSIS_GROUP,
+    SEARCH_ANALYSIS_JOBS, SEARCH_ANALYSIS_RESULTS,
+    WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES,
+    GET_ANALYSIS_ELT, GET_ANALYSIS_EP, GET_ANALYSIS_STATS, GET_ANALYSIS_PLT,
+    PERSPECTIVE_CODES
+)
+from .exceptions import IRPAPIError, IRPJobError, IRPReferenceDataError, IRPValidationError
 from .validators import validate_non_empty_string, validate_positive_int, validate_list_not_empty
 from .utils import extract_id_from_location_header, build_analysis_currency_dict
 
@@ -459,10 +466,10 @@ class AnalysisManager:
 
 
     def poll_analysis_grouping_job_to_completion(
-            self,
-            job_id: int,
-            interval: int = 10,
-            timeout: int = 600000
+        self,
+        job_id: int,
+        interval: int = 10,
+        timeout: int = 600000
     ) -> Dict[str, Any]:
         """
         Poll analysis grouping job until completion or timeout.
@@ -507,59 +514,59 @@ class AnalysisManager:
 
 
     def poll_analysis_grouping_job_batch_to_completion(
-                self,
-                job_ids: List[int],
-                interval: int = 20,
-                timeout: int = 600000
-        ) -> List[Dict[str, Any]]:
-            """
-            Poll multiple analysis grouping jobs until all complete or timeout.
+        self,
+        job_ids: List[int],
+        interval: int = 20,
+        timeout: int = 600000
+    ) -> List[Dict[str, Any]]:
+        """
+        Poll multiple analysis grouping jobs until all complete or timeout.
 
-            Args:
-                job_ids: List of job IDs
-                interval: Polling interval in seconds (default: 20)
-                timeout: Maximum timeout in seconds (default: 600000)
+        Args:
+            job_ids: List of job IDs
+            interval: Polling interval in seconds (default: 20)
+            timeout: Maximum timeout in seconds (default: 600000)
 
-            Returns:
-                List of final job status details for all jobs
+        Returns:
+            List of final job status details for all jobs
 
-            Raises:
-                IRPValidationError: If parameters are invalid
-                IRPJobError: If jobs time out
-                IRPAPIError: If polling fails
-            """
-            validate_list_not_empty(job_ids, "job_ids")
-            validate_positive_int(interval, "interval")
-            validate_positive_int(timeout, "timeout")
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If jobs time out
+            IRPAPIError: If polling fails
+        """
+        validate_list_not_empty(job_ids, "job_ids")
+        validate_positive_int(interval, "interval")
+        validate_positive_int(timeout, "timeout")
 
-            start = time.time()
-            while True:
-                print(f"Polling batch grouping job ids: {','.join(str(item) for item in job_ids)}")
+        start = time.time()
+        while True:
+            print(f"Polling batch grouping job ids: {','.join(str(item) for item in job_ids)}")
 
-                all_completed = False
-                all_jobs = []
-                for job_id in job_ids:
-                    workflow_response = self.get_analysis_grouping_job(job_id)
-                    all_jobs.append(workflow_response)
-                    try:
-                        status = workflow_response['status']
-                    except (KeyError, TypeError) as e:
-                        raise IRPAPIError(
-                            f"Missing 'status' in workflow response for job ID {job_id}: {e}"
-                        ) from e
-                    if status in WORKFLOW_IN_PROGRESS_STATUSES:
-                        all_jobs = []
-                        break
-                    all_completed = True
+            all_completed = False
+            all_jobs = []
+            for job_id in job_ids:
+                workflow_response = self.get_analysis_grouping_job(job_id)
+                all_jobs.append(workflow_response)
+                try:
+                    status = workflow_response['status']
+                except (KeyError, TypeError) as e:
+                    raise IRPAPIError(
+                        f"Missing 'status' in workflow response for job ID {job_id}: {e}"
+                    ) from e
+                if status in WORKFLOW_IN_PROGRESS_STATUSES:
+                    all_jobs = []
+                    break
+                all_completed = True
 
-                if all_completed:
-                    return all_jobs
-                
-                if time.time() - start > timeout:
-                    raise IRPJobError(
-                        f"Batch grouping jobs did not complete within {timeout} seconds"
-                    )
-                time.sleep(interval)
+            if all_completed:
+                return all_jobs
+            
+            if time.time() - start > timeout:
+                raise IRPJobError(
+                    f"Batch grouping jobs did not complete within {timeout} seconds"
+                )
+            time.sleep(interval)
 
 
     def get_analysis_job(self, job_id: int) -> Dict[str, Any]:
@@ -773,3 +780,211 @@ class AnalysisManager:
             print(f"Deleted analysis ID: {analysis_id}")
         except Exception as e:
             raise IRPAPIError(f"Failed to delete analysis : {e}")
+
+    def get_analysis_by_app_analysis_id(self, app_analysis_id: int) -> Dict[str, Any]:
+        """
+        Retrieve analysis by appAnalysisId (the ID used in the application/UI).
+
+        Args:
+            app_analysis_id: Application analysis ID (e.g., 35810)
+
+        Returns:
+            Dict containing analysisId and exposureResourceId
+
+        Raises:
+            IRPValidationError: If app_analysis_id is invalid
+            IRPAPIError: If request fails or analysis not found
+        """
+        validate_positive_int(app_analysis_id, "app_analysis_id")
+
+        try:
+            filter_str = f"appAnalysisId={app_analysis_id}"
+            results = self.search_analyses(filter=filter_str)
+            if not results:
+                raise IRPAPIError(f"No analysis found with appAnalysisId={app_analysis_id}")
+
+            analysis = results[0]
+            return {
+                'analysisId': analysis.get('analysisId'),
+                'exposureResourceId': analysis.get('exposureResourceId'),
+                'analysisName': analysis.get('analysisName'),
+                'raw': analysis
+            }
+        except IRPAPIError:
+            raise
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get analysis by appAnalysisId {app_analysis_id}: {e}")
+
+    def _validate_perspective_code(self, perspective_code: str) -> None:
+        """Validate perspective code is one of the allowed values."""
+        if perspective_code not in PERSPECTIVE_CODES:
+            raise IRPValidationError(
+                f"Invalid perspective_code '{perspective_code}'. "
+                f"Must be one of: {', '.join(PERSPECTIVE_CODES)}"
+            )
+
+    def get_elt(
+        self,
+        analysis_id: int,
+        perspective_code: str,
+        exposure_resource_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve Event Loss Table (ELT) for an analysis.
+
+        Args:
+            analysis_id: Analysis ID
+            perspective_code: One of 'GR' (Gross), 'GU' (Ground-Up), 'RL' (Reinsurance Layer)
+            exposure_resource_id: Exposure resource ID (portfolio ID from analysis)
+
+        Returns:
+            List of ELT records containing eventId, positionValue, stdDevI, stdDevC, etc.
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If request fails
+        """
+        validate_positive_int(analysis_id, "analysis_id")
+        validate_positive_int(exposure_resource_id, "exposure_resource_id")
+        self._validate_perspective_code(perspective_code)
+
+        params = {
+            'perspectiveCode': perspective_code,
+            'exposureResourceType': 'PORTFOLIO',
+            'exposureResourceId': exposure_resource_id
+        }
+
+        try:
+            response = self.client.request(
+                'GET',
+                GET_ANALYSIS_ELT.format(analysisId=analysis_id),
+                params=params
+            )
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get ELT for analysis {analysis_id}: {e}")
+
+    def get_ep(
+        self,
+        analysis_id: int,
+        perspective_code: str,
+        exposure_resource_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve EP (Exceedance Probability) metrics for an analysis.
+
+        Args:
+            analysis_id: Analysis ID
+            perspective_code: One of 'GR' (Gross), 'GU' (Ground-Up), 'RL' (Reinsurance Layer)
+            exposure_resource_id: Exposure resource ID (portfolio ID from analysis)
+
+        Returns:
+            List of EP curve data (OEP, AEP, CEP, TCE curves)
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If request fails
+        """
+        validate_positive_int(analysis_id, "analysis_id")
+        validate_positive_int(exposure_resource_id, "exposure_resource_id")
+        self._validate_perspective_code(perspective_code)
+
+        params = {
+            'perspectiveCode': perspective_code,
+            'exposureResourceType': 'PORTFOLIO',
+            'exposureResourceId': exposure_resource_id
+        }
+
+        try:
+            response = self.client.request(
+                'GET',
+                GET_ANALYSIS_EP.format(analysisId=analysis_id),
+                params=params
+            )
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get EP metrics for analysis {analysis_id}: {e}")
+
+    def get_stats(
+        self,
+        analysis_id: int,
+        perspective_code: str,
+        exposure_resource_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve statistics for an analysis.
+
+        Args:
+            analysis_id: Analysis ID
+            perspective_code: One of 'GR' (Gross), 'GU' (Ground-Up), 'RL' (Reinsurance Layer)
+            exposure_resource_id: Exposure resource ID (portfolio ID from analysis)
+
+        Returns:
+            List of statistical metrics
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If request fails
+        """
+        validate_positive_int(analysis_id, "analysis_id")
+        validate_positive_int(exposure_resource_id, "exposure_resource_id")
+        self._validate_perspective_code(perspective_code)
+
+        params = {
+            'perspectiveCode': perspective_code,
+            'exposureResourceType': 'PORTFOLIO',
+            'exposureResourceId': exposure_resource_id
+        }
+
+        try:
+            response = self.client.request(
+                'GET',
+                GET_ANALYSIS_STATS.format(analysisId=analysis_id),
+                params=params
+            )
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get statistics for analysis {analysis_id}: {e}")
+
+    def get_plt(
+        self,
+        analysis_id: int,
+        perspective_code: str,
+        exposure_resource_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve Period Loss Table (PLT) for an analysis.
+
+        Note: PLT is only available for HD (High Definition) analyses.
+
+        Args:
+            analysis_id: Analysis ID
+            perspective_code: One of 'GR' (Gross), 'GU' (Ground-Up), 'RL' (Reinsurance Layer)
+            exposure_resource_id: Exposure resource ID (portfolio ID from analysis)
+
+        Returns:
+            List of PLT records containing event dates, loss dates, and loss amounts
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If request fails
+        """
+        validate_positive_int(analysis_id, "analysis_id")
+        validate_positive_int(exposure_resource_id, "exposure_resource_id")
+        self._validate_perspective_code(perspective_code)
+
+        params = {
+            'perspectiveCode': perspective_code,
+            'exposureResourceType': 'PORTFOLIO',
+            'exposureResourceId': exposure_resource_id
+        }
+
+        try:
+            response = self.client.request(
+                'GET',
+                GET_ANALYSIS_PLT.format(analysisId=analysis_id),
+                params=params
+            )
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get PLT for analysis {analysis_id}: {e}")
