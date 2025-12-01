@@ -336,8 +336,9 @@ def create_batch(
     except Exception as e:
         raise BatchError(f"Transformer failed for batch_type '{batch_type}': {str(e)}")
 
-    if not job_configs:
-        raise BatchError(f"Transformer returned no job configurations for batch_type '{batch_type}'")
+    # Note: Empty job_configs is allowed - batch will be created with 0 jobs
+    # This is useful for optional batch types (e.g., Create Reinsurance Treaties when no treaties defined)
+    # Empty batches will be immediately marked as COMPLETED during reconciliation
 
     # Create batch and jobs in transaction
     # Use transaction_context to ensure atomicity: if any job creation fails,
@@ -873,8 +874,12 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
         j['status'] in TERMINAL_JOB_STATUSES for j in non_skipped_jobs
     )
 
-    if not all_jobs_terminal:
-        # Jobs still in progress (or no non-skipped jobs) - batch remains ACTIVE
+    # Handle empty batch (no non-skipped jobs/configs) - immediately COMPLETED
+    # This supports optional batch types where transformer returned 0 job configurations
+    if len(non_skipped_jobs) == 0 and len(non_skipped_configs) == 0:
+        recon_result = BatchStatus.COMPLETED
+    elif not all_jobs_terminal:
+        # Jobs still in progress - batch remains ACTIVE
         recon_result = BatchStatus.ACTIVE
     else:
         # All jobs are in terminal states - determine final batch status

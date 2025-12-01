@@ -543,8 +543,19 @@ def test_create_batch_transformer_returns_empty(test_schema):
     BATCH_TYPE_TRANSFORMERS['test_empty_transformer'] = transform_empty
 
     try:
-        with pytest.raises(BatchError, match="returned no job configurations"):
-            create_batch('test_empty_transformer', config_id, step_id, schema=test_schema)
+        # Empty batches are now allowed for workflow continuity (e.g., optional batch types)
+        batch_id = create_batch('test_empty_transformer', config_id, step_id, schema=test_schema)
+
+        # Batch should be created successfully
+        assert batch_id is not None
+
+        # Batch should have 0 jobs
+        jobs = get_batch_jobs(batch_id, schema=test_schema)
+        assert len(jobs) == 0
+
+        # Recon should immediately mark as COMPLETED
+        result = recon_batch(batch_id, schema=test_schema)
+        assert result == BatchStatus.COMPLETED
     finally:
         # Cleanup
         del BATCH_TYPE_TRANSFORMERS['test_empty_transformer']
@@ -732,10 +743,11 @@ def test_recon_batch_empty_batch(test_schema):
     if not log_records.empty:
         log_record = log_records.iloc[0]
 
-    # With no non-skipped configs and no non-skipped jobs, should be ACTIVE
-    assert result == BatchStatus.ACTIVE
+    # With no non-skipped configs and no non-skipped jobs, should be COMPLETED
+    # (Empty batches complete immediately for workflow continuity)
+    assert result == BatchStatus.COMPLETED
     assert not log_record.empty
-    assert log_record['recon_result'] == BatchStatus.ACTIVE
+    assert log_record['recon_result'] == BatchStatus.COMPLETED
 
 
 @pytest.mark.database
