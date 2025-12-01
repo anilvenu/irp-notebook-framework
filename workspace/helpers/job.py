@@ -220,6 +220,10 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             workflow_id, request_json, response_json = _submit_grouping_job(
                 job_id, job_config, irp_client
             )
+        elif batch_type == BatchType.EXPORT_TO_RDM:
+            workflow_id, request_json, response_json = _submit_export_to_rdm_job(
+                job_id, job_config, irp_client
+            )
         # Add more batch types as needed
 
         return workflow_id, request_json, response_json
@@ -968,6 +972,80 @@ def _submit_grouping_job(
     return workflow_id, request_json, response_json
 
 
+def _submit_export_to_rdm_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Submit Export to RDM job to Moody's API.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data containing:
+            - rdm_name: Target RDM database name
+            - server_name: Database server name (e.g., 'databridge-1')
+            - analysis_names: List of analysis and group names to export
+        client: IRPClient instance
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+
+    Raises:
+        ValueError: If required fields are missing
+        JobError: If submission fails
+    """
+    # Extract required fields
+    rdm_name = job_config.get('rdm_name')
+    server_name = job_config.get('server_name')
+    analysis_names = job_config.get('analysis_names', [])
+    database_id = job_config.get('database_id')  # May be None for seed job
+
+    # Validate required fields
+    if not rdm_name:
+        raise ValueError("Missing required field: rdm_name")
+    if not server_name:
+        raise ValueError("Missing required field: server_name")
+    if not analysis_names:
+        raise ValueError("Missing required field: analysis_names")
+
+    # Submit RDM export job
+    try:
+        moody_job_id = client.rdm.submit_rdm_export_job(
+            server_name=server_name,
+            rdm_name=rdm_name,
+            analysis_names=analysis_names,
+            database_id=database_id
+        )
+    except Exception as e:
+        raise JobError(f"Failed to submit RDM export job: {str(e)}")
+
+    # Build workflow ID
+    workflow_id = str(moody_job_id)
+
+    # Build request/response structures
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.EXPORT_TO_RDM,
+        'configuration': job_config,
+        'api_request': {
+            'rdm_name': rdm_name,
+            'server_name': server_name,
+            'analysis_count': len(analysis_names)
+        },
+        'submitted_at': datetime.now().isoformat()
+    }
+
+    response_json = {
+        'workflow_id': workflow_id,
+        'moody_job_id': moody_job_id,
+        'status': 'ACCEPTED',
+        'message': f'RDM export job submitted to export {len(analysis_names)} items to "{rdm_name}"'
+    }
+
+    return workflow_id, request_json, response_json
+
+
 def _register_job_submission(
     job_id: int,
     workflow_id: str,
@@ -1212,6 +1290,61 @@ def get_job_config(job_id: int, schema: str = 'public') -> Dict[str, Any]:
     return config
 
 
+def update_job_configuration_data(
+    job_configuration_id: int,
+    updates: Dict[str, Any],
+    schema: str = 'public'
+) -> None:
+    """
+    Update specific fields in a job configuration's JSON data.
+
+    Merges the provided updates into the existing job_configuration_data,
+    preserving fields not included in updates.
+
+    LAYER: 2 (Compound - read + update)
+
+    Args:
+        job_configuration_id: ID of the job configuration to update
+        updates: Dict of fields to update/add to the configuration
+        schema: Database schema
+
+    Raises:
+        JobError: If job configuration not found
+    """
+    if not isinstance(job_configuration_id, int) or job_configuration_id <= 0:
+        raise JobError(f"Invalid job_configuration_id: {job_configuration_id}")
+
+    # Get current configuration
+    current = execute_query(
+        "SELECT job_configuration_data FROM irp_job_configuration WHERE id = %s",
+        (job_configuration_id,),
+        schema=schema
+    )
+
+    if current.empty:
+        raise JobError(f"Job configuration {job_configuration_id} not found")
+
+    config_data = current.iloc[0]['job_configuration_data']
+
+    # Handle if stored as string
+    if isinstance(config_data, str):
+        config_data = json.loads(config_data)
+
+    # Merge updates
+    config_data.update(updates)
+
+    # Save back
+    execute_command(
+        """
+        UPDATE irp_job_configuration
+        SET job_configuration_data = %s, updated_ts = NOW()
+        WHERE id = %s
+        """,
+        (json.dumps(config_data), job_configuration_id),
+        schema=schema
+    )
+
+
 # ============================================================================
 # JOB WORKFLOW OPERATIONS (Layer 3)
 # ============================================================================
@@ -1436,8 +1569,9 @@ def submit_job(
     # Read job
     job = read_job(job_id, schema=schema)
 
-    # Check if already submitted
-    already_submitted = job.get('moodys_workflow_id') is not None
+    # Check if already submitted (must have a non-empty workflow ID)
+    workflow_id_value = job.get('moodys_workflow_id')
+    already_submitted = workflow_id_value is not None and workflow_id_value != ''
 
     if not already_submitted or force:
         # Get job configuration
@@ -1552,6 +1686,8 @@ def track_job_status(
         elif batch_type == BatchType.GROUPING_ROLLUP:
             # Rollup groups use the same tracking API as regular grouping
             job_data = irp_client.analysis.get_analysis_grouping_job(int(workflow_id))
+        elif batch_type == BatchType.EXPORT_TO_RDM:
+            job_data = irp_client.rdm.get_rdm_export_job(int(workflow_id))
         else:
             raise ValueError(f"Invalid batch type for tracking: {batch_type}")
 

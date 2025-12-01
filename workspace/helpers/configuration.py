@@ -442,24 +442,89 @@ def transform_grouping_rollup(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Transform configuration for Export to RDM batch type.
-    Creates one job configuration per group.
+
+    The Moody's RDM export API has a limit of 100 analyses per request.
+    When there are more than 100 items to export, this creates:
+    - A "seed job" with 1 analysis (creates the RDM)
+    - Remaining jobs with up to 100 analyses each (append to RDM using database_id)
+
+    The job exports to the RDM specified in Metadata['Export RDM Name'].
+    Analysis names come from the Analysis Table sheet.
+    Group names come from the Groupings sheet.
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        List of job configurations (one per group)
+        List of job configurations (1 if <=100 items, multiple if >100)
     """
+    CHUNK_SIZE = 100
+
     metadata = _extract_metadata(config)
+    analysis_table = config.get('Analysis Table', [])
     groupings = config.get('Groupings', [])
 
-    job_configs = []
-    for group_row in groupings:
-        job_config = {
+    # Collect all analysis names
+    analysis_names = [
+        a.get('Analysis Name') for a in analysis_table
+        if a.get('Analysis Name') and pd.notna(a.get('Analysis Name'))
+    ]
+
+    # Collect all group names
+    group_names = [
+        g.get('Group_Name') for g in groupings
+        if g.get('Group_Name') and pd.notna(g.get('Group_Name'))
+    ]
+
+    # Combine into single export list (analyses + groups)
+    all_export_names = analysis_names + group_names
+
+    rdm_name = metadata.get('Export RDM Name')
+    server_name = 'databridge-1'
+
+    # If within limit, create single job (no seed needed)
+    if len(all_export_names) <= CHUNK_SIZE:
+        return [{
             'Metadata': metadata,
-            **group_row
-        }
-        job_configs.append(job_config)
+            'rdm_name': rdm_name,
+            'server_name': server_name,
+            'analysis_names': all_export_names,
+            'analysis_count': len(analysis_names),
+            'group_count': len(group_names),
+            'is_seed_job': False,
+            'database_id': None
+        }]
+
+    # Chunking needed: seed job (1 analysis) + remaining chunks
+    job_configs = []
+
+    # Seed job: first analysis only (creates the RDM)
+    job_configs.append({
+        'Metadata': metadata,
+        'rdm_name': rdm_name,
+        'server_name': server_name,
+        'analysis_names': [all_export_names[0]],
+        'analysis_count': 1 if analysis_names else 0,
+        'group_count': 1 if not analysis_names and group_names else 0,
+        'is_seed_job': True,
+        'database_id': None
+    })
+
+    # Remaining items in chunks of up to 100
+    remaining = all_export_names[1:]
+    chunks = [remaining[i:i+CHUNK_SIZE] for i in range(0, len(remaining), CHUNK_SIZE)]
+
+    for chunk in chunks:
+        job_configs.append({
+            'Metadata': metadata,
+            'rdm_name': rdm_name,
+            'server_name': server_name,
+            'analysis_names': chunk,
+            'analysis_count': len([n for n in chunk if n in analysis_names]),
+            'group_count': len([n for n in chunk if n in group_names]),
+            'is_seed_job': False,
+            'database_id': None  # Will be populated after seed job completes
+        })
 
     return job_configs
 

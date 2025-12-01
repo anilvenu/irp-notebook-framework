@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional
 
 from helpers.irp_integration.utils import extract_id_from_location_header
 from .client import Client
-from .constants import CREATE_RDM_EXPORT_JOB, GET_EXPORT_JOB, WORKFLOW_COMPLETED_STATUSES
+from .constants import CREATE_RDM_EXPORT_JOB, GET_EXPORT_JOB, SEARCH_DATABASES, WORKFLOW_COMPLETED_STATUSES
 from .exceptions import IRPAPIError, IRPJobError
 from .validators import validate_non_empty_string, validate_list_not_empty, validate_positive_int
 
@@ -53,7 +53,7 @@ class RDMManager:
             analysis_names: List[str]
     ) -> Dict[str, Any]:
         """
-        Export multiple analyses to RDM (Risk Data Model).
+        Export multiple analyses to RDM (Risk Data Model) and poll to completion.
 
         Args:
             server_name: Database server name
@@ -67,57 +67,31 @@ class RDMManager:
             IRPValidationError: If parameters are invalid
             IRPAPIError: If export fails or analyses not found
         """
-        validate_non_empty_string(server_name, "server_name")
-        validate_non_empty_string(rdm_name, "rdm_name")
-        validate_list_not_empty(analysis_names, "analysis_names")
-
-        database_servers = self.edm_manager.search_database_servers(filter=f"serverName=\"{server_name}\"")
-        try:
-            database_server_id = database_servers[0]['serverId']
-        except (KeyError, IndexError, TypeError) as e:
-            raise IRPAPIError(
-                f"Failed to extract server ID for server '{server_name}': {e}"
-            ) from e
-
-        rdms = self.edm_manager.search_edms(filter=f"exposureName=\"{rdm_name}\"")
-        if (len(rdms) > 0):
-            raise IRPAPIError(f"RDM with name {rdm_name} already exists")
-
-        analysis_uris = []
-        for name in analysis_names:
-            analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
-            if (len(analysis_response) == 0):
-                raise IRPAPIError(f"Analysis with this name does not exist: {name}")
-            if (len(analysis_response) > 1):
-                raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
-            try:
-                analysis_uris.append(analysis_response[0]['uri'])
-            except (KeyError, IndexError, TypeError) as e:
-                raise IRPAPIError(
-                    f"Failed to extract analysis URI for analysis '{name}': {e}"
-                ) from e
-
         rdm_export_job_id = self.submit_rdm_export_job(
+            server_name=server_name,
             rdm_name=rdm_name,
-            server_id=database_server_id,
-            resource_uris=analysis_uris
+            analysis_names=analysis_names
         )
         return self.poll_rdm_export_job_to_completion(rdm_export_job_id)
 
 
     def submit_rdm_export_job(
             self,
+            server_name: str,
             rdm_name: str,
-            server_id: int,
-            resource_uris: List[str]
+            analysis_names: List[str],
+            database_id: Optional[int] = None
     ) -> int:
         """
         Submit RDM export job.
 
+        Performs validation (server lookup, RDM existence check, analysis URI
+        resolution) and submits the export job.
+
         Args:
+            server_name: Database server name
             rdm_name: Name for the RDM
-            server_id: Database server ID
-            resource_uris: List of analysis resource URIs to export
+            analysis_names: List of analysis names to export
 
         Returns:
             Job ID
@@ -126,16 +100,51 @@ class RDMManager:
             IRPValidationError: If parameters are invalid
             IRPAPIError: If job submission fails
         """
+        validate_non_empty_string(server_name, "server_name")
         validate_non_empty_string(rdm_name, "rdm_name")
-        validate_positive_int(server_id, "server_id")
+        validate_list_not_empty(analysis_names, "analysis_names")
+
+        # Look up server ID
+        database_servers = self.edm_manager.search_database_servers(filter=f"serverName=\"{server_name}\"")
+        try:
+            server_id = database_servers[0]['serverId']
+        except (KeyError, IndexError, TypeError) as e:
+            raise IRPAPIError(
+                f"Failed to extract server ID for server '{server_name}': {e}"
+            ) from e
+
+        # Resolve analysis names to URIs
+        resource_uris = []
+        for name in analysis_names:
+            analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
+            if len(analysis_response) == 0:
+                raise IRPAPIError(f"Analysis with this name does not exist: {name}")
+            if len(analysis_response) > 1:
+                raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
+            try:
+                resource_uris.append(analysis_response[0]['uri'])
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPAPIError(
+                    f"Failed to extract analysis URI for analysis '{name}': {e}"
+                ) from e
+
+        # Build settings - use databaseId if provided (appending to existing RDM),
+        # otherwise use rdmName (creating new RDM)
+        if database_id:
+            settings = {
+                "databaseId": database_id,
+                "serverId": server_id
+            }
+        else:
+            settings = {
+                "rdmName": rdm_name,
+                "serverId": server_id
+            }
 
         data = {
             "exportType": "RDM_DATABRIDGE",
             "resourceType": "analyses",
-            "settings": {
-                "rdmName": rdm_name,
-                "serverId": server_id
-            },
+            "settings": settings,
             "resourceUris": resource_uris
         }
 
@@ -216,3 +225,97 @@ class RDMManager:
                     f"RDM Export job ID {job_id} did not complete within {timeout} seconds. Last status: {status}"
                 )
             time.sleep(interval)
+
+    def get_rdm_database_id(self, rdm_name: str, server_name: str = "databridge-1") -> int:
+        """
+        Get database ID for an existing RDM by name.
+
+        Args:
+            rdm_name: Name of the RDM
+            server_name: Name of the database server (default: "databridge-1")
+
+        Returns:
+            Database ID
+
+        Raises:
+            IRPAPIError: If RDM not found
+        """
+        databases = self.search_databases(
+            server_name=server_name,
+            filter=f"databaseName LIKE \"{rdm_name}*\""
+        )
+        if not databases:
+            raise IRPAPIError(f"RDM '{rdm_name}' not found on server '{server_name}'")
+        elif len(databases) > 1:
+            raise IRPAPIError(f"Multiple RDMs found with name '{rdm_name}' on server '{server_name}'")
+
+        try:
+            return databases[0]['databaseId']
+        except (KeyError, IndexError) as e:
+            raise IRPAPIError(f"Failed to extract databaseId for RDM '{rdm_name}': {e}")
+
+    def get_rdm_database_full_name(self, rdm_name: str, server_name: str = "databridge-1") -> str:
+        """
+        Get full database name for an existing RDM by name prefix.
+
+        Args:
+            rdm_name: Name prefix of the RDM
+            server_name: Name of the database server (default: "databridge-1")
+
+        Returns:
+            Full database name
+
+        Raises:
+            IRPAPIError: If RDM not found
+        """
+        databases = self.search_databases(
+            server_name=server_name,
+            filter=f"databaseName LIKE \"{rdm_name}*\""
+        )
+        if not databases:
+            raise IRPAPIError(f"RDM '{rdm_name}' not found on server '{server_name}'")
+        elif len(databases) > 1:
+            raise IRPAPIError(f"Multiple RDMs found with name '{rdm_name}' on server '{server_name}'")
+
+        try:
+            return databases[0]['databaseName']
+        except (KeyError, IndexError) as e:
+            raise IRPAPIError(f"Failed to extract databaseName for RDM '{rdm_name}': {e}")
+
+    def search_databases(self, server_name: str, filter: str = "") -> List[Dict[str, Any]]:
+        """
+        Search databases on a server.
+
+        Args:
+            server_name: Name of the database server
+            filter: Optional filter string (e.g., 'databaseName="MyRDM"')
+
+        Returns:
+            List of database records
+
+        Raises:
+            IRPAPIError: If request fails
+        """
+        # Look up server ID first
+        database_servers = self.edm_manager.search_database_servers(filter=f"serverName=\"{server_name}\"")
+        if not database_servers:
+            raise IRPAPIError(f"Database server '{server_name}' not found")
+
+        try:
+            server_id = database_servers[0]['serverId']
+        except (KeyError, IndexError) as e:
+            raise IRPAPIError(f"Failed to extract server ID: {e}")
+
+        params = {}
+        if filter:
+            params['filter'] = filter
+
+        try:
+            response = self.client.request(
+                'GET',
+                SEARCH_DATABASES.format(serverId=server_id),
+                params=params
+            )
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to search databases: {e}")

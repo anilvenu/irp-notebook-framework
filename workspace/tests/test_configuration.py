@@ -647,20 +647,100 @@ def test_transform_grouping():
 
 @pytest.mark.unit
 def test_transform_export_to_rdm():
-    """Test Export to RDM transformer"""
+    """Test Export to RDM transformer - single job when <=100 items"""
     config = {
-        'Metadata': {'Current Date Value': '202503'},
+        'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'TestRDM'},
+        'Analysis Table': [
+            {'Analysis Name': 'A1'},
+            {'Analysis Name': 'A2'}
+        ],
         'Groupings': [
-            {'Group_Name': 'G1', 'items': ['P1', 'P2']},
-            {'Group_Name': 'G2', 'items': ['A1']}
+            {'Group_Name': 'G1'},
+            {'Group_Name': 'G2'}
         ]
     }
 
     result = create_job_configurations('Export to RDM', config)
 
-    assert len(result) == 2, "Should create one job per group"
+    # Should create single job with all analyses + groups when <=100 items
+    assert len(result) == 1, "Should create single job when <=100 items"
     assert result[0]['Metadata'] == config['Metadata']
-    assert result[0]['Group_Name'] == 'G1'
+    assert result[0]['rdm_name'] == 'TestRDM'
+    assert result[0]['server_name'] == 'databridge-1'
+    assert result[0]['analysis_names'] == ['A1', 'A2', 'G1', 'G2']
+    assert result[0]['analysis_count'] == 2
+    assert result[0]['group_count'] == 2
+    assert result[0]['is_seed_job'] is False
+    assert result[0]['database_id'] is None
+
+
+@pytest.mark.unit
+def test_transform_export_to_rdm_chunking():
+    """Test Export to RDM transformer - chunking when >100 items"""
+    # Create config with 150 analyses (requires seed job + 2 chunks)
+    # seed (1) + remaining 149 split into [100, 49] = 3 jobs total
+    analysis_names = [{'Analysis Name': f'Analysis_{i}'} for i in range(150)]
+    config = {
+        'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'LargeRDM'},
+        'Analysis Table': analysis_names,
+        'Groupings': []
+    }
+
+    result = create_job_configurations('Export to RDM', config)
+
+    # Should create seed job (1 analysis) + 2 chunks (100 + 49)
+    assert len(result) == 3, "Should create seed + 2 chunks for 150 items"
+
+    # First job is seed job with 1 analysis
+    assert result[0]['is_seed_job'] is True
+    assert len(result[0]['analysis_names']) == 1
+    assert result[0]['analysis_names'][0] == 'Analysis_0'
+    assert result[0]['database_id'] is None
+
+    # Second job has first 100 of remaining
+    assert result[1]['is_seed_job'] is False
+    assert len(result[1]['analysis_names']) == 100
+    assert result[1]['analysis_names'][0] == 'Analysis_1'
+    assert result[1]['database_id'] is None
+
+    # Third job has remaining 49
+    assert result[2]['is_seed_job'] is False
+    assert len(result[2]['analysis_names']) == 49
+    assert result[2]['analysis_names'][0] == 'Analysis_101'
+
+
+@pytest.mark.unit
+def test_transform_export_to_rdm_large_chunking():
+    """Test Export to RDM transformer - multiple chunks for very large exports"""
+    # Create config with 250 analyses
+    # seed (1) + remaining 249 split into [100, 100, 49] = 4 jobs total
+    analysis_names = [{'Analysis Name': f'Analysis_{i}'} for i in range(250)]
+    config = {
+        'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'VeryLargeRDM'},
+        'Analysis Table': analysis_names,
+        'Groupings': []
+    }
+
+    result = create_job_configurations('Export to RDM', config)
+
+    # Should create seed job + 3 chunks
+    assert len(result) == 4, "Should create seed + 3 chunks for 250 items"
+
+    # Seed job
+    assert result[0]['is_seed_job'] is True
+    assert len(result[0]['analysis_names']) == 1
+
+    # First chunk (100 analyses)
+    assert result[1]['is_seed_job'] is False
+    assert len(result[1]['analysis_names']) == 100
+
+    # Second chunk (100 analyses)
+    assert result[2]['is_seed_job'] is False
+    assert len(result[2]['analysis_names']) == 100
+
+    # Third chunk (remaining 49)
+    assert result[3]['is_seed_job'] is False
+    assert len(result[3]['analysis_names']) == 49
 
 
 @pytest.mark.unit
