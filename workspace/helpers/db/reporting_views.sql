@@ -177,13 +177,14 @@ WITH batch_stats AS (
         COUNT(DISTINCT jc.id) FILTER (WHERE vjc.config_report_status = 'UNFULFILLED') AS unfulfilled_configs,
         COUNT(DISTINCT jc.id) FILTER (WHERE vjc.config_report_status = 'SKIPPED') AS skipped_configs,
         -- Job stats (from v_irp_job_configuration)
-        SUM(vjc.total_jobs) AS total_jobs,
-        SUM(vjc.unsubmitted_jobs) AS unsubmitted_jobs,
-        SUM(vjc.failed_jobs) AS failed_jobs,
-        SUM(vjc.cancelled_jobs) AS cancelled_jobs,
-        SUM(vjc.error_jobs) AS error_jobs,
-        SUM(vjc.finished_jobs) AS finished_jobs,
-        SUM(vjc.skipped_jobs) AS skipped_jobs,
+        -- Use COALESCE to handle empty batches (no job configs) where SUM returns NULL
+        COALESCE(SUM(vjc.total_jobs), 0) AS total_jobs,
+        COALESCE(SUM(vjc.unsubmitted_jobs), 0) AS unsubmitted_jobs,
+        COALESCE(SUM(vjc.failed_jobs), 0) AS failed_jobs,
+        COALESCE(SUM(vjc.cancelled_jobs), 0) AS cancelled_jobs,
+        COALESCE(SUM(vjc.error_jobs), 0) AS error_jobs,
+        COALESCE(SUM(vjc.finished_jobs), 0) AS finished_jobs,
+        COALESCE(SUM(vjc.skipped_jobs), 0) AS skipped_jobs,
         -- Aggregate flags
         BOOL_OR(vjc.has_failures) AS has_any_failures,
         BOOL_OR(vjc.has_errors) AS has_any_errors,
@@ -208,6 +209,15 @@ SELECT
     bs.*,
     -- Derived batch reporting status based on configuration and job reporting statuses
     CASE
+        -- Rule 0: Empty batch (0 configs, 0 jobs) - use batch_status directly
+        -- This handles optional batch types (e.g., Create Reinsurance Treaties with no treaties)
+        WHEN bs.total_jobs = 0 THEN
+            CASE
+                WHEN bs.batch_status = 'COMPLETED' THEN 'COMPLETED'
+                WHEN bs.batch_status = 'INITIATED' THEN 'UNSUBMITTED'
+                WHEN bs.batch_status = 'ACTIVE' THEN 'IN-PROGRESS'
+                ELSE bs.batch_status::TEXT
+            END
         -- Rule 1: If all configurations are SKIPPED reporting status, then SKIPPED
         WHEN bs.total_configs > 0 AND bs.skipped_configs = bs.total_configs THEN 'SKIPPED'
         -- Rule 2: If all configurations are FULFILLED, then COMPLETED
