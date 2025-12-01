@@ -840,8 +840,8 @@ def _submit_analysis_job(
         raise ValueError("Missing required field: Analysis Profile")
     if not output_profile:
         raise ValueError("Missing required field: Output Profile")
-    if not event_rate:
-        raise ValueError("Missing required field: Event Rate")
+    # Note: Event Rate is required for DLM analyses but optional for HD analyses
+    # The validation is performed in submit_portfolio_analysis_job after determining job type
 
     # Extract treaty names (up to 5)
     treaty_names = []

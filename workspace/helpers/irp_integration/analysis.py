@@ -165,7 +165,7 @@ class AnalysisManager:
             job_name: Name for analysis job (must be unique)
             analysis_profile_name: Model profile name
             output_profile_name: Output profile name
-            event_rate_scheme_name: Event rate scheme name
+            event_rate_scheme_name: Event rate scheme name (required for DLM, optional for HD)
             treaty_names: List of treaty names to apply
             tag_names: List of tag names to apply
             currency: Optional currency configuration
@@ -183,7 +183,7 @@ class AnalysisManager:
         validate_non_empty_string(job_name, "job_name")
         validate_non_empty_string(analysis_profile_name, "analysis_profile_name")
         validate_non_empty_string(output_profile_name, "output_profile_name")
-        validate_non_empty_string(event_rate_scheme_name, "event_rate_scheme_name")
+        # event_rate_scheme_name validation deferred - required for DLM but optional for HD
 
         # Check if analysis name already exists (unless skipped for batch operations)
         if not skip_duplicate_check:
@@ -239,17 +239,14 @@ class AnalysisManager:
         else:
             treaty_ids = []
 
-        # Look up reference data
+        # Look up reference data - model profile first to determine job type
         model_profile_response = self.reference_data_manager.get_model_profile_by_name(analysis_profile_name)
         output_profile_response = self.reference_data_manager.get_output_profile_by_name(output_profile_name)
-        event_rate_scheme_response = self.reference_data_manager.get_event_rate_scheme_by_name(event_rate_scheme_name)
 
         if model_profile_response.get('count', 0) == 0:
             raise IRPReferenceDataError(f"Analysis profile '{analysis_profile_name}' not found")
         if len(output_profile_response) == 0:
             raise IRPReferenceDataError(f"Output profile '{output_profile_name}' not found")
-        if event_rate_scheme_response.get('count', 0) == 0:
-            raise IRPReferenceDataError(f"Event rate scheme '{event_rate_scheme_name}' not found")
 
         try:
             model_profile_id = model_profile_response['items'][0]['id']
@@ -269,12 +266,20 @@ class AnalysisManager:
                 f"Failed to extract output profile ID for '{output_profile_name}': {e}"
             ) from e
 
-        try:
-            event_rate_scheme_id = event_rate_scheme_response['items'][0]['eventRateSchemeId']
-        except (KeyError, IndexError, TypeError) as e:
-            raise IRPReferenceDataError(
-                f"Failed to extract event rate scheme ID for '{event_rate_scheme_name}': {e}"
-            ) from e
+        # Event rate scheme is required for DLM analyses but optional for HD
+        event_rate_scheme_id = None
+        if event_rate_scheme_name:
+            event_rate_scheme_response = self.reference_data_manager.get_event_rate_scheme_by_name(event_rate_scheme_name)
+            if event_rate_scheme_response.get('count', 0) == 0:
+                raise IRPReferenceDataError(f"Event rate scheme '{event_rate_scheme_name}' not found")
+            try:
+                event_rate_scheme_id = event_rate_scheme_response['items'][0]['eventRateSchemeId']
+            except (KeyError, IndexError, TypeError) as e:
+                raise IRPReferenceDataError(
+                    f"Failed to extract event rate scheme ID for '{event_rate_scheme_name}': {e}"
+                ) from e
+        elif job_type == "DLM":
+            raise IRPReferenceDataError("Event rate scheme is required for DLM analyses")
 
         # Look up tag IDs
         try:
@@ -285,19 +290,24 @@ class AnalysisManager:
         if currency is None:
             currency = build_analysis_currency_dict()
 
+        settings = {
+            "name": job_name,
+            "modelProfileId": model_profile_id,
+            "outputProfileId": output_profile_id,
+            "treatyIds": treaty_ids,
+            "tagIds": tag_ids,
+            "currency": currency
+        }
+
+        # Only include eventRateSchemeId for DLM analyses
+        if event_rate_scheme_id is not None:
+            settings["eventRateSchemeId"] = event_rate_scheme_id
+
         data = {
             "resourceUri": portfolio_uri,
             "resourceType": "portfolio",
             "type": job_type,
-            "settings": {
-                "name": job_name,
-                "modelProfileId": model_profile_id,
-                "outputProfileId": output_profile_id,
-                "eventRateSchemeId": event_rate_scheme_id,
-                "treatyIds": treaty_ids,
-                "tagIds": tag_ids,
-                "currency": currency
-            }
+            "settings": settings
         }
 
         try:
