@@ -32,6 +32,11 @@ workspace/workflows/_Template/files/configuration/*.xlsx
 *.env
 !.env.example
 
+# Kerberos (keytabs contain sensitive credentials)
+keytabs/*.keytab
+config/krb5.conf
+!config/krb5.conf.example
+
 # Data
 data/
 logs/

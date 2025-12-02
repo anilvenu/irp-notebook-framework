@@ -38,19 +38,31 @@ services:
       - TEAMS_NOTIFICATION_ENABLED=${TEAMS_NOTIFICATION_ENABLED:-true}
       - TEAMS_DEFAULT_DASHBOARD_URL=${TEAMS_DEFAULT_DASHBOARD_URL}
       - TEAMS_DEFAULT_JUPYTERLAB_URL=${TEAMS_DEFAULT_JUPYTERLAB_URL}
+      # Kerberos configuration for Windows Authentication
+      - KERBEROS_ENABLED=${KERBEROS_ENABLED:-false}
+      - KRB5_REALM=${KRB5_REALM:-}
+      - KRB5_KDC=${KRB5_KDC:-}
+      - KRB5_ADMIN_SERVER=${KRB5_ADMIN_SERVER:-}
+      - KRB5_PRINCIPAL=${KRB5_PRINCIPAL:-}
+      - KRB5_KEYTAB=${KRB5_KEYTAB:-/etc/krb5/svc_jupyter.keytab}
+      - KRB5_CONFIG=/etc/krb5.conf
+    # DEV ONLY: Map AD/SQL Server hostname to Docker host (port-forwarded to Hyper-V VM)
+    # In production, remove this - the container should be on a network that can
+    # directly resolve and reach the AD domain controller and SQL Server.
+    extra_hosts:
+      - "irp-adlab01.irplab.local:host-gateway"
+      - "irp-adlab01:host-gateway"
     volumes:
       - ./workspace:${NOTEBOOK_HOME_DIR:-/home/jovyan}/workspace
+      # Kerberos configuration files for Windows Authentication
+      - ./config/krb5.conf:/etc/krb5.conf:ro
+      - ./keytabs:/etc/krb5:ro
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - irp-network
     restart: unless-stopped
-    command: >
-      start-notebook.sh 
-      --NotebookApp.token='' 
-      --NotebookApp.password='' 
-      --NotebookApp.notebook_dir='${NOTEBOOK_HOME_DIR:-/home/jovyan}'   
 
   # FastAPI Application Service
   # This service runs the IRP Dashboard FastAPI application in Docker
