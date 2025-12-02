@@ -267,10 +267,9 @@ class Step:
         self.run_id = None
         self.run_num = None
         self.logs = []
-        
-        # Auto-start if not executed
-        if not self.executed:
-            self.start()
+
+        # Auto-start step run (force=True if re-running to create new run entry)
+        self.start(force=self.executed)
     
     
     def _executed(self):

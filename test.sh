@@ -67,6 +67,9 @@ pip install -r requirements-test.txt -q
 #echo "$(pwd)/workspace" > $(python -c "import site; print(site.getsitepackages()[0])")/workspace.pth
 #python -c "import site; print(f'{site.getsitepackages()[0]}/workspace.pth updated')"
 
+# Disable Teams notifications during tests
+export TEAMS_NOTIFICATION_ENABLED=false
+
 # Run ALL pytest tests in a single command for unified results
 # SQL Server tests are excluded via pytest.ini (use ./test_sqlserver.sh for SQL Server tests)
 pytest workspace/tests/ -v "$@"

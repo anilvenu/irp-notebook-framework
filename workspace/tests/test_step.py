@@ -211,14 +211,17 @@ def test_step_get_last_output(test_schema, mock_context):
     step1 = Step(context)
     step1.complete({'result': 'first_run', 'count': 100})
 
-    # Second run - get last output
-    # (This will fail to start because step already executed, but we can still get output)
+    # Second run - auto-starts with force=True (re-run)
+    # Complete it with different output
     step2 = Step(context)
+    step2.complete({'result': 'second_run', 'count': 200})
+
+    # get_last_output should return the most recent COMPLETED run (run #2)
     last_output = step2.get_last_output()
 
     assert last_output is not None
-    assert last_output['result'] == 'first_run'
-    assert last_output['count'] == 100
+    assert last_output['result'] == 'second_run'
+    assert last_output['count'] == 200
 
 
 @pytest.mark.database
@@ -282,16 +285,19 @@ def test_step_force_reexecution(test_schema, mock_context):
     step1 = Step(context)
     step1.complete()
 
-    # Second execution with force
+    # Second execution - auto-starts as run #2 with force=True
     step2 = Step(context)
-    step2.start(force=True)  # Force re-execution
+    assert step2.run_num == 2  # Auto-started as run #2
 
-    assert step2.run_num == 2  # Should be run #2
+    # Calling start(force=True) again creates run #3
+    step2.start(force=True)
+    assert step2.run_num == 3  # Now run #3
+
     step2.complete()
 
-    # Verify both runs exist
+    # Verify run #3 exists
     last_run = get_last_step_run(step_id)
-    assert last_run['run_num'] == 2
+    assert last_run['run_num'] == 3
 
 
 @pytest.mark.database
@@ -640,7 +646,7 @@ def test_step_skip_database_update_failure(test_schema, mock_context, monkeypatc
 @pytest.mark.database
 @pytest.mark.integration
 def test_step_context_manager_entry_without_run_id(test_schema, mock_context):
-    """Test Step context manager __enter__ starts step when run_id is None"""
+    """Test Step context manager __enter__ works with auto-started re-run"""
     cycle_id = register_cycle('test_cycle_ctx_entry')
     stage_id = get_or_create_stage(cycle_id, 1, 'Setup')
     step_id = get_or_create_step(stage_id, 1, 'Load Data')
@@ -652,16 +658,20 @@ def test_step_context_manager_entry_without_run_id(test_schema, mock_context):
     step1 = Step(context)
     step1.complete()
 
-    # Second execution - step is already executed, so __init__ won't auto-start
+    # Second execution - auto-starts with force=True (re-run)
     step2 = Step(context)
     assert step2.executed is True
-    assert step2.run_id is None  # Not auto-started
+    assert step2.run_id is not None  # Auto-started on re-run
+    assert step2.run_num == 2  # Run #2
 
-    # Using context manager should trigger start in __enter__ (Line 285)
-    # But since executed=True, it will fail
-    with pytest.raises(StepError, match="Cannot execute step"):
-        with step2 as s:
-            pass
+    # Using context manager should work normally since run_id is populated
+    with step2 as s:
+        assert s.run_id is not None
+        assert s.run_num == 2
+
+    # Context manager __exit__ should have completed the step
+    last_run = get_last_step_run(step_id)
+    assert last_run['status'] == StepStatus.COMPLETED
 
 
 @pytest.mark.database
