@@ -212,16 +212,16 @@ def test_step_get_last_output(test_schema, mock_context):
     step1.complete({'result': 'first_run', 'count': 100})
 
     # Second run - auto-starts with force=True (re-run)
-    # We can still get output from the first run
+    # Complete it with different output
     step2 = Step(context)
+    step2.complete({'result': 'second_run', 'count': 200})
+
+    # get_last_output should return the most recent COMPLETED run (run #2)
     last_output = step2.get_last_output()
 
     assert last_output is not None
-    assert last_output['result'] == 'first_run'
-    assert last_output['count'] == 100
-
-    # Clean up the auto-started run
-    step2.complete()
+    assert last_output['result'] == 'second_run'
+    assert last_output['count'] == 200
 
 
 @pytest.mark.database
