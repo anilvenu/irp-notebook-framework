@@ -1044,3 +1044,107 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
         _send_batch_failure_notification(batch_id, recon_result, recon_summary, schema=schema)
 
     return recon_result
+
+
+def get_batches_for_configuration(
+    configuration_id: int,
+    batch_type: Optional[str] = None,
+    exclude_statuses: Optional[List[str]] = None,
+    schema: str = 'public'
+) -> List[Dict[str, Any]]:
+    """
+    Get all batches for a configuration, optionally filtered by batch type and status.
+
+    Args:
+        configuration_id: Configuration ID
+        batch_type: Optional batch type filter
+        exclude_statuses: Optional list of statuses to exclude (e.g., ['COMPLETED', 'CANCELLED'])
+        schema: Database schema
+
+    Returns:
+        List of batch dictionaries with keys: id, batch_type, status, created_ts, job_count
+    """
+    query = """
+        SELECT
+            b.id,
+            b.batch_type,
+            b.status,
+            b.created_ts,
+            COUNT(j.id) as job_count
+        FROM irp_batch b
+        LEFT JOIN irp_job j ON b.id = j.batch_id
+        WHERE b.configuration_id = %s
+    """
+    params: List[Any] = [configuration_id]
+
+    if batch_type:
+        query += " AND b.batch_type = %s"
+        params.append(batch_type)
+
+    if exclude_statuses:
+        placeholders = ', '.join(['%s'] * len(exclude_statuses))
+        query += f" AND b.status NOT IN ({placeholders})"
+        params.extend(exclude_statuses)
+
+    query += " GROUP BY b.id, b.batch_type, b.status, b.created_ts ORDER BY b.created_ts DESC"
+
+    result = execute_query(query, tuple(params), schema=schema)
+
+    if result.empty:
+        return []
+
+    return result.to_dict('records')  # type: ignore
+
+
+def delete_batch(batch_id: int, schema: str = 'public') -> bool:
+    """
+    Delete a batch and all its associated jobs and job configurations.
+
+    This operation is irreversible. Use with caution.
+
+    Args:
+        batch_id: Batch ID to delete
+        schema: Database schema
+
+    Returns:
+        True if deleted successfully
+
+    Raises:
+        BatchError: If batch not found or deletion fails
+    """
+    if not isinstance(batch_id, int) or batch_id <= 0:
+        raise BatchError(f"Invalid batch_id: {batch_id}")
+
+    # Verify batch exists
+    batch = read_batch(batch_id, schema=schema)
+    if not batch:
+        raise BatchError(f"Batch {batch_id} not found")
+
+    # Delete in order: jobs → job_configs → batch
+    # Note: job_config deletion is cascaded by FK constraint, but explicit for clarity
+    try:
+        # Delete all jobs for this batch
+        execute_command(
+            "DELETE FROM irp_job WHERE batch_id = %s",
+            (batch_id,),
+            schema=schema
+        )
+
+        # Delete all job configurations for this batch
+        execute_command(
+            "DELETE FROM irp_job_configuration WHERE batch_id = %s",
+            (batch_id,),
+            schema=schema
+        )
+
+        # Delete the batch itself
+        execute_command(
+            "DELETE FROM irp_batch WHERE id = %s",
+            (batch_id,),
+            schema=schema
+        )
+
+        return True
+
+    except Exception as e:
+        raise BatchError(f"Failed to delete batch {batch_id}: {str(e)}")
