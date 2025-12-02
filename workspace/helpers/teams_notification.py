@@ -402,6 +402,75 @@ class TeamsNotificationClient:
 
 
 # ============================================================================
+# ACTION BUTTON HELPERS
+# ============================================================================
+
+def build_notification_actions(
+    notebook_path: str = '',
+    cycle_name: str = '',
+    schema: str = 'public'
+) -> List[Dict[str, str]]:
+    """
+    Build standard action buttons for IRP workflow notifications.
+
+    Creates action buttons for:
+    - "Open Notebook": Link to the notebook in JupyterLab
+    - "View Cycle Dashboard": Link to the cycle-specific dashboard page
+
+    Args:
+        notebook_path: Path to notebook file (for "Open Notebook" button)
+        cycle_name: Cycle name (for cycle-specific dashboard link)
+        schema: Database schema for dashboard URL
+
+    Returns:
+        List of action button dicts with 'title' and 'url' keys
+
+    Example:
+        >>> actions = build_notification_actions(
+        ...     notebook_path='/workspace/workflows/Active_Q1/notebooks/Stage_03/Step_01.ipynb',
+        ...     cycle_name='Q1-2025',
+        ...     schema='production'
+        ... )
+        >>> # Returns: [{"title": "Open Notebook", "url": "..."}, {"title": "View Cycle Dashboard", "url": "..."}]
+    """
+    actions = []
+
+    # JupyterLab notebook link
+    base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
+    if base_url and notebook_path and 'workflows' in notebook_path:
+        rel_path = notebook_path.split('workflows')[-1].lstrip('/\\')
+        notebook_url = f"{base_url.rstrip('/')}/lab/tree/workspace/workflows/{rel_path}"
+        actions.append({"title": "Open Notebook", "url": notebook_url})
+
+    # Cycle-specific dashboard link
+    dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
+    if dashboard_url:
+        if cycle_name and cycle_name != "Unknown":
+            cycle_dashboard_url = f"{dashboard_url.rstrip('/')}/{schema}/cycle/{cycle_name}"
+            actions.append({"title": "View Cycle Dashboard", "url": cycle_dashboard_url})
+        else:
+            actions.append({"title": "View Dashboard", "url": dashboard_url})
+
+    return actions
+
+
+def truncate_error(error: str, max_length: int = 500) -> str:
+    """
+    Truncate an error message for notification display.
+
+    Args:
+        error: The error message to truncate
+        max_length: Maximum length before truncation (default: 500)
+
+    Returns:
+        Truncated error message with "..." suffix if truncated
+    """
+    if len(error) > max_length:
+        return error[:max_length] + "..."
+    return error
+
+
+# ============================================================================
 # CONVENIENCE FUNCTIONS
 # ============================================================================
 

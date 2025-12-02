@@ -5,7 +5,6 @@ This module provides functionality to programmatically execute Jupyter notebooks
 using nbconvert, enabling automated workflow execution.
 """
 
-import os
 import subprocess
 import logging
 from pathlib import Path
@@ -24,7 +23,10 @@ def _send_failure_notification(notebook_path: Path, error: str) -> None:
         error: Error message from the execution failure
     """
     try:
-        from helpers.teams_notification import TeamsNotificationClient
+        from helpers.teams_notification import (
+            TeamsNotificationClient, build_notification_actions, truncate_error
+        )
+        from helpers.database import get_current_schema
 
         teams = TeamsNotificationClient()
 
@@ -45,28 +47,10 @@ def _send_failure_notification(notebook_path: Path, error: str) -> None:
             if part.startswith('Step_'):
                 step_name = part.replace('.ipynb', '')
 
-        # Build action buttons with notebook link and dashboard
-        actions = []
-        base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
-        if base_url and 'workflows' in path_str:
-            rel_path = path_str.split('workflows')[-1].lstrip('/\\')
-            notebook_url = f"{base_url.rstrip('/')}/lab/tree/workspace/workflows/{rel_path}"
-            actions.append({"title": "Open Notebook", "url": notebook_url})
-
-        dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
-        if dashboard_url:
-            # Link to cycle-specific dashboard page if cycle is known
-            # URL pattern: /{schema}/cycle/{cycle_name}
-            if cycle_name and cycle_name != "Unknown":
-                from helpers.database import get_current_schema
-                schema = get_current_schema()
-                cycle_dashboard_url = f"{dashboard_url.rstrip('/')}/{schema}/cycle/{cycle_name}"
-                actions.append({"title": "View Cycle Dashboard", "url": cycle_dashboard_url})
-            else:
-                actions.append({"title": "View Dashboard", "url": dashboard_url})
-
-        # Truncate error for notification (keep first 500 chars)
-        error_summary = error[:500] + "..." if len(error) > 500 else error
+        # Build action buttons and truncate error
+        schema = get_current_schema() if cycle_name != "Unknown" else 'public'
+        actions = build_notification_actions(path_str, cycle_name, schema)
+        error_summary = truncate_error(error)
 
         teams.send_error(
             title=f"[{cycle_name}] Notebook Failed: {step_name}",

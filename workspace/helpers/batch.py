@@ -97,41 +97,6 @@ def _get_batch_context(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
         }
 
 
-def _build_notification_actions(notebook_path: str, cycle_name: str, schema: str) -> List[Dict[str, str]]:
-    """
-    Build action buttons for Teams notifications (notebook link + dashboard link).
-
-    Args:
-        notebook_path: Path to the notebook
-        cycle_name: Cycle name for dashboard URL
-        schema: Database schema for dashboard URL
-
-    Returns:
-        List of action button dictionaries
-    """
-    import os
-
-    actions = []
-
-    # Add JupyterLab link to the actual notebook
-    base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
-    if base_url and 'workflows' in notebook_path:
-        rel_path = notebook_path.split('workflows')[-1].lstrip('/\\')
-        notebook_url = f"{base_url.rstrip('/')}/lab/tree/workspace/workflows/{rel_path}"
-        actions.append({"title": "Open Notebook", "url": notebook_url})
-
-    # Add dashboard link with cycle-specific path
-    dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
-    if dashboard_url:
-        if cycle_name and cycle_name != "Unknown":
-            cycle_dashboard_url = f"{dashboard_url.rstrip('/')}/{schema}/cycle/{cycle_name}"
-            actions.append({"title": "View Cycle Dashboard", "url": cycle_dashboard_url})
-        else:
-            actions.append({"title": "View Dashboard", "url": dashboard_url})
-
-    return actions
-
-
 def _send_batch_failure_notification(
     batch_id: int,
     batch_status: str,
@@ -148,11 +113,11 @@ def _send_batch_failure_notification(
         schema: Database schema
     """
     try:
-        from helpers.teams_notification import TeamsNotificationClient
+        from helpers.teams_notification import TeamsNotificationClient, build_notification_actions
 
         teams = TeamsNotificationClient()
         ctx = _get_batch_context(batch_id, schema=schema)
-        actions = _build_notification_actions(ctx['notebook_path'], ctx['cycle_name'], schema)
+        actions = build_notification_actions(ctx['notebook_path'], ctx['cycle_name'], schema)
 
         stage_str = f"Stage {ctx['stage_num']:02d}" if ctx['stage_num'] else "Unknown"
 
