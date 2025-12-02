@@ -439,45 +439,8 @@ class Step:
             print(f"Error: {error_message}")
             print("="*60)
 
-            # Send Teams notification
-            self._send_failure_notification(error_message)
-
         except Exception as e:
             print(f"Failed to update step status: {str(e)}")
-
-
-    def _send_failure_notification(self, error_message: str):
-        """
-        Send Teams notification when step fails.
-
-        Args:
-            error_message: Error message from the failure
-        """
-        try:
-            from helpers.teams_notification import (
-                TeamsNotificationClient, build_notification_actions, truncate_error
-            )
-            from helpers.database import get_current_schema
-
-            teams = TeamsNotificationClient()
-            schema = get_current_schema()
-            notebook_path = str(self.context.notebook_path)
-
-            actions = build_notification_actions(notebook_path, self.context.cycle_name, schema)
-            error_summary = truncate_error(error_message)
-
-            teams.send_error(
-                title=f"[{self.context.cycle_name}] Step Failed: {self.context.step_name}",
-                message=f"**Cycle:** {self.context.cycle_name}\n"
-                        f"**Stage:** {self.context.stage_name}\n"
-                        f"**Step:** {self.context.step_name}\n\n"
-                        f"**Error:**\n{error_summary}",
-                actions=actions if actions else None
-            )
-
-        except Exception as e:
-            # Don't let notification failure break the workflow
-            print(f"Failed to send failure notification: {e}")
     
     
     def skip(self, reason: str = ""):

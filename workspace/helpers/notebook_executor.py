@@ -14,9 +14,9 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-def _send_failure_notification(notebook_path: Path, error: str) -> None:
+def _handle_notebook_failure(notebook_path: Path, error: str) -> None:
     """
-    Send Teams notification when notebook execution fails.
+    Handle notebook execution failure: mark step as failed and send Teams notification.
 
     Args:
         notebook_path: Path to the failed notebook
@@ -27,6 +27,19 @@ def _send_failure_notification(notebook_path: Path, error: str) -> None:
             TeamsNotificationClient, build_notification_actions, truncate_error
         )
         from helpers.database import get_current_schema
+        from helpers.step import get_last_step_run, update_step_run
+        from helpers.constants import StepStatus
+        from helpers.context import WorkContext
+
+        # Mark the step run as FAILED (it was left ACTIVE when notebook crashed)
+        try:
+            context = WorkContext(notebook_path=str(notebook_path))
+            last_run = get_last_step_run(context.step_id)
+            if last_run and last_run['status'] == 'ACTIVE':
+                update_step_run(last_run['id'], StepStatus.FAILED, error_message=error[:1000])
+                logger.info(f"Marked step run {last_run['id']} as FAILED")
+        except Exception as e:
+            logger.warning(f"Could not mark step as failed: {e}")
 
         teams = TeamsNotificationClient()
 
@@ -177,8 +190,8 @@ def execute_notebook(
 
         logger.error(error_msg)
 
-        # Send Teams notification for failure
-        _send_failure_notification(notebook_path, error_msg)
+        # Send Teams notification for failure and mark step as failed
+        _handle_notebook_failure(notebook_path, error_msg)
 
         return {
             'success': False,
@@ -203,8 +216,8 @@ def execute_notebook(
 
         logger.error(error_msg)
 
-        # Send Teams notification for timeout
-        _send_failure_notification(notebook_path, error_msg)
+        # Send Teams notification for timeout and mark step as failed
+        _handle_notebook_failure(notebook_path, error_msg)
 
         return {
             'success': False,
@@ -224,8 +237,8 @@ def execute_notebook(
         error_msg = f"Unexpected error executing notebook {notebook_path}: {str(e)}"
         logger.error(error_msg, exc_info=True)
 
-        # Send Teams notification for unexpected error
-        _send_failure_notification(notebook_path, error_msg)
+        # Send Teams notification for unexpected error and mark step as failed
+        _handle_notebook_failure(notebook_path, error_msg)
 
         return {
             'success': False,
