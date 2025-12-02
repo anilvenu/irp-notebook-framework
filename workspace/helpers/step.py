@@ -413,16 +413,16 @@ class Step:
     def fail(self, error_message: str):
         """
         Mark step as failed.
-        
+
         Args:
             error_message: Error message describing the failure
         """
-        
+
         if not self.run_id:
             # Step never started, just log error
             print(f"Step failed: {error_message}")
             return
-        
+
         try:
             # Update database
             update_step_run(
@@ -430,17 +430,65 @@ class Step:
                 StepStatus.FAILED,
                 error_message=error_message
             )
-            
+
             duration = (datetime.now() - self.start_time).total_seconds()
-            
+
             print("\n" + "="*60)
             print(f"STEP FAILED")
             print(f"Run #{self.run_num} failed after {duration:.1f} seconds")
             print(f"Error: {error_message}")
             print("="*60)
-            
+
+            # Send Teams notification
+            self._send_failure_notification(error_message)
+
         except Exception as e:
             print(f"Failed to update step status: {str(e)}")
+
+
+    def _send_failure_notification(self, error_message: str):
+        """
+        Send Teams notification when step fails.
+
+        Args:
+            error_message: Error message from the failure
+        """
+        import os
+
+        try:
+            from helpers.teams_notification import TeamsNotificationClient
+
+            teams = TeamsNotificationClient()
+
+            # Build action buttons with notebook link and dashboard
+            actions = []
+            base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
+            if base_url:
+                notebook_path = str(self.context.notebook_path)
+                if 'workflows' in notebook_path:
+                    rel_path = notebook_path.split('workflows')[-1].lstrip('/\\')
+                    notebook_url = f"{base_url.rstrip('/')}/lab/tree/workflows/{rel_path}"
+                    actions.append({"title": "Open Notebook", "url": notebook_url})
+
+            dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
+            if dashboard_url:
+                actions.append({"title": "View Dashboard", "url": dashboard_url})
+
+            # Truncate error for notification (keep first 500 chars)
+            error_summary = error_message[:500] + "..." if len(error_message) > 500 else error_message
+
+            teams.send_error(
+                title=f"[{self.context.cycle_name}] Step Failed: {self.context.step_name}",
+                message=f"**Cycle:** {self.context.cycle_name}\n"
+                        f"**Stage:** {self.context.stage_name}\n"
+                        f"**Step:** {self.context.step_name}\n\n"
+                        f"**Error:**\n{error_summary}",
+                actions=actions if actions else None
+            )
+
+        except Exception as e:
+            # Don't let notification failure break the workflow
+            print(f"Failed to send failure notification: {e}")
     
     
     def skip(self, reason: str = ""):

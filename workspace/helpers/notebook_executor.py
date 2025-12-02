@@ -5,6 +5,7 @@ This module provides functionality to programmatically execute Jupyter notebooks
 using nbconvert, enabling automated workflow execution.
 """
 
+import os
 import subprocess
 import logging
 from pathlib import Path
@@ -12,6 +13,67 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def _send_failure_notification(notebook_path: Path, error: str) -> None:
+    """
+    Send Teams notification when notebook execution fails.
+
+    Args:
+        notebook_path: Path to the failed notebook
+        error: Error message from the execution failure
+    """
+    try:
+        from helpers.teams_notification import TeamsNotificationClient
+
+        teams = TeamsNotificationClient()
+
+        # Extract cycle/stage/step from path
+        # e.g., .../Active_Demo-1126/notebooks/Stage_03_.../Step_01_...ipynb
+        path_str = str(notebook_path)
+        cycle_name = "Unknown"
+        stage_name = "Unknown"
+        step_name = notebook_path.stem
+
+        if 'Active_' in path_str:
+            parts = path_str.split('Active_')[1].split('/')
+            cycle_name = parts[0].split('\\')[0]
+
+        for part in notebook_path.parts:
+            if part.startswith('Stage_'):
+                stage_name = part
+            if part.startswith('Step_'):
+                step_name = part.replace('.ipynb', '')
+
+        # Build action buttons with notebook link and dashboard
+        actions = []
+        base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
+        if base_url and 'workflows' in path_str:
+            rel_path = path_str.split('workflows')[-1].lstrip('/\\')
+            notebook_url = f"{base_url.rstrip('/')}/lab/tree/workflows/{rel_path}"
+            actions.append({"title": "Open Notebook", "url": notebook_url})
+
+        dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
+        if dashboard_url:
+            actions.append({"title": "View Dashboard", "url": dashboard_url})
+
+        # Truncate error for notification (keep first 500 chars)
+        error_summary = error[:500] + "..." if len(error) > 500 else error
+
+        teams.send_error(
+            title=f"[{cycle_name}] Notebook Failed: {step_name}",
+            message=f"**Cycle:** {cycle_name}\n"
+                    f"**Stage:** {stage_name}\n"
+                    f"**Step:** {step_name}\n\n"
+                    f"**Error:**\n{error_summary}",
+            actions=actions if actions else None
+        )
+
+        logger.info(f"Sent failure notification for notebook: {notebook_path}")
+
+    except Exception as e:
+        # Don't let notification failure break the workflow
+        logger.warning(f"Failed to send failure notification: {e}")
 
 
 class NotebookExecutionError(Exception):
@@ -123,6 +185,9 @@ def execute_notebook(
 
         logger.error(error_msg)
 
+        # Send Teams notification for failure
+        _send_failure_notification(notebook_path, error_msg)
+
         return {
             'success': False,
             'notebook_path': notebook_path,
@@ -146,6 +211,9 @@ def execute_notebook(
 
         logger.error(error_msg)
 
+        # Send Teams notification for timeout
+        _send_failure_notification(notebook_path, error_msg)
+
         return {
             'success': False,
             'notebook_path': notebook_path,
@@ -163,6 +231,9 @@ def execute_notebook(
 
         error_msg = f"Unexpected error executing notebook {notebook_path}: {str(e)}"
         logger.error(error_msg, exc_info=True)
+
+        # Send Teams notification for unexpected error
+        _send_failure_notification(notebook_path, error_msg)
 
         return {
             'success': False,
