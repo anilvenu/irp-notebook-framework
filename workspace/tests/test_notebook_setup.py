@@ -76,15 +76,13 @@ def test_step_not_executed_returns_step():
 
 
 @pytest.mark.unit
-def test_step_already_executed_exits_by_default():
-    """Test that already-executed step raises SystemExit by default"""
+def test_step_already_executed_allows_rerun():
+    """Test that already-executed steps can be re-run without blocking"""
     stage_dir = Path('/workspace/workflows/Active_Test/notebooks/Stage_03_Data_Import')
 
     with patch('helpers.notebook_setup.Path.cwd', return_value=stage_dir), \
          patch('helpers.notebook_setup.WorkContext') as mock_context_class, \
-         patch('helpers.notebook_setup.Step') as mock_step_class, \
-         patch('helpers.notebook_setup.get_last_step_run') as mock_get_last, \
-         patch('helpers.notebook_setup.ux'):
+         patch('helpers.notebook_setup.Step') as mock_step_class:
 
         # Configure mocks
         mock_context = MagicMock()
@@ -96,50 +94,11 @@ def test_step_already_executed_exits_by_default():
         mock_step.status_message = "Step already run"
         mock_step_class.return_value = mock_step
 
-        mock_get_last.return_value = {
-            'run_num': 1,
-            'status': 'COMPLETED',
-            'completed_ts': None
-        }
+        # Call function - should not raise or block
+        context, step = initialize_notebook_context('Step_01_Test.ipynb')
 
-        # Should raise SystemExit
-        with pytest.raises(SystemExit, match="Step already completed"):
-            initialize_notebook_context('Step_01_Test.ipynb')
-
-
-@pytest.mark.unit
-def test_step_already_executed_allow_rerun():
-    """Test that allow_rerun=True calls step.start(force=True)"""
-    stage_dir = Path('/workspace/workflows/Active_Test/notebooks/Stage_03_Data_Import')
-
-    with patch('helpers.notebook_setup.Path.cwd', return_value=stage_dir), \
-         patch('helpers.notebook_setup.WorkContext') as mock_context_class, \
-         patch('helpers.notebook_setup.Step') as mock_step_class, \
-         patch('helpers.notebook_setup.get_last_step_run') as mock_get_last, \
-         patch('helpers.notebook_setup.ux'):
-
-        # Configure mocks
-        mock_context = MagicMock()
-        mock_context_class.return_value = mock_context
-
-        mock_step = MagicMock()
-        mock_step.executed = True  # Already executed
-        mock_step.step_id = 123
-        mock_step.status_message = "Step already run"
-        mock_step_class.return_value = mock_step
-
-        mock_get_last.return_value = {
-            'run_num': 1,
-            'status': 'COMPLETED',
-            'completed_ts': None
-        }
-
-        # Call with allow_rerun=True
-        context, step = initialize_notebook_context('Step_01_Test.ipynb', allow_rerun=True)
-
-        # Verify step.start was called with force=True
-        mock_step.start.assert_called_once_with(force=True)
-
-        # Verify returns
+        # Verify returns (no blocking, no forced start)
         assert context == mock_context
         assert step == mock_step
+        # step.start should NOT be called by initialize_notebook_context
+        mock_step.start.assert_not_called()

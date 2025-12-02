@@ -10,13 +10,11 @@ from pathlib import Path
 from typing import Tuple
 
 from helpers.context import WorkContext
-from helpers.step import Step, get_last_step_run
-from helpers import ux
+from helpers.step import Step
 
 
 def initialize_notebook_context(
-    notebook_filename: str,
-    allow_rerun: bool = False
+    notebook_filename: str
 ) -> Tuple[WorkContext, Step]:
     """
     Initialize notebook context and step tracking.
@@ -24,27 +22,20 @@ def initialize_notebook_context(
     This function handles:
     - Automatic path detection (works in both Active_* directories and /home/jovyan)
     - WorkContext initialization
-    - Step tracking initialization with execution guards
+    - Step tracking initialization
     - sys.path configuration for workspace imports
 
     Args:
         notebook_filename: Name of the notebook file (e.g., 'Step_01_Submit_Create_EDM_Batch.ipynb')
-        allow_rerun: If True, allows step to be re-executed automatically (default: False)
-                     If False, raises SystemExit if step already executed
 
     Returns:
         Tuple of (WorkContext, Step) objects
 
     Raises:
         RuntimeError: If workspace or Active_ directory cannot be found
-        SystemExit: If step already executed and allow_rerun=False
 
     Example:
-        >>> # Standard execution - exits if already completed
         >>> context, step = initialize_notebook_context('Step_01_Submit_Create_EDM_Batch.ipynb')
-        >>>
-        >>> # Allow re-execution - automatically reruns if already completed
-        >>> context, step = initialize_notebook_context('Step_01_Submit_Create_EDM_Batch.ipynb', allow_rerun=True)
     """
     # Determine the notebook's actual directory
     cwd = Path.cwd()
@@ -102,26 +93,5 @@ def initialize_notebook_context(
 
     # Initialize step execution tracking
     step = Step(context)
-
-    # Handle execution guards
-    if step.executed:
-        ux.warning("⚠ This step has already been executed")
-        ux.info(f"Message: {step.status_message}")
-
-        last_run = get_last_step_run(step.step_id)
-        if last_run:
-            ux.info(f"Last run: #{last_run['run_num']}")
-            ux.info(f"Status: {last_run['status']}")
-            if last_run['completed_ts']:
-                ux.info(f"Completed: {last_run['completed_ts'].strftime('%Y-%m-%d %H:%M:%S')}")
-
-        if allow_rerun:
-            # Automatically re-run the step without prompting
-            ux.info("Re-running step (allow_rerun=True)...")
-            step.start(force=True)
-        else:
-            # Exit if step already executed and rerun not allowed
-            ux.info("Step execution skipped (already completed)")
-            raise SystemExit("Step already completed")
 
     return context, step
