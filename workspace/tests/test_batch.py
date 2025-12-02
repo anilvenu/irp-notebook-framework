@@ -804,3 +804,195 @@ def test_recon_batch_mixed_job_states(test_schema, mock_irp_client):
     # Recon - should be ACTIVE (not all finished)
     result = recon_batch(batch_id, schema=test_schema)
     assert result == BatchStatus.ACTIVE
+
+
+# ============================================================================
+# Tests - Batch Failure Notifications
+# ============================================================================
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_recon_batch_sends_notification_on_failure(test_schema, mock_irp_client):
+    """Test that recon_batch sends Teams notification when batch fails."""
+    from unittest.mock import patch, MagicMock
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_notif_failed')
+
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
+
+    # Mark job as FAILED
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    update_job_status(jobs[0]['id'], JobStatus.FAILED, schema=test_schema)
+
+    with patch('helpers.teams_notification.TeamsNotificationClient') as mock_teams_class:
+        mock_client = MagicMock()
+        mock_teams_class.return_value = mock_client
+        mock_client.send_error.return_value = True
+
+        result_status = recon_batch(batch_id, schema=test_schema)
+
+        assert result_status == BatchStatus.FAILED
+
+        # Verify notification was sent
+        mock_client.send_error.assert_called_once()
+        call_kwargs = mock_client.send_error.call_args[1]
+        assert 'test_notif_failed' in call_kwargs['title']
+        assert 'EDM Creation' in call_kwargs['title']
+        assert 'FAILED' in call_kwargs['message']
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_recon_batch_sends_warning_on_cancelled(test_schema, mock_irp_client):
+    """Test that recon_batch sends warning notification when all jobs cancelled."""
+    from unittest.mock import patch, MagicMock
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_notif_cancelled')
+
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
+
+    # Mark all jobs as CANCELLED
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    for job in jobs:
+        update_job_status(job['id'], JobStatus.CANCELLED, schema=test_schema)
+
+    with patch('helpers.teams_notification.TeamsNotificationClient') as mock_teams_class:
+        mock_client = MagicMock()
+        mock_teams_class.return_value = mock_client
+        mock_client.send_warning.return_value = True
+
+        result_status = recon_batch(batch_id, schema=test_schema)
+
+        assert result_status == BatchStatus.CANCELLED
+
+        # Verify warning was sent (not error)
+        mock_client.send_warning.assert_called_once()
+        call_kwargs = mock_client.send_warning.call_args[1]
+        assert 'Cancelled' in call_kwargs['title']
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_recon_batch_no_notification_on_success(test_schema, mock_irp_client):
+    """Test that recon_batch does NOT send notification when batch completes successfully."""
+    from unittest.mock import patch, MagicMock
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_notif_success')
+
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
+
+    # Mark all jobs as FINISHED
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    for job in jobs:
+        update_job_status(job['id'], JobStatus.FINISHED, schema=test_schema)
+
+    with patch('helpers.teams_notification.TeamsNotificationClient') as mock_teams_class:
+        mock_client = MagicMock()
+        mock_teams_class.return_value = mock_client
+
+        result_status = recon_batch(batch_id, schema=test_schema)
+
+        assert result_status == BatchStatus.COMPLETED
+
+        # Verify NO notification was sent
+        mock_client.send_error.assert_not_called()
+        mock_client.send_warning.assert_not_called()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_recon_batch_no_notification_on_active(test_schema, mock_irp_client):
+    """Test that recon_batch does NOT send notification when batch still active."""
+    from unittest.mock import patch, MagicMock
+
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_notif_active')
+
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
+
+    # Leave jobs in SUBMITTED state (still running)
+    # No updates needed
+
+    with patch('helpers.teams_notification.TeamsNotificationClient') as mock_teams_class:
+        mock_client = MagicMock()
+        mock_teams_class.return_value = mock_client
+
+        result_status = recon_batch(batch_id, schema=test_schema)
+
+        assert result_status == BatchStatus.ACTIVE
+
+        # Verify NO notification was sent
+        mock_client.send_error.assert_not_called()
+        mock_client.send_warning.assert_not_called()
+
+
+@pytest.mark.database
+@pytest.mark.unit
+def test_recon_batch_notification_includes_job_counts(test_schema, mock_irp_client):
+    """Test that failure notification includes job status counts."""
+    from unittest.mock import patch, MagicMock
+
+    # Create config with multiple databases for multiple jobs
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_notif_counts', 'ACTIVE'),
+        schema=test_schema
+    )
+
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+
+    config_data = {
+        'Databases': [
+            {'Database': 'DB1', 'Server': 'databridge-1'},
+            {'Database': 'DB2', 'Server': 'databridge-1'},
+            {'Database': 'DB3', 'Server': 'databridge-1'}
+        ]
+    }
+
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps(config_data),
+         ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+    submit_batch(batch_id, mock_irp_client, schema=test_schema)
+
+    # Set mixed states: 1 FINISHED, 1 FAILED, 1 FAILED
+    jobs = get_batch_jobs(batch_id, schema=test_schema)
+    update_job_status(jobs[0]['id'], JobStatus.FINISHED, schema=test_schema)
+    update_job_status(jobs[1]['id'], JobStatus.FAILED, schema=test_schema)
+    update_job_status(jobs[2]['id'], JobStatus.FAILED, schema=test_schema)
+
+    with patch('helpers.teams_notification.TeamsNotificationClient') as mock_teams_class:
+        mock_client = MagicMock()
+        mock_teams_class.return_value = mock_client
+        mock_client.send_error.return_value = True
+
+        result_status = recon_batch(batch_id, schema=test_schema)
+
+        assert result_status == BatchStatus.FAILED
+
+        # Verify notification includes counts
+        call_kwargs = mock_client.send_error.call_args[1]
+        message = call_kwargs['message']
+
+        assert 'Total Jobs' in message
+        assert 'Finished' in message
+        assert 'Failed' in message

@@ -23,6 +23,8 @@ from helpers.teams_notification import (
     TeamsWebhookError,
     TeamsValidationError,
     send_teams_notification,
+    build_notification_actions,
+    truncate_error,
     NOTIFICATION_STYLES,
 )
 
@@ -584,3 +586,139 @@ def test_real_notification():
     )
 
     assert result is True
+
+
+# ============================================================================
+# HELPER FUNCTION TESTS - build_notification_actions
+# ============================================================================
+
+@pytest.mark.unit
+def test_build_notification_actions_with_notebook_path(mock_env):
+    """Test building actions with notebook path creates Open Notebook button."""
+    actions = build_notification_actions(
+        notebook_path='/workspace/workflows/Active_Q1/notebooks/Stage_03/Step_01.ipynb',
+        cycle_name='Q1-2025',
+        schema='production'
+    )
+
+    assert len(actions) == 2
+
+    # Check Open Notebook action
+    notebook_action = actions[0]
+    assert notebook_action['title'] == 'Open Notebook'
+    assert 'jupyter.test.com' in notebook_action['url']
+    assert 'Active_Q1/notebooks/Stage_03/Step_01.ipynb' in notebook_action['url']
+
+    # Check View Cycle Dashboard action
+    dashboard_action = actions[1]
+    assert dashboard_action['title'] == 'View Cycle Dashboard'
+    assert 'dashboard.test.com' in dashboard_action['url']
+    assert 'production/cycle/Q1-2025' in dashboard_action['url']
+
+
+@pytest.mark.unit
+def test_build_notification_actions_without_notebook_path(mock_env):
+    """Test building actions without notebook path only creates dashboard button."""
+    actions = build_notification_actions(
+        notebook_path='',
+        cycle_name='Q1-2025',
+        schema='public'
+    )
+
+    assert len(actions) == 1
+    assert actions[0]['title'] == 'View Cycle Dashboard'
+    assert 'public/cycle/Q1-2025' in actions[0]['url']
+
+
+@pytest.mark.unit
+def test_build_notification_actions_unknown_cycle(mock_env):
+    """Test building actions with unknown cycle creates generic dashboard button."""
+    actions = build_notification_actions(
+        notebook_path='',
+        cycle_name='Unknown',
+        schema='public'
+    )
+
+    assert len(actions) == 1
+    assert actions[0]['title'] == 'View Dashboard'
+    assert actions[0]['url'] == 'https://dashboard.test.com'
+
+
+@pytest.mark.unit
+def test_build_notification_actions_no_env_vars(monkeypatch):
+    """Test building actions with no environment variables returns empty list."""
+    monkeypatch.delenv('TEAMS_DEFAULT_JUPYTERLAB_URL', raising=False)
+    monkeypatch.delenv('TEAMS_DEFAULT_DASHBOARD_URL', raising=False)
+
+    actions = build_notification_actions(
+        notebook_path='/workspace/workflows/Active_Q1/notebooks/Step_01.ipynb',
+        cycle_name='Q1-2025'
+    )
+
+    assert actions == []
+
+
+@pytest.mark.unit
+def test_build_notification_actions_path_without_workflows(mock_env):
+    """Test that notebook path without 'workflows' doesn't create notebook action."""
+    actions = build_notification_actions(
+        notebook_path='/some/other/path/notebook.ipynb',
+        cycle_name='Q1-2025'
+    )
+
+    # Should only have dashboard action, not notebook action
+    assert len(actions) == 1
+    assert actions[0]['title'] == 'View Cycle Dashboard'
+
+
+# ============================================================================
+# HELPER FUNCTION TESTS - truncate_error
+# ============================================================================
+
+@pytest.mark.unit
+def test_truncate_error_short_message():
+    """Test that short messages are not truncated."""
+    short_error = "Something went wrong"
+    result = truncate_error(short_error)
+
+    assert result == short_error
+    assert '...' not in result
+
+
+@pytest.mark.unit
+def test_truncate_error_long_message():
+    """Test that long messages are truncated with ellipsis."""
+    long_error = "A" * 600  # Longer than default 500
+    result = truncate_error(long_error)
+
+    assert len(result) == 503  # 500 + '...'
+    assert result.endswith('...')
+    assert result.startswith('A' * 500)
+
+
+@pytest.mark.unit
+def test_truncate_error_custom_length():
+    """Test truncation with custom max length."""
+    error = "A" * 200
+    result = truncate_error(error, max_length=100)
+
+    assert len(result) == 103  # 100 + '...'
+    assert result.endswith('...')
+
+
+@pytest.mark.unit
+def test_truncate_error_exact_length():
+    """Test message exactly at max length is not truncated."""
+    error = "A" * 500
+    result = truncate_error(error)
+
+    assert result == error
+    assert '...' not in result
+
+
+@pytest.mark.unit
+def test_truncate_error_empty_string():
+    """Test empty string returns empty string."""
+    result = truncate_error("")
+
+    assert result == ""
