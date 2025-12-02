@@ -54,6 +54,100 @@ class BatchError(Exception):
 
 
 # ============================================================================
+# NOTIFICATION HELPERS
+# ============================================================================
+
+def _send_job_failure_notification(
+    batch_id: int,
+    job_id: int,
+    batch_type: str,
+    error: str,
+    schema: str = 'public'
+) -> None:
+    """
+    Send Teams notification when a job submission fails.
+
+    Args:
+        batch_id: Batch ID
+        job_id: Job ID that failed
+        batch_type: Type of batch
+        error: Error message from the submission failure
+        schema: Database schema
+    """
+    import os
+
+    try:
+        from helpers.teams_notification import TeamsNotificationClient
+
+        teams = TeamsNotificationClient()
+
+        # Get cycle info and notebook path from batch
+        query = """
+            SELECT c.cycle_name, st.stage_num, s.step_num, s.step_name, s.notebook_path
+            FROM irp_batch b
+            JOIN irp_configuration cfg ON b.configuration_id = cfg.id
+            JOIN irp_cycle c ON cfg.cycle_id = c.id
+            LEFT JOIN irp_step s ON b.step_id = s.id
+            LEFT JOIN irp_stage st ON s.stage_id = st.id
+            WHERE b.id = %s
+        """
+        result = execute_query(query, (batch_id,), schema=schema)
+
+        if not result.empty:
+            cycle_name = result.iloc[0]['cycle_name']
+            stage_num = result.iloc[0]['stage_num']
+            step_name = result.iloc[0]['step_name'] or batch_type
+            notebook_path = str(result.iloc[0]['notebook_path'] or '')
+        else:
+            cycle_name = "Unknown"
+            stage_num = None
+            step_name = batch_type
+            notebook_path = ''
+
+        # Build action buttons
+        actions = []
+
+        # Add JupyterLab link to the actual notebook
+        base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
+        if base_url and 'workflows' in notebook_path:
+            rel_path = notebook_path.split('workflows')[-1].lstrip('/\\')
+            notebook_url = f"{base_url.rstrip('/')}/lab/tree/workspace/workflows/{rel_path}"
+            actions.append({"title": "Open Notebook", "url": notebook_url})
+
+        # Add dashboard link with cycle-specific path
+        dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
+        if dashboard_url:
+            # Link to cycle-specific dashboard page if cycle is known
+            # URL pattern: /{schema}/cycle/{cycle_name}
+            if cycle_name and cycle_name != "Unknown":
+                cycle_dashboard_url = f"{dashboard_url.rstrip('/')}/{schema}/cycle/{cycle_name}"
+                actions.append({"title": "View Cycle Dashboard", "url": cycle_dashboard_url})
+            else:
+                actions.append({"title": "View Dashboard", "url": dashboard_url})
+
+        # Truncate error for notification (keep first 500 chars)
+        error_summary = error[:500] + "..." if len(error) > 500 else error
+
+        stage_str = f"Stage {stage_num:02d}" if stage_num else "Unknown"
+
+        teams.send_error(
+            title=f"[{cycle_name}] Job Submission Failed: {step_name}",
+            message=f"**Cycle:** {cycle_name}\n"
+                    f"**Stage:** {stage_str}\n"
+                    f"**Batch Type:** {batch_type}\n"
+                    f"**Batch ID:** {batch_id}\n"
+                    f"**Job ID:** {job_id}\n\n"
+                    f"**Error:**\n{error_summary}",
+            actions=actions if actions else None
+        )
+
+    except Exception as e:
+        # Don't let notification failure break the workflow
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to send job failure notification: {e}")
+
+
+# ============================================================================
 # PRIVATE FUNCTIONS
 # ============================================================================
 
@@ -498,6 +592,14 @@ def submit_batch(
                     'status': 'FAILED',
                     'error': str(e)
                 })
+                # Send Teams notification for job submission failure
+                _send_job_failure_notification(
+                    batch_id=batch_id,
+                    job_id=job_record['id'],
+                    batch_type=batch['batch_type'],
+                    error=str(e),
+                    schema=schema
+                )
 
     # Update batch status to ACTIVE and set submitted_ts
     query = """
@@ -641,6 +743,14 @@ def _submit_rdm_export_batch_with_seed(
                 'error': str(e),
                 'is_seed': False
             })
+            # Send Teams notification for job submission failure
+            _send_job_failure_notification(
+                batch_id=batch_id,
+                job_id=job_record['id'],
+                batch_type=BatchType.EXPORT_TO_RDM,
+                error=str(e),
+                schema=schema
+            )
 
     # 5. Update batch status to ACTIVE
     query = """

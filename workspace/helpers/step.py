@@ -467,12 +467,17 @@ class Step:
                 notebook_path = str(self.context.notebook_path)
                 if 'workflows' in notebook_path:
                     rel_path = notebook_path.split('workflows')[-1].lstrip('/\\')
-                    notebook_url = f"{base_url.rstrip('/')}/lab/tree/workflows/{rel_path}"
+                    notebook_url = f"{base_url.rstrip('/')}/lab/tree/workspace/workflows/{rel_path}"
                     actions.append({"title": "Open Notebook", "url": notebook_url})
 
             dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
             if dashboard_url:
-                actions.append({"title": "View Dashboard", "url": dashboard_url})
+                # Link to cycle-specific dashboard page
+                # URL pattern: /{schema}/cycle/{cycle_name}
+                from helpers.database import get_current_schema
+                schema = get_current_schema()
+                cycle_dashboard_url = f"{dashboard_url.rstrip('/')}/{schema}/cycle/{self.context.cycle_name}"
+                actions.append({"title": "View Cycle Dashboard", "url": cycle_dashboard_url})
 
             # Truncate error for notification (keep first 500 chars)
             error_summary = error_message[:500] + "..." if len(error_message) > 500 else error_message

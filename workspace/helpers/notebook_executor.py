@@ -50,12 +50,20 @@ def _send_failure_notification(notebook_path: Path, error: str) -> None:
         base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
         if base_url and 'workflows' in path_str:
             rel_path = path_str.split('workflows')[-1].lstrip('/\\')
-            notebook_url = f"{base_url.rstrip('/')}/lab/tree/workflows/{rel_path}"
+            notebook_url = f"{base_url.rstrip('/')}/lab/tree/workspace/workflows/{rel_path}"
             actions.append({"title": "Open Notebook", "url": notebook_url})
 
         dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
         if dashboard_url:
-            actions.append({"title": "View Dashboard", "url": dashboard_url})
+            # Link to cycle-specific dashboard page if cycle is known
+            # URL pattern: /{schema}/cycle/{cycle_name}
+            if cycle_name and cycle_name != "Unknown":
+                from helpers.database import get_current_schema
+                schema = get_current_schema()
+                cycle_dashboard_url = f"{dashboard_url.rstrip('/')}/{schema}/cycle/{cycle_name}"
+                actions.append({"title": "View Cycle Dashboard", "url": cycle_dashboard_url})
+            else:
+                actions.append({"title": "View Dashboard", "url": dashboard_url})
 
         # Truncate error for notification (keep first 500 chars)
         error_summary = error[:500] + "..." if len(error) > 500 else error
