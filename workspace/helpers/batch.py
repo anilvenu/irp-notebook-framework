@@ -57,94 +57,145 @@ class BatchError(Exception):
 # NOTIFICATION HELPERS
 # ============================================================================
 
-def _send_job_failure_notification(
-    batch_id: int,
-    job_id: int,
-    batch_type: str,
-    error: str,
-    schema: str = 'public'
-) -> None:
+def _get_batch_context(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
     """
-    Send Teams notification when a job submission fails.
+    Get cycle/stage/step context for a batch (used for notifications).
 
     Args:
         batch_id: Batch ID
-        job_id: Job ID that failed
-        batch_type: Type of batch
-        error: Error message from the submission failure
         schema: Database schema
+
+    Returns:
+        Dictionary with context info (cycle_name, stage_num, step_name, notebook_path, batch_type)
+    """
+    query = """
+        SELECT c.cycle_name, st.stage_num, s.step_num, s.step_name, s.notebook_path, b.batch_type
+        FROM irp_batch b
+        JOIN irp_configuration cfg ON b.configuration_id = cfg.id
+        JOIN irp_cycle c ON cfg.cycle_id = c.id
+        LEFT JOIN irp_step s ON b.step_id = s.id
+        LEFT JOIN irp_stage st ON s.stage_id = st.id
+        WHERE b.id = %s
+    """
+    result = execute_query(query, (batch_id,), schema=schema)
+
+    if not result.empty:
+        return {
+            'cycle_name': result.iloc[0]['cycle_name'],
+            'stage_num': result.iloc[0]['stage_num'],
+            'step_name': result.iloc[0]['step_name'] or result.iloc[0]['batch_type'],
+            'notebook_path': str(result.iloc[0]['notebook_path'] or ''),
+            'batch_type': result.iloc[0]['batch_type']
+        }
+    else:
+        return {
+            'cycle_name': "Unknown",
+            'stage_num': None,
+            'step_name': "Unknown",
+            'notebook_path': '',
+            'batch_type': "Unknown"
+        }
+
+
+def _build_notification_actions(notebook_path: str, cycle_name: str, schema: str) -> List[Dict[str, str]]:
+    """
+    Build action buttons for Teams notifications (notebook link + dashboard link).
+
+    Args:
+        notebook_path: Path to the notebook
+        cycle_name: Cycle name for dashboard URL
+        schema: Database schema for dashboard URL
+
+    Returns:
+        List of action button dictionaries
     """
     import os
 
+    actions = []
+
+    # Add JupyterLab link to the actual notebook
+    base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
+    if base_url and 'workflows' in notebook_path:
+        rel_path = notebook_path.split('workflows')[-1].lstrip('/\\')
+        notebook_url = f"{base_url.rstrip('/')}/lab/tree/workspace/workflows/{rel_path}"
+        actions.append({"title": "Open Notebook", "url": notebook_url})
+
+    # Add dashboard link with cycle-specific path
+    dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
+    if dashboard_url:
+        if cycle_name and cycle_name != "Unknown":
+            cycle_dashboard_url = f"{dashboard_url.rstrip('/')}/{schema}/cycle/{cycle_name}"
+            actions.append({"title": "View Cycle Dashboard", "url": cycle_dashboard_url})
+        else:
+            actions.append({"title": "View Dashboard", "url": dashboard_url})
+
+    return actions
+
+
+def _send_batch_failure_notification(
+    batch_id: int,
+    batch_status: str,
+    recon_summary: Dict[str, Any],
+    schema: str = 'public'
+) -> None:
+    """
+    Send Teams notification when batch reconciliation results in failure status.
+
+    Args:
+        batch_id: Batch ID
+        batch_status: Final batch status (FAILED, ERROR, or CANCELLED)
+        recon_summary: Reconciliation summary data
+        schema: Database schema
+    """
     try:
         from helpers.teams_notification import TeamsNotificationClient
 
         teams = TeamsNotificationClient()
+        ctx = _get_batch_context(batch_id, schema=schema)
+        actions = _build_notification_actions(ctx['notebook_path'], ctx['cycle_name'], schema)
 
-        # Get cycle info and notebook path from batch
-        query = """
-            SELECT c.cycle_name, st.stage_num, s.step_num, s.step_name, s.notebook_path
-            FROM irp_batch b
-            JOIN irp_configuration cfg ON b.configuration_id = cfg.id
-            JOIN irp_cycle c ON cfg.cycle_id = c.id
-            LEFT JOIN irp_step s ON b.step_id = s.id
-            LEFT JOIN irp_stage st ON s.stage_id = st.id
-            WHERE b.id = %s
-        """
-        result = execute_query(query, (batch_id,), schema=schema)
+        stage_str = f"Stage {ctx['stage_num']:02d}" if ctx['stage_num'] else "Unknown"
 
-        if not result.empty:
-            cycle_name = result.iloc[0]['cycle_name']
-            stage_num = result.iloc[0]['stage_num']
-            step_name = result.iloc[0]['step_name'] or batch_type
-            notebook_path = str(result.iloc[0]['notebook_path'] or '')
+        # Build summary based on status
+        status_counts = recon_summary.get('job_status_counts', {})
+        total_jobs = recon_summary.get('non_skipped_jobs', 0)
+        finished = status_counts.get(JobStatus.FINISHED, 0)
+        failed = status_counts.get(JobStatus.FAILED, 0)
+        error = status_counts.get(JobStatus.ERROR, 0)
+        cancelled = status_counts.get(JobStatus.CANCELLED, 0)
+
+        summary_parts = [f"**Total Jobs:** {total_jobs}"]
+        if finished > 0:
+            summary_parts.append(f"**Finished:** {finished}")
+        if failed > 0:
+            summary_parts.append(f"**Failed:** {failed}")
+        if error > 0:
+            summary_parts.append(f"**Error:** {error}")
+        if cancelled > 0:
+            summary_parts.append(f"**Cancelled:** {cancelled}")
+
+        # Choose notification style based on status
+        if batch_status == BatchStatus.CANCELLED:
+            title = f"[{ctx['cycle_name']}] Batch Cancelled: {ctx['batch_type']}"
+            send_method = teams.send_warning
         else:
-            cycle_name = "Unknown"
-            stage_num = None
-            step_name = batch_type
-            notebook_path = ''
+            title = f"[{ctx['cycle_name']}] Batch Failed: {ctx['batch_type']}"
+            send_method = teams.send_error
 
-        # Build action buttons
-        actions = []
-
-        # Add JupyterLab link to the actual notebook
-        base_url = os.environ.get('TEAMS_DEFAULT_JUPYTERLAB_URL', '')
-        if base_url and 'workflows' in notebook_path:
-            rel_path = notebook_path.split('workflows')[-1].lstrip('/\\')
-            notebook_url = f"{base_url.rstrip('/')}/lab/tree/workspace/workflows/{rel_path}"
-            actions.append({"title": "Open Notebook", "url": notebook_url})
-
-        # Add dashboard link with cycle-specific path
-        dashboard_url = os.environ.get('TEAMS_DEFAULT_DASHBOARD_URL', '')
-        if dashboard_url:
-            # Link to cycle-specific dashboard page if cycle is known
-            # URL pattern: /{schema}/cycle/{cycle_name}
-            if cycle_name and cycle_name != "Unknown":
-                cycle_dashboard_url = f"{dashboard_url.rstrip('/')}/{schema}/cycle/{cycle_name}"
-                actions.append({"title": "View Cycle Dashboard", "url": cycle_dashboard_url})
-            else:
-                actions.append({"title": "View Dashboard", "url": dashboard_url})
-
-        # Truncate error for notification (keep first 500 chars)
-        error_summary = error[:500] + "..." if len(error) > 500 else error
-
-        stage_str = f"Stage {stage_num:02d}" if stage_num else "Unknown"
-
-        teams.send_error(
-            title=f"[{cycle_name}] Job Submission Failed: {step_name}",
-            message=f"**Cycle:** {cycle_name}\n"
+        send_method(
+            title=title,
+            message=f"**Cycle:** {ctx['cycle_name']}\n"
                     f"**Stage:** {stage_str}\n"
-                    f"**Batch Type:** {batch_type}\n"
+                    f"**Batch Type:** {ctx['batch_type']}\n"
                     f"**Batch ID:** {batch_id}\n"
-                    f"**Job ID:** {job_id}\n\n"
-                    f"**Error:**\n{error_summary}",
+                    f"**Status:** {batch_status}\n\n" +
+                    "\n".join(summary_parts),
             actions=actions if actions else None
         )
 
     except Exception as e:
-        # Don't let notification failure break the workflow
         import logging
-        logging.getLogger(__name__).warning(f"Failed to send job failure notification: {e}")
+        logging.getLogger(__name__).warning(f"Failed to send batch failure notification: {e}")
 
 
 # ============================================================================
@@ -592,14 +643,6 @@ def submit_batch(
                     'status': 'FAILED',
                     'error': str(e)
                 })
-                # Send Teams notification for job submission failure
-                _send_job_failure_notification(
-                    batch_id=batch_id,
-                    job_id=job_record['id'],
-                    batch_type=batch['batch_type'],
-                    error=str(e),
-                    schema=schema
-                )
 
     # Update batch status to ACTIVE and set submitted_ts
     query = """
@@ -743,14 +786,6 @@ def _submit_rdm_export_batch_with_seed(
                 'error': str(e),
                 'is_seed': False
             })
-            # Send Teams notification for job submission failure
-            _send_job_failure_notification(
-                batch_id=batch_id,
-                job_id=job_record['id'],
-                batch_type=BatchType.EXPORT_TO_RDM,
-                error=str(e),
-                schema=schema
-            )
 
     # 5. Update batch status to ACTIVE
     query = """
@@ -1038,5 +1073,9 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
 
     # Update batch status
     update_batch_status(batch_id, recon_result, schema=schema)
+
+    # Send notification for failure statuses
+    if recon_result in [BatchStatus.FAILED, BatchStatus.ERROR, BatchStatus.CANCELLED]:
+        _send_batch_failure_notification(batch_id, recon_result, recon_summary, schema=schema)
 
     return recon_result
