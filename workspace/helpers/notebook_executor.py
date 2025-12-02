@@ -14,6 +14,73 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+def _handle_notebook_failure(notebook_path: Path, error: str) -> None:
+    """
+    Handle notebook execution failure: mark step as failed and send Teams notification.
+
+    Args:
+        notebook_path: Path to the failed notebook
+        error: Error message from the execution failure
+    """
+    try:
+        from helpers.teams_notification import (
+            TeamsNotificationClient, build_notification_actions, truncate_error
+        )
+        from helpers.database import get_current_schema
+        from helpers.step import get_last_step_run, update_step_run
+        from helpers.constants import StepStatus
+        from helpers.context import WorkContext
+
+        # Mark the step run as FAILED (it was left ACTIVE when notebook crashed)
+        try:
+            context = WorkContext(notebook_path=str(notebook_path))
+            last_run = get_last_step_run(context.step_id)
+            if last_run and last_run['status'] == 'ACTIVE':
+                update_step_run(last_run['id'], StepStatus.FAILED, error_message=error[:1000])
+                logger.info(f"Marked step run {last_run['id']} as FAILED")
+        except Exception as e:
+            logger.warning(f"Could not mark step as failed: {e}")
+
+        teams = TeamsNotificationClient()
+
+        # Extract cycle/stage/step from path
+        # e.g., .../Active_Demo-1126/notebooks/Stage_03_.../Step_01_...ipynb
+        path_str = str(notebook_path)
+        cycle_name = "Unknown"
+        stage_name = "Unknown"
+        step_name = notebook_path.stem
+
+        if 'Active_' in path_str:
+            parts = path_str.split('Active_')[1].split('/')
+            cycle_name = parts[0].split('\\')[0]
+
+        for part in notebook_path.parts:
+            if part.startswith('Stage_'):
+                stage_name = part
+            if part.startswith('Step_'):
+                step_name = part.replace('.ipynb', '')
+
+        # Build action buttons and truncate error
+        schema = get_current_schema() if cycle_name != "Unknown" else 'public'
+        actions = build_notification_actions(path_str, cycle_name, schema)
+        error_summary = truncate_error(error)
+
+        teams.send_error(
+            title=f"[{cycle_name}] Notebook Failed: {step_name}",
+            message=f"**Cycle:** {cycle_name}\n"
+                    f"**Stage:** {stage_name}\n"
+                    f"**Step:** {step_name}\n\n"
+                    f"**Error:**\n{error_summary}",
+            actions=actions if actions else None
+        )
+
+        logger.info(f"Sent failure notification for notebook: {notebook_path}")
+
+    except Exception as e:
+        # Don't let notification failure break the workflow
+        logger.warning(f"Failed to send failure notification: {e}")
+
+
 class NotebookExecutionError(Exception):
     """Raised when notebook execution fails."""
     pass
@@ -123,6 +190,9 @@ def execute_notebook(
 
         logger.error(error_msg)
 
+        # Send Teams notification for failure and mark step as failed
+        _handle_notebook_failure(notebook_path, error_msg)
+
         return {
             'success': False,
             'notebook_path': notebook_path,
@@ -146,6 +216,9 @@ def execute_notebook(
 
         logger.error(error_msg)
 
+        # Send Teams notification for timeout and mark step as failed
+        _handle_notebook_failure(notebook_path, error_msg)
+
         return {
             'success': False,
             'notebook_path': notebook_path,
@@ -163,6 +236,9 @@ def execute_notebook(
 
         error_msg = f"Unexpected error executing notebook {notebook_path}: {str(e)}"
         logger.error(error_msg, exc_info=True)
+
+        # Send Teams notification for unexpected error and mark step as failed
+        _handle_notebook_failure(notebook_path, error_msg)
 
         return {
             'success': False,

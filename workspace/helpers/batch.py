@@ -54,6 +54,116 @@ class BatchError(Exception):
 
 
 # ============================================================================
+# NOTIFICATION HELPERS
+# ============================================================================
+
+def _get_batch_context(batch_id: int, schema: str = 'public') -> Dict[str, Any]:
+    """
+    Get cycle/stage/step context for a batch (used for notifications).
+
+    Args:
+        batch_id: Batch ID
+        schema: Database schema
+
+    Returns:
+        Dictionary with context info (cycle_name, stage_num, step_name, notebook_path, batch_type)
+    """
+    query = """
+        SELECT c.cycle_name, st.stage_num, s.step_num, s.step_name, s.notebook_path, b.batch_type
+        FROM irp_batch b
+        JOIN irp_configuration cfg ON b.configuration_id = cfg.id
+        JOIN irp_cycle c ON cfg.cycle_id = c.id
+        LEFT JOIN irp_step s ON b.step_id = s.id
+        LEFT JOIN irp_stage st ON s.stage_id = st.id
+        WHERE b.id = %s
+    """
+    result = execute_query(query, (batch_id,), schema=schema)
+
+    if not result.empty:
+        return {
+            'cycle_name': result.iloc[0]['cycle_name'],
+            'stage_num': result.iloc[0]['stage_num'],
+            'step_name': result.iloc[0]['step_name'] or result.iloc[0]['batch_type'],
+            'notebook_path': str(result.iloc[0]['notebook_path'] or ''),
+            'batch_type': result.iloc[0]['batch_type']
+        }
+    else:
+        return {
+            'cycle_name': "Unknown",
+            'stage_num': None,
+            'step_name': "Unknown",
+            'notebook_path': '',
+            'batch_type': "Unknown"
+        }
+
+
+def _send_batch_failure_notification(
+    batch_id: int,
+    batch_status: str,
+    recon_summary: Dict[str, Any],
+    schema: str = 'public'
+) -> None:
+    """
+    Send Teams notification when batch reconciliation results in failure status.
+
+    Args:
+        batch_id: Batch ID
+        batch_status: Final batch status (FAILED, ERROR, or CANCELLED)
+        recon_summary: Reconciliation summary data
+        schema: Database schema
+    """
+    try:
+        from helpers.teams_notification import TeamsNotificationClient, build_notification_actions
+
+        teams = TeamsNotificationClient()
+        ctx = _get_batch_context(batch_id, schema=schema)
+        actions = build_notification_actions(ctx['notebook_path'], ctx['cycle_name'], schema)
+
+        stage_str = f"Stage {ctx['stage_num']:02d}" if ctx['stage_num'] else "Unknown"
+
+        # Build summary based on status
+        status_counts = recon_summary.get('job_status_counts', {})
+        total_jobs = recon_summary.get('non_skipped_jobs', 0)
+        finished = status_counts.get(JobStatus.FINISHED, 0)
+        failed = status_counts.get(JobStatus.FAILED, 0)
+        error = status_counts.get(JobStatus.ERROR, 0)
+        cancelled = status_counts.get(JobStatus.CANCELLED, 0)
+
+        summary_parts = [f"**Total Jobs:** {total_jobs}"]
+        if finished > 0:
+            summary_parts.append(f"**Finished:** {finished}")
+        if failed > 0:
+            summary_parts.append(f"**Failed:** {failed}")
+        if error > 0:
+            summary_parts.append(f"**Error:** {error}")
+        if cancelled > 0:
+            summary_parts.append(f"**Cancelled:** {cancelled}")
+
+        # Choose notification style based on status
+        if batch_status == BatchStatus.CANCELLED:
+            title = f"[{ctx['cycle_name']}] Batch Cancelled: {ctx['batch_type']}"
+            send_method = teams.send_warning
+        else:
+            title = f"[{ctx['cycle_name']}] Batch Failed: {ctx['batch_type']}"
+            send_method = teams.send_error
+
+        send_method(
+            title=title,
+            message=f"**Cycle:** {ctx['cycle_name']}\n"
+                    f"**Stage:** {stage_str}\n"
+                    f"**Batch Type:** {ctx['batch_type']}\n"
+                    f"**Batch ID:** {batch_id}\n"
+                    f"**Status:** {batch_status}\n\n" +
+                    "\n".join(summary_parts),
+            actions=actions if actions else None
+        )
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to send batch failure notification: {e}")
+
+
+# ============================================================================
 # PRIVATE FUNCTIONS
 # ============================================================================
 
@@ -928,5 +1038,9 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
 
     # Update batch status
     update_batch_status(batch_id, recon_result, schema=schema)
+
+    # Send notification for failure statuses
+    if recon_result in [BatchStatus.FAILED, BatchStatus.ERROR, BatchStatus.CANCELLED]:
+        _send_batch_failure_notification(batch_id, recon_result, recon_summary, schema=schema)
 
     return recon_result

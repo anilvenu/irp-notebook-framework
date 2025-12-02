@@ -413,16 +413,16 @@ class Step:
     def fail(self, error_message: str):
         """
         Mark step as failed.
-        
+
         Args:
             error_message: Error message describing the failure
         """
-        
+
         if not self.run_id:
             # Step never started, just log error
             print(f"Step failed: {error_message}")
             return
-        
+
         try:
             # Update database
             update_step_run(
@@ -430,15 +430,15 @@ class Step:
                 StepStatus.FAILED,
                 error_message=error_message
             )
-            
+
             duration = (datetime.now() - self.start_time).total_seconds()
-            
+
             print("\n" + "="*60)
             print(f"STEP FAILED")
             print(f"Run #{self.run_num} failed after {duration:.1f} seconds")
             print(f"Error: {error_message}")
             print("="*60)
-            
+
         except Exception as e:
             print(f"Failed to update step status: {str(e)}")
     
