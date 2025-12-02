@@ -240,6 +240,7 @@ def test_send_notification_with_default_actions(client, webhook_url):
 def test_send_notification_no_actions_when_defaults_empty(monkeypatch, webhook_url):
     """Test no actions included when defaults are empty."""
     monkeypatch.setenv('TEAMS_WEBHOOK_URL', webhook_url)
+    monkeypatch.setenv('TEAMS_NOTIFICATION_ENABLED', 'true')
     monkeypatch.delenv('TEAMS_DEFAULT_DASHBOARD_URL', raising=False)
     monkeypatch.delenv('TEAMS_DEFAULT_JUPYTERLAB_URL', raising=False)
 
