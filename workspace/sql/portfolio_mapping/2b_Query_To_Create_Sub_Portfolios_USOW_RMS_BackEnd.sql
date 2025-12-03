@@ -10,11 +10,11 @@ Instructions:
 				6. Select all commands from "SET NOCOUNT ON" and onwards and excecute the script.
 SQL Server: T4025RDP22DB101
 SQL Database: QEM Exposure Database
-Input Portfolios:	US_ST
+Input Portfolios:	US_OW
 Output Tables:
-					US_ST_Lend
-					US_ST_Prop
-					US_ST_Clayton
+					US_OW_Lend
+					US_OW_Prop
+					US_OW_Clayton
 
 Runtime: < 10 seconds
 **********************************************************************************************************************************************/
@@ -24,7 +24,7 @@ USE [{{ EDM_FULL_NAME }}]
 /*US Portfolios:  If these differ, the script will need to be updated
 Select * from portinfo
 PORTINFOID	PORTNUM
-1	USST
+1	USOW
 
 
 select distinct inceptdate from dbo.policy
@@ -54,7 +54,7 @@ SET @Date = {{ DATETIME_VALUE }} --Update by running (Select getdate())
 
 --Lender Placed
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Lender_P','USST_Lender_P',@Date,'USST_Lender_P'
+select max(portinfoid)+1,'USOW_Lender_P','USOW_Lender_P',@Date,'USOW_Lender_P'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_1 INT
@@ -82,7 +82,7 @@ where name = 'portacct'
 
 --Geico 1.0
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Geico_HIP1','USST_Geico_HIP1',@Date,'US_ST_Geico_HIP1.0'
+select max(portinfoid)+1,'USOW_Geico_HIP1','USOW_Geico_HIP1',@Date,'US_OW_Geico_HIP1.0'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_4 INT
@@ -110,7 +110,7 @@ where name = 'portacct'
 
 --Geico 2.0 50QS
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Geico_50HIP2','USST_Geico_50HIP2',@Date,'USST_Geico_50HIP2'
+select max(portinfoid)+1,'USOW_Geico_50HIP2','USOW_Geico_50HIP2',@Date,'USOW_Geico_50HIP2'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_5 INT
@@ -140,7 +140,7 @@ where name = 'portacct'
 
 --Geico 2.0 75QS
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Geico_75HIP2','USST_Geico_75HIP2',@Date,'USST_Geico_75HIP2'
+select max(portinfoid)+1,'USOW_Geico_75HIP2','USOW_Geico_75HIP2',@Date,'USOW_Geico_75HIP2'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_6 INT
@@ -170,7 +170,7 @@ where name = 'portacct'
 --Manufactured Housing
 
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Manufactured','USST_Manufactured',@Date,'USST_Manufactured'
+select max(portinfoid)+1,'USOW_Manufactured','USOW_Manufactured',@Date,'USOW_Manufactured'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_7 INT
@@ -198,7 +198,7 @@ where name = 'portacct'
 
 --Renters
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Renters','USST_Renters',@Date,'USST_Renters'
+select max(portinfoid)+1,'USOW_Renters','USOW_Renters',@Date,'USOW_Renters'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_8 INT
@@ -227,7 +227,7 @@ where name = 'portacct'
 
 --Condo
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Condo','USST_Condo',@Date,'USST_Condo'
+select max(portinfoid)+1,'USOW_Condo','USOW_Condo',@Date,'USOW_Condo'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_3 INT
@@ -256,7 +256,7 @@ where name = 'portacct'
 
 --CHFS
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_CHFS','USST_CHFS',@Date,'USST_CHFS'
+select max(portinfoid)+1,'USOW_CHFS','USOW_CHFS',@Date,'USOW_CHFS'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_2 INT
@@ -285,7 +285,7 @@ where name = 'portacct'
 
 --Other
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Other','USST_Other',@Date,'USST_Other'
+select max(portinfoid)+1,'USOW_Other','USOW_Other',@Date,'USOW_Other'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_9 INT
@@ -314,7 +314,7 @@ where name = 'portacct'
 
 --Clay 21st
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Clay_21st','USST_Clay_21st',@Date,'USST_Clay_21st'
+select max(portinfoid)+1,'USOW_Clay_21st','USOW_Clay_21st',@Date,'USOW_Clay_21st'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_10 INT
@@ -345,7 +345,7 @@ where name = 'portacct'
 
 --Clay Homes
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USST_Clay_Homes','USST_Clay_Homes',@Date,'USST_Clay_Homes'
+select max(portinfoid)+1,'USOW_Clay_Homes','USOW_Clay_Homes',@Date,'USOW_Clay_Homes'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_11 INT
@@ -388,17 +388,17 @@ SELECT
 FROM dbo.Portinfo pi
 LEFT JOIN dbo.Portacct pa ON pi.PORTINFOID = pa.PORTINFOID
 WHERE pi.PORTNAME IN (
-    'USST_Lender_P',
-    'USST_Geico_HIP1',
-    'USST_Geico_50HIP2',
-    'USST_Geico_75HIP2',
-    'USST_Manufactured',
-    'USST_Renters',
-    'USST_Condo',
-    'USST_CHFS',
-    'USST_Other',
-    'USST_Clay_21st',
-    'USST_Clay_Homes'
+    'USOW_Lender_P',
+    'USOW_Geico_HIP1',
+    'USOW_Geico_50HIP2',
+    'USOW_Geico_75HIP2',
+    'USOW_Manufactured',
+    'USOW_Renters',
+    'USOW_Condo',
+    'USOW_CHFS',
+    'USOW_Other',
+    'USOW_Clay_21st',
+    'USOW_Clay_Homes'
 )
 AND pi.CREATEDATE = @Date
 GROUP BY pi.PORTINFOID, pi.PORTNUM, pi.PORTNAME, pi.CREATEDATE, pi.DESCRIPT
