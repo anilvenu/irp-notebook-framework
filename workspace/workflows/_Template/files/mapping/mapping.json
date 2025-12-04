@@ -777,6 +777,134 @@
         {
             "source": "WFSUPPRESS",
             "destination": "WFSUPPRESS"
+        },
+        {
+            "source": "TOCV4VAL",
+            "destination": "TOCV4VAL"
+        },
+        {
+            "source": "TOCV4VCUR",
+            "destination": "TOCV4VCUR"
+        },
+        {
+            "source": "TOCV5VAL",
+            "destination": "TOCV5VAL"
+        },
+        {
+            "source": "TOCV5VCUR",
+            "destination": "TOCV5VCUR"
+        },
+        {
+            "source": "TOCV6VAL",
+            "destination": "TOCV6VAL"
+        },
+        {
+            "source": "TOCV6VCUR",
+            "destination": "TOCV6VCUR"
+        },
+        {
+            "source": "TOCV7VAL",
+            "destination": "TOCV7VAL"
+        },
+        {
+            "source": "TOCV7VCUR",
+            "destination": "TOCV7VCUR"
+        },
+        {
+            "source": "TOCV4LIMIT",
+            "destination": "TOCV4LIMIT"
+        },
+        {
+            "source": "TOCV4LCUR",
+            "destination": "TOCV4LCUR"
+        },
+        {
+            "source": "TOCV5LIMIT",
+            "destination": "TOCV5LIMIT"
+        },
+        {
+            "source": "TOCV5LCUR",
+            "destination": "TOCV5LCUR"
+        },
+        {
+            "source": "TOCV6LIMIT",
+            "destination": "TOCV6LIMIT"
+        },
+        {
+            "source": "TOCV6LCUR",
+            "destination": "TOCV6LCUR"
+        },
+        {
+            "source": "TOCV7LIMIT",
+            "destination": "TOCV7LIMIT"
+        },
+        {
+            "source": "TOCV7LCUR",
+            "destination": "TOCV7LCUR"
+        },
+        {
+            "source": "TOCV4DED",
+            "destination": "TOCV4DED"
+        },
+        {
+            "source": "TOCV4DCUR",
+            "destination": "TOCV4DCUR"
+        },
+        {
+            "source": "TOCV5DED",
+            "destination": "TOCV5DED"
+        },
+        {
+            "source": "TOCV5DCUR",
+            "destination": "TOCV5DCUR"
+        },
+        {
+            "source": "TOCV6DED",
+            "destination": "TOCV6DED"
+        },
+        {
+            "source": "TOCV6DCUR",
+            "destination": "TOCV6DCUR"
+        },
+        {
+            "source": "TOCV7DED",
+            "destination": "TOCV7DED"
+        },
+        {
+            "source": "TOCV7DCUR",
+            "destination": "TOCV7DCUR"
+        },
+        {
+            "source": "TOSITELIM",
+            "destination": "TOSITELIM"
+        },
+        {
+            "source": "TOSITELCUR",
+            "destination": "TOSITELCUR"
+        },
+        {
+            "source": "TOSITEDED",
+            "destination": "TOSITEDED"
+        },
+        {
+            "source": "TOSITEDCUR",
+            "destination": "TOSITEDCUR"
+        },
+        {
+            "source": "TOCOMBINEDLIM",
+            "destination": "TOCOMBINEDLIM"
+        },
+        {
+            "source": "TOCOMBINEDLCUR",
+            "destination": "TOCOMBINEDLCUR"
+        },
+        {
+            "source": "TOCOMBINEDDED",
+            "destination": "TOCOMBINEDDED"
+        },
+        {
+            "source": "TOCOMBINEDDCUR",
+            "destination": "TOCOMBINEDDCUR"
         }
     ],
     "reinsuranceItems": [],
