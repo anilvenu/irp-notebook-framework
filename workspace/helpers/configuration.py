@@ -1514,17 +1514,31 @@ def load_configuration_file(
             _format_error('BUS-004', cycle_id=cycle_id, active_cycle_id=active_cycle_id)
         )
 
-    # Check if there's already an ACTIVE configuration for this cycle
-    query = """
+    # Check if there's an existing configuration with batches created from it
+    # If batches exist, we cannot replace the configuration (data integrity)
+    # If no batches exist, we can safely replace the configuration
+    config_query = """
         SELECT id FROM irp_configuration
-        WHERE cycle_id = %s AND status = %s
+        WHERE cycle_id = %s
     """
-    df = execute_query(query, (cycle_id, ConfigurationStatus.ACTIVE), schema=schema)
+    config_df = execute_query(config_query, (cycle_id,), schema=schema)
 
-    if not df.empty:
-        raise ConfigurationError(
-            _format_error('BUS-003', cycle_id=cycle_id)
-        )
+    if not config_df.empty:
+        config_id = int(config_df.iloc[0]['id'])
+        # Check if any batches have been created from this configuration
+        batch_query = """
+            SELECT COUNT(*) as batch_count FROM irp_batch
+            WHERE configuration_id = %s
+        """
+        batch_df = execute_query(batch_query, (config_id,), schema=schema)
+        batch_count = int(batch_df.iloc[0]['batch_count'])
+
+        if batch_count > 0:
+            # Batches exist - cannot replace configuration
+            raise ConfigurationError(
+                _format_error('BUS-003', batch_count=batch_count, config_id=config_id)
+            )
+        # No batches exist - safe to replace (will be deleted below)
 
     # Validate Excel file using helper function
     config_data, validation_results, all_valid, file_mtime = _validate_excel_file(excel_config_path)

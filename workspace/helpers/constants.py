@@ -611,7 +611,7 @@ VALIDATION_ERROR_CODES = {
     # Business rule errors
     'BUS-001': 'Database "{database}" has no Base Portfolio (at least one required)',
     'BUS-002': 'Expiration Date must be after Inception Date for treaty {treaty_name}',
-    'BUS-003': 'Duplicate ACTIVE configuration exists for cycle {cycle_id}',
+    'BUS-003': 'Cannot replace configuration: {batch_count} batch(es) have been created from the current configuration (config_id={config_id}). To start fresh, archive this cycle and create a new one.',
     'BUS-004': 'Provided cycle_id {cycle_id} does not match active cycle {active_cycle_id}',
 
     # Format/Pattern errors
