@@ -34,7 +34,7 @@ from helpers.job import (
     resubmit_job as resubmit_job,
     JobError
 )
-from helpers.constants import JobStatus, ConfigurationStatus
+from helpers.constants import JobStatus, ConfigurationStatus, BatchStatus
 
 
 # ============================================================================
@@ -1415,3 +1415,75 @@ def test_resubmit_jobs_preserves_order(test_schema, mock_irp_client):
     # Verify order preserved
     for i, success in enumerate(result['successful']):
         assert success['old_job_id'] == job_ids[i]
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_job_sets_batch_to_active(test_schema, mock_irp_client):
+    """Test resubmit_job sets batch status back to ACTIVE."""
+    from helpers.job import resubmit_job
+    from helpers.batch import read_batch, update_batch_status
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_batch_active')
+
+    # Create a job
+    job_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB'},
+        schema=test_schema
+    )
+
+    # Set batch to COMPLETED (simulating a completed batch)
+    update_batch_status(batch_id, BatchStatus.COMPLETED, schema=test_schema)
+
+    # Verify batch is COMPLETED
+    batch_before = read_batch(batch_id, schema=test_schema)
+    assert batch_before['status'] == BatchStatus.COMPLETED
+
+    # Resubmit the job
+    new_job_id = resubmit_job(
+        job_id=job_id,
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
+        schema=test_schema
+    )
+
+    # Verify batch is now ACTIVE
+    batch_after = read_batch(batch_id, schema=test_schema)
+    assert batch_after['status'] == BatchStatus.ACTIVE
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_job_sets_failed_batch_to_active(test_schema, mock_irp_client):
+    """Test resubmit_job sets a FAILED batch status back to ACTIVE."""
+    from helpers.job import resubmit_job
+    from helpers.batch import read_batch, update_batch_status
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_failed_batch')
+
+    # Create a job
+    job_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB'},
+        schema=test_schema
+    )
+
+    # Set batch to FAILED (simulating a failed batch)
+    update_batch_status(batch_id, BatchStatus.FAILED, schema=test_schema)
+
+    # Verify batch is FAILED
+    batch_before = read_batch(batch_id, schema=test_schema)
+    assert batch_before['status'] == BatchStatus.FAILED
+
+    # Resubmit the job
+    new_job_id = resubmit_job(
+        job_id=job_id,
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
+        schema=test_schema
+    )
+
+    # Verify batch is now ACTIVE
+    batch_after = read_batch(batch_id, schema=test_schema)
+    assert batch_after['status'] == BatchStatus.ACTIVE

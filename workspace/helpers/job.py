@@ -1834,6 +1834,11 @@ def resubmit_job(
         # Skip original job (must happen within same transaction)
         skip_job(job_id, schema=schema)
 
+        # Set batch status back to ACTIVE (in case it was COMPLETED/FAILED)
+        from helpers.batch import update_batch_status
+        from helpers.constants import BatchStatus
+        update_batch_status(batch_id, BatchStatus.ACTIVE, schema=schema)
+
         # All database operations committed together at end of context
 
     # Submit the job AFTER transaction completes successfully
