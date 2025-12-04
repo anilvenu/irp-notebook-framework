@@ -7,10 +7,52 @@ model profiles, output profiles, event rate schemes, currencies, and tags.
 
 from typing import Dict, List, Any
 from .client import Client
-from .constants import SEARCH_CURRENCIES, GET_TAGS, CREATE_TAG, GET_MODEL_PROFILES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME
+from .constants import SEARCH_CURRENCIES, SEARCH_CURRENCY_SCHEME_VINTAGES, GET_TAGS, CREATE_TAG, GET_MODEL_PROFILES, GET_OUTPUT_PROFILES, GET_EVENT_RATE_SCHEME
 from .exceptions import IRPAPIError
 from .validators import validate_non_empty_string, validate_list_not_empty
 from .utils import extract_id_from_location_header
+
+
+def _build_analysis_currency_dict(vintage: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Build currency dict for analysis requests from a currency scheme vintage.
+
+    Args:
+        vintage: Currency scheme vintage dict from API with keys:
+            - effectiveDate: ISO date string (e.g., "2025-05-28T00:00:00.000Z")
+            - currencySchemeCode: Scheme code (e.g., "RMS")
+            - vintage: Vintage code (e.g., "RL25")
+
+    Returns:
+        Currency dict with asOfDate (date only), code, scheme, and vintage
+    """
+    # Extract date portion only (API returns full timestamp but expects date only)
+    effective_date = vintage["effectiveDate"].split("T")[0]
+    return {
+        "asOfDate": effective_date,
+        "code": "USD",
+        "scheme": vintage["currencySchemeCode"],
+        "vintage": vintage["vintage"]
+    }
+
+
+def _build_default_analysis_currency_dict() -> Dict[str, str]:
+    """
+    Build default currency dict for analysis requests.
+
+    Note: This is a fallback helper used when the currency scheme
+    vintage cannot be retrieved from the API.
+
+    Returns:
+        Currency dict with default values
+    """
+    return {
+        "asOfDate": "2025-05-28",
+        "code": "USD",
+        "scheme": "RMS",
+        "vintage": "RL25"
+    }
+
 
 class ReferenceDataManager:
     """Manager for reference data operations."""
@@ -175,6 +217,70 @@ class ReferenceDataManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to search currencies: {e}")
+
+
+    def search_currency_scheme_vintages(self, where_clause: str = "") -> Dict[str, Any]:
+        """
+        Search currency scheme vintages with optional filtering.
+
+        Args:
+            where_clause: Optional filter clause
+
+        Returns:
+            Dict containing currency scheme vintages
+
+        Raises:
+            IRPAPIError: If request fails
+        """
+        params = {}
+        if where_clause:
+            params['where'] = where_clause
+
+        try:
+            response = self.client.request('GET', SEARCH_CURRENCY_SCHEME_VINTAGES, params=params)
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to search currency scheme vintages: {e}")
+
+
+    def get_latest_currency_scheme_vintage(self) -> Dict[str, Any]:
+        """
+        Get the latest RMS currency scheme vintage by effective date.
+
+        Returns:
+            Dict containing the currency scheme vintage with the most recent effectiveDate
+
+        Raises:
+            IRPAPIError: If request fails or no vintages found
+        """
+        where_clause = "currencySchemeCode=\"RMS\""
+        response = self.search_currency_scheme_vintages(where_clause)
+
+        try:
+            items = response['items']
+            if not items:
+                raise IRPAPIError("No RMS currency scheme vintages found")
+            latest = max(items, key=lambda x: x['effectiveDate'])
+            return latest
+        except KeyError as e:
+            raise IRPAPIError(f"Failed to extract items from currency scheme vintages response: {e}") from e
+
+
+    def get_analysis_currency(self) -> Dict[str, str]:
+        """
+        Get currency dict for analysis requests.
+
+        Attempts to get the latest RMS currency scheme vintage from the API.
+        Falls back to default values if the API call fails.
+
+        Returns:
+            Currency dict with asOfDate, code, scheme, and vintage
+        """
+        try:
+            latest_vintage = self.get_latest_currency_scheme_vintage()
+            return _build_analysis_currency_dict(latest_vintage)
+        except IRPAPIError:
+            return _build_default_analysis_currency_dict()
 
 
     def get_currency_by_name(self, currency_name: str) -> Dict[str, Any]:

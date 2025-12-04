@@ -264,26 +264,6 @@ def find_reference_data_by_name(
     return match
 
 
-
-
-def build_analysis_currency_dict() -> Dict[str, str]:
-    """
-    Build default currency dict for analysis requests.
-
-    Note: This is a temporary helper that will be replaced once
-    currency data is gathered dynamically from APIs.
-
-    Returns:
-        Currency dict with default values
-    """
-    return {
-        "asOfDate": "2018-11-15",
-        "code": "USD",
-        "scheme": "RMS",
-        "vintage": "RL18.1"
-    }
-
-
 def extract_analysis_id_from_workflow_response(workflow: Dict[str, Any]) -> Optional[str]:
     """
     Extract analysis ID from workflow response.

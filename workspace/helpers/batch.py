@@ -1148,3 +1148,111 @@ def delete_batch(batch_id: int, schema: str = 'public') -> bool:
 
     except Exception as e:
         raise BatchError(f"Failed to delete batch {batch_id}: {str(e)}")
+
+
+# ============================================================================
+# ANALYSIS BATCH RECONCILIATION
+# ============================================================================
+
+def reconcile_analysis_batch(
+    batch_id: int,
+    irp_client: IRPClient,
+    schema: str = 'public'
+) -> Dict[str, Any]:
+    """
+    Reconcile an analysis batch by comparing job states with Moody's analyses.
+
+    Compares:
+    - Job statuses in our database
+    - Actual analyses that exist in Moody's
+
+    Args:
+        batch_id: Batch ID to reconcile
+        irp_client: IRPClient instance for Moody's API calls
+        schema: Database schema
+
+    Returns:
+        Dictionary with reconciliation summary:
+        - total_jobs: Total number of non-skipped jobs
+        - jobs_by_status: Dict of status -> count
+        - analyses_in_moodys: Number of analyses found in Moody's
+        - jobs_without_analysis: List of job dicts where analysis is missing
+        - jobs_with_analysis: List of job dicts where analysis exists
+        - existing_analyses: List of existing analysis dicts from Moody's
+
+    Raises:
+        BatchError: If batch not found or not an analysis batch
+    """
+    # Validate and read batch
+    batch = read_batch(batch_id, schema=schema)
+
+    if batch['batch_type'] != BatchType.ANALYSIS:
+        raise BatchError(
+            f"Batch {batch_id} is type '{batch['batch_type']}', not '{BatchType.ANALYSIS}'"
+        )
+
+    # Get all non-skipped jobs and their configurations
+    jobs = get_batch_jobs(batch_id, skipped=False, schema=schema)
+    job_configs = get_batch_job_configurations(batch_id, skipped=False, schema=schema)
+
+    # Build a lookup from job_configuration_id -> job_configuration_data
+    config_lookup = {
+        jc['id']: jc['job_configuration_data']
+        for jc in job_configs
+    }
+
+    # Count jobs by status
+    jobs_by_status: Dict[str, int] = {}
+    for job in jobs:
+        status = job['status']
+        jobs_by_status[status] = jobs_by_status.get(status, 0) + 1
+
+    # Get job configs for Moody's lookup (need Analysis Name + Database)
+    job_config_data_list = [jc['job_configuration_data'] for jc in job_configs]
+
+    # Check which analyses exist in Moody's
+    existing_analyses = irp_client.analysis.find_existing_analyses_from_job_configs(
+        job_config_data_list
+    )
+
+    # Build set of (analysis_name, edm_name) that exist in Moody's
+    existing_keys = set()
+    for item in existing_analyses:
+        analysis_name = item['job_config'].get('Analysis Name')
+        edm_name = item['job_config'].get('Database')
+        if analysis_name and edm_name:
+            existing_keys.add((analysis_name, edm_name))
+
+    # Categorize jobs
+    jobs_without_analysis = []
+    jobs_with_analysis = []
+
+    for job in jobs:
+        job_config_data = config_lookup.get(job['job_configuration_id'], {})
+        analysis_name = job_config_data.get('Analysis Name')
+        edm_name = job_config_data.get('Database')
+
+        job_info = {
+            'job_id': job['id'],
+            'status': job['status'],
+            'analysis_name': analysis_name,
+            'edm_name': edm_name,
+            'job_configuration_id': job['job_configuration_id']
+        }
+
+        if (analysis_name, edm_name) in existing_keys:
+            jobs_with_analysis.append(job_info)
+        else:
+            jobs_without_analysis.append(job_info)
+
+    return {
+        'batch_id': batch_id,
+        'batch_type': batch['batch_type'],
+        'batch_status': batch['status'],
+        'total_jobs': len(jobs),
+        'jobs_by_status': jobs_by_status,
+        'analyses_in_moodys': len(existing_analyses),
+        'jobs_without_analysis': jobs_without_analysis,
+        'jobs_with_analysis': jobs_with_analysis,
+        'existing_analyses': existing_analyses
+    }

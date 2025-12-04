@@ -804,3 +804,279 @@ def test_recon_batch_mixed_job_states(test_schema, mock_irp_client):
     # Recon - should be ACTIVE (not all finished)
     result = recon_batch(batch_id, schema=test_schema)
     assert result == BatchStatus.ACTIVE
+
+
+# ============================================================================
+# Tests - Analysis Batch Reconciliation (reconcile_analysis_batch)
+# ============================================================================
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_reconcile_analysis_batch_fresh(test_schema):
+    """Test reconcile_analysis_batch with fresh batch (no analyses in Moody's)."""
+    from helpers.batch import reconcile_analysis_batch
+    from helpers.constants import BatchType
+    from unittest.mock import MagicMock
+
+    # Create hierarchy with Analysis batch type
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_reconcile_fresh', 'ACTIVE'),
+        schema=test_schema
+    )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps({}), ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, BatchType.ANALYSIS, BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    # Create jobs with analysis configurations
+    from helpers.job import create_job_with_config
+    job1_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestEDM', 'Analysis Name': 'Analysis_1'},
+        schema=test_schema
+    )
+    job2_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestEDM', 'Analysis Name': 'Analysis_2'},
+        schema=test_schema
+    )
+
+    # Mock IRP client - no existing analyses
+    mock_client = MagicMock()
+    mock_client.analysis.find_existing_analyses_from_job_configs.return_value = []
+
+    result = reconcile_analysis_batch(batch_id, mock_client, schema=test_schema)
+
+    assert result['batch_id'] == batch_id
+    assert result['batch_type'] == BatchType.ANALYSIS
+    assert result['total_jobs'] == 2
+    assert result['analyses_in_moodys'] == 0
+    assert len(result['jobs_without_analysis']) == 2
+    assert len(result['jobs_with_analysis']) == 0
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_reconcile_analysis_batch_all_exist(test_schema):
+    """Test reconcile_analysis_batch when all analyses exist in Moody's."""
+    from helpers.batch import reconcile_analysis_batch
+    from helpers.constants import BatchType
+    from helpers.job import create_job_with_config
+    from unittest.mock import MagicMock
+
+    # Create hierarchy
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_reconcile_exist', 'ACTIVE'),
+        schema=test_schema
+    )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps({}), ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, BatchType.ANALYSIS, BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    # Create jobs
+    job_config_1 = {'Database': 'TestEDM', 'Analysis Name': 'Analysis_1'}
+    job_config_2 = {'Database': 'TestEDM', 'Analysis Name': 'Analysis_2'}
+    create_job_with_config(batch_id, config_id, job_configuration_data=job_config_1, schema=test_schema)
+    create_job_with_config(batch_id, config_id, job_configuration_data=job_config_2, schema=test_schema)
+
+    # Mock IRP client - all analyses exist
+    mock_client = MagicMock()
+    mock_client.analysis.find_existing_analyses_from_job_configs.return_value = [
+        {'job_config': job_config_1, 'analysis': {'analysisId': 'A001'}},
+        {'job_config': job_config_2, 'analysis': {'analysisId': 'A002'}},
+    ]
+
+    result = reconcile_analysis_batch(batch_id, mock_client, schema=test_schema)
+
+    assert result['total_jobs'] == 2
+    assert result['analyses_in_moodys'] == 2
+    assert len(result['jobs_without_analysis']) == 0
+    assert len(result['jobs_with_analysis']) == 2
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_reconcile_analysis_batch_partial(test_schema):
+    """Test reconcile_analysis_batch with some analyses missing."""
+    from helpers.batch import reconcile_analysis_batch
+    from helpers.constants import BatchType
+    from helpers.job import create_job_with_config
+    from unittest.mock import MagicMock
+
+    # Create hierarchy
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_reconcile_partial', 'ACTIVE'),
+        schema=test_schema
+    )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps({}), ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, BatchType.ANALYSIS, BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    # Create 3 jobs
+    job_config_1 = {'Database': 'TestEDM', 'Analysis Name': 'Analysis_1'}
+    job_config_2 = {'Database': 'TestEDM', 'Analysis Name': 'Analysis_2'}
+    job_config_3 = {'Database': 'TestEDM', 'Analysis Name': 'Analysis_3'}
+    create_job_with_config(batch_id, config_id, job_configuration_data=job_config_1, schema=test_schema)
+    create_job_with_config(batch_id, config_id, job_configuration_data=job_config_2, schema=test_schema)
+    create_job_with_config(batch_id, config_id, job_configuration_data=job_config_3, schema=test_schema)
+
+    # Mock: Only Analysis_1 exists
+    mock_client = MagicMock()
+    mock_client.analysis.find_existing_analyses_from_job_configs.return_value = [
+        {'job_config': job_config_1, 'analysis': {'analysisId': 'A001'}},
+    ]
+
+    result = reconcile_analysis_batch(batch_id, mock_client, schema=test_schema)
+
+    assert result['total_jobs'] == 3
+    assert result['analyses_in_moodys'] == 1
+    assert len(result['jobs_without_analysis']) == 2
+    assert len(result['jobs_with_analysis']) == 1
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_reconcile_analysis_batch_wrong_type(test_schema):
+    """Test reconcile_analysis_batch raises error for non-analysis batch."""
+    from helpers.batch import reconcile_analysis_batch, BatchError
+    from unittest.mock import MagicMock
+
+    # Create hierarchy with EDM Creation batch type (wrong type)
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_wrong_type')
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, 'EDM Creation', BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    mock_client = MagicMock()
+
+    with pytest.raises(BatchError, match="not 'Analysis'"):
+        reconcile_analysis_batch(batch_id, mock_client, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_reconcile_analysis_batch_excludes_skipped(test_schema):
+    """Test reconcile_analysis_batch excludes skipped jobs."""
+    from helpers.batch import reconcile_analysis_batch
+    from helpers.constants import BatchType
+    from helpers.job import create_job_with_config, skip_job
+    from unittest.mock import MagicMock
+
+    # Create hierarchy
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_reconcile_skip', 'ACTIVE'),
+        schema=test_schema
+    )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps({}), ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, BatchType.ANALYSIS, BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    # Create 3 jobs
+    job1_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestEDM', 'Analysis Name': 'Analysis_1'},
+        schema=test_schema
+    )
+    job2_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestEDM', 'Analysis Name': 'Analysis_2'},
+        schema=test_schema
+    )
+    job3_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestEDM', 'Analysis Name': 'Analysis_3'},
+        schema=test_schema
+    )
+
+    # Skip job 2
+    skip_job(job2_id, schema=test_schema)
+
+    mock_client = MagicMock()
+    mock_client.analysis.find_existing_analyses_from_job_configs.return_value = []
+
+    result = reconcile_analysis_batch(batch_id, mock_client, schema=test_schema)
+
+    # Should only count 2 jobs (1 and 3), not the skipped one
+    assert result['total_jobs'] == 2
+    assert len(result['jobs_without_analysis']) == 2
