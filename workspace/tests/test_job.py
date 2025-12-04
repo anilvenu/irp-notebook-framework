@@ -1217,3 +1217,201 @@ def test_chained_resubmissions_with_override(test_schema, mock_irp_client):
     for row in df.itertuples():
         assert row.skipped == True
         assert row.override_job_configuration_id is not None
+
+
+# ==============================================================================
+# BULK RESUBMISSION TESTS (resubmit_jobs)
+# ==============================================================================
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_jobs_all_success(test_schema, mock_irp_client):
+    """Test resubmit_jobs when all resubmissions succeed."""
+    from helpers.job import resubmit_jobs
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_jobs_success')
+
+    # Create jobs
+    job1_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB1'},
+        schema=test_schema
+    )
+    job2_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB2'},
+        schema=test_schema
+    )
+
+    # Resubmit all jobs
+    result = resubmit_jobs(
+        job_ids=[job1_id, job2_id],
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
+        schema=test_schema
+    )
+
+    assert result['total'] == 2
+    assert result['success_count'] == 2
+    assert result['failure_count'] == 0
+    assert len(result['successful']) == 2
+    assert len(result['failed']) == 0
+
+    # Verify new job IDs are different from original
+    new_job_ids = [s['new_job_id'] for s in result['successful']]
+    assert job1_id not in new_job_ids
+    assert job2_id not in new_job_ids
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_jobs_partial_failure(test_schema, mock_irp_client):
+    """Test resubmit_jobs when some resubmissions fail."""
+    from helpers.job import resubmit_jobs
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_jobs_partial')
+
+    # Create valid jobs
+    job1_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB1'},
+        schema=test_schema
+    )
+    job2_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB2'},
+        schema=test_schema
+    )
+
+    # Include an invalid job ID that will fail
+    invalid_job_id = 999999
+
+    result = resubmit_jobs(
+        job_ids=[job1_id, invalid_job_id, job2_id],
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
+        schema=test_schema
+    )
+
+    assert result['total'] == 3
+    assert result['success_count'] == 2
+    assert result['failure_count'] == 1
+    assert len(result['successful']) == 2
+    assert len(result['failed']) == 1
+
+    # Verify the failed entry has error info
+    assert result['failed'][0]['job_id'] == invalid_job_id
+    assert 'error' in result['failed'][0]
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_jobs_empty_list(test_schema, mock_irp_client):
+    """Test resubmit_jobs with empty job list."""
+    from helpers.job import resubmit_jobs
+
+    result = resubmit_jobs(
+        job_ids=[],
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
+        schema=test_schema
+    )
+
+    assert result['total'] == 0
+    assert result['success_count'] == 0
+    assert result['failure_count'] == 0
+    assert result['successful'] == []
+    assert result['failed'] == []
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_jobs_all_fail(test_schema, mock_irp_client):
+    """Test resubmit_jobs when all jobs fail (invalid IDs)."""
+    from helpers.job import resubmit_jobs
+
+    result = resubmit_jobs(
+        job_ids=[999991, 999992, 999993],
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
+        schema=test_schema
+    )
+
+    assert result['total'] == 3
+    assert result['success_count'] == 0
+    assert result['failure_count'] == 3
+    assert len(result['successful']) == 0
+    assert len(result['failed']) == 3
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_jobs_marks_original_skipped(test_schema, mock_irp_client):
+    """Test resubmit_jobs marks original jobs as skipped."""
+    from helpers.job import resubmit_jobs
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_jobs_skip')
+
+    # Create job
+    job_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB'},
+        schema=test_schema
+    )
+
+    # Verify not skipped initially
+    job_before = read_job(job_id, schema=test_schema)
+    assert job_before['skipped'] == False
+
+    # Resubmit
+    result = resubmit_jobs(
+        job_ids=[job_id],
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
+        schema=test_schema
+    )
+
+    assert result['success_count'] == 1
+
+    # Verify original job is now skipped
+    job_after = read_job(job_id, schema=test_schema)
+    assert job_after['skipped'] == True
+
+    # Verify new job exists and is not skipped
+    new_job_id = result['successful'][0]['new_job_id']
+    new_job = read_job(new_job_id, schema=test_schema)
+    assert new_job['skipped'] == False
+    assert new_job['parent_job_id'] == job_id
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_resubmit_jobs_preserves_order(test_schema, mock_irp_client):
+    """Test resubmit_jobs processes jobs in order."""
+    from helpers.job import resubmit_jobs
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(test_schema, 'test_resubmit_jobs_order')
+
+    # Create multiple jobs
+    job_ids = []
+    for i in range(5):
+        job_id = create_job_with_config(
+            batch_id, config_id,
+            job_configuration_data={'Database': f'TestDB_{i}'},
+            schema=test_schema
+        )
+        job_ids.append(job_id)
+
+    result = resubmit_jobs(
+        job_ids=job_ids,
+        irp_client=mock_irp_client,
+        batch_type='EDM Creation',
+        schema=test_schema
+    )
+
+    assert result['total'] == 5
+    assert result['success_count'] == 5
+
+    # Verify order preserved
+    for i, success in enumerate(result['successful']):
+        assert success['old_job_id'] == job_ids[i]
