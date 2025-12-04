@@ -444,9 +444,10 @@ def test_load_configuration_archived_cycle_fails(test_schema):
 @pytest.mark.database
 @pytest.mark.integration
 @pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
-def test_load_configuration_duplicate_active_fails(test_schema):
-    """Test that duplicate ACTIVE configurations are prevented"""
-    cycle_id = create_test_cycle(test_schema, 'test-duplicate')
+def test_load_configuration_replace_when_no_batches(test_schema):
+    """Test that configuration can be replaced when no batches exist (even if ACTIVE)"""
+    from helpers.database import execute_command
+    cycle_id = create_test_cycle(test_schema, 'test-replace-no-batches')
 
     # Load first configuration
     config_id_1 = load_configuration_file(
@@ -455,15 +456,70 @@ def test_load_configuration_duplicate_active_fails(test_schema):
         schema=test_schema
     )
 
-    # Update to ACTIVE status
+    # Update to ACTIVE status (simulating workflow progress without batch creation)
     update_configuration_status(config_id_1, ConfigurationStatus.ACTIVE, schema=test_schema)
 
-    # Try to load second configuration - should fail
-    with pytest.raises(ConfigurationError):
+    # Load second configuration - should succeed since no batches exist
+    config_id_2 = load_configuration_file(
+        cycle_id=cycle_id,
+        excel_config_path=VALID_EXCEL_PATH,
+        schema=test_schema
+    )
+
+    # Verify the old configuration was replaced
+    assert config_id_2 != config_id_1
+    old_config = execute_query(
+        "SELECT * FROM irp_configuration WHERE id = %s",
+        (config_id_1,),
+        schema=test_schema
+    )
+    assert old_config.empty, "Old configuration should be deleted"
+
+
+@pytest.mark.database
+@pytest.mark.integration
+@pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Test Excel file not found")
+def test_load_configuration_fails_when_batches_exist(test_schema):
+    """Test that configuration cannot be replaced when batches exist"""
+    cycle_id = create_test_cycle(test_schema, 'test-batches-exist')
+
+    # Load first configuration
+    config_id_1 = load_configuration_file(
+        cycle_id=cycle_id,
+        excel_config_path=VALID_EXCEL_PATH,
+        schema=test_schema
+    )
+
+    # Create a stage for this cycle (required for step)
+    stage_id = execute_insert(
+        """INSERT INTO irp_stage (cycle_id, stage_num, stage_name)
+           VALUES (%s, 1, 'Setup')""",
+        (cycle_id,),
+        schema=test_schema
+    )
+
+    # Create a step for the batch (required for batch)
+    step_id = execute_insert(
+        """INSERT INTO irp_step (stage_id, step_num, step_name, notebook_path)
+           VALUES (%s, 1, 'Test Step', '/test/path')""",
+        (stage_id,),
+        schema=test_schema
+    )
+
+    # Create a batch linked to this configuration
+    execute_insert(
+        """INSERT INTO irp_batch (batch_type, configuration_id, step_id, status)
+           VALUES (%s, %s, %s, %s)""",
+        ('EDM Creation', config_id_1, step_id, 'INITIATED'),
+        schema=test_schema
+    )
+
+    # Try to load second configuration - should fail because batches exist
+    with pytest.raises(ConfigurationError, match="batch.*have been created"):
         load_configuration_file(
             cycle_id=cycle_id,
             excel_config_path=VALID_EXCEL_PATH,
-                schema=test_schema
+            schema=test_schema
         )
 
 
