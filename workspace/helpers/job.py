@@ -1843,8 +1843,16 @@ def resubmit_job(
 
     # Submit the job AFTER transaction completes successfully
     # Job submission involves external API call, so keep it outside transaction
-    submit_job(new_job_id, batch_type=batch_type, irp_client=irp_client, schema=schema)
-    # TODO Handle submission error
+    try:
+        submit_job(new_job_id, batch_type=batch_type, irp_client=irp_client, schema=schema)
+    except JobError:
+        # Submission failed - submit_job() already set the job status to ERROR
+        # Re-raise with context about which job was created
+        raise JobError(
+            f"Resubmitted job {new_job_id} was created but submission failed. "
+            f"Original job {job_id} has been skipped. "
+            f"New job {new_job_id} is in ERROR status."
+        )
 
     return new_job_id
 
