@@ -19,15 +19,17 @@ def _build_analysis_currency_dict(vintage: Dict[str, Any]) -> Dict[str, str]:
 
     Args:
         vintage: Currency scheme vintage dict from API with keys:
-            - effectiveDate: ISO date string
+            - effectiveDate: ISO date string (e.g., "2025-05-28T00:00:00.000Z")
             - currencySchemeCode: Scheme code (e.g., "RMS")
             - vintage: Vintage code (e.g., "RL25")
 
     Returns:
-        Currency dict with asOfDate, code, scheme, and vintage
+        Currency dict with asOfDate (date only), code, scheme, and vintage
     """
+    # Extract date portion only (API returns full timestamp but expects date only)
+    effective_date = vintage["effectiveDate"].split("T")[0]
     return {
-        "asOfDate": vintage["effectiveDate"],
+        "asOfDate": effective_date,
         "code": "USD",
         "scheme": vintage["currencySchemeCode"],
         "vintage": vintage["vintage"]
@@ -45,7 +47,7 @@ def _build_default_analysis_currency_dict() -> Dict[str, str]:
         Currency dict with default values
     """
     return {
-        "asOfDate": "2025-05-28T00:00:00.000Z",
+        "asOfDate": "2025-05-28",
         "code": "USD",
         "scheme": "RMS",
         "vintage": "RL25"
