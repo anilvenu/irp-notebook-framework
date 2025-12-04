@@ -94,3 +94,4 @@ SEARCH_DATABASES = '/platform/riskdata/v1/dataservers/{serverId}/databases'
 
 # Currency endpoints
 SEARCH_CURRENCIES = '/data-store/referencetables/currency'
+SEARCH_CURRENCY_SCHEME_VINTAGES = '/data-store/referencetables/currencyschemevintage'
