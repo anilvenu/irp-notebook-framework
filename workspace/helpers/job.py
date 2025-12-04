@@ -21,7 +21,7 @@ Workflow:
 
 import os
 import json
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 
 from helpers.irp_integration import IRPClient
@@ -1842,3 +1842,58 @@ def resubmit_job(
     # TODO Handle submission error
 
     return new_job_id
+
+
+def resubmit_jobs(
+    job_ids: List[int],
+    irp_client: IRPClient,
+    batch_type: str,
+    schema: str = 'public'
+) -> Dict[str, Any]:
+    """
+    Resubmit multiple jobs in bulk.
+
+    Calls resubmit_job() for each job, collecting results and errors.
+
+    Args:
+        job_ids: List of job IDs to resubmit
+        irp_client: IRPClient instance
+        batch_type: Batch type for job submission
+        schema: Database schema
+
+    Returns:
+        Dictionary with:
+        - successful: List of dicts with old_job_id and new_job_id
+        - failed: List of dicts with job_id and error message
+        - total: Total jobs attempted
+        - success_count: Number of successful resubmissions
+        - failure_count: Number of failed resubmissions
+    """
+    successful = []
+    failed = []
+
+    for job_id in job_ids:
+        try:
+            new_job_id = resubmit_job(
+                job_id=job_id,
+                irp_client=irp_client,
+                batch_type=batch_type,
+                schema=schema
+            )
+            successful.append({
+                'old_job_id': job_id,
+                'new_job_id': new_job_id
+            })
+        except Exception as e:
+            failed.append({
+                'job_id': job_id,
+                'error': str(e)
+            })
+
+    return {
+        'successful': successful,
+        'failed': failed,
+        'total': len(job_ids),
+        'success_count': len(successful),
+        'failure_count': len(failed)
+    }

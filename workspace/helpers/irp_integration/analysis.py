@@ -760,7 +760,76 @@ class AnalysisManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to search analysis results : {e}")
-        
+
+    def get_analysis_by_name(self, analysis_name: str, edm_name: str) -> Dict[str, Any]:
+        """
+        Get an analysis by name and EDM name.
+
+        Args:
+            analysis_name: Name of the analysis
+            edm_name: Name of the EDM (exposure database)
+
+        Returns:
+            Dict containing analysis details
+
+        Raises:
+            IRPValidationError: If inputs are invalid
+            IRPAPIError: If analysis not found or multiple matches
+        """
+        validate_non_empty_string(analysis_name, "analysis_name")
+        validate_non_empty_string(edm_name, "edm_name")
+
+        filter_str = f'analysisName = "{analysis_name}" AND exposureName = "{edm_name}"'
+        analyses = self.search_analyses(filter=filter_str)
+
+        if len(analyses) == 0:
+            raise IRPAPIError(f"Analysis '{analysis_name}' not found for EDM '{edm_name}'")
+        if len(analyses) > 1:
+            raise IRPAPIError(f"Multiple analyses found with name '{analysis_name}' for EDM '{edm_name}'")
+
+        return analyses[0]
+
+    def find_existing_analyses_from_job_configs(
+        self,
+        job_configs: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Find which analysis job configurations already exist in Moody's.
+
+        Used to validate analysis batch job configurations before submission.
+        Each job config dict should have 'Analysis Name' and 'Database' keys
+        (matching the Analysis Table / job configuration format).
+
+        Args:
+            job_configs: List of job configuration dicts, each containing:
+                - 'Analysis Name': Name of the analysis
+                - 'Database': Name of the EDM
+
+        Returns:
+            List of dicts for any matches found, each containing:
+                - 'job_config': The original job configuration dict
+                - 'analysis': The existing analysis from the API
+        """
+        existing = []
+
+        for job_config in job_configs:
+            analysis_name = job_config.get('Analysis Name')
+            edm_name = job_config.get('Database')
+
+            if not analysis_name or not edm_name:
+                continue
+
+            filter_str = f'analysisName = "{analysis_name}" AND exposureName = "{edm_name}"'
+            analyses = self.search_analyses(filter=filter_str)
+
+            if analyses:
+                for analysis in analyses:
+                    existing.append({
+                        'job_config': job_config,
+                        'analysis': analysis
+                    })
+
+        return existing
 
     def delete_analysis(self, analysis_id: int) -> None:
         """
