@@ -21,6 +21,7 @@ workspace_path = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(workspace_path))
 
 from helpers import database as db
+from helpers.constants import BatchType
 
 
 # ============================================================================
@@ -425,6 +426,10 @@ async def batch_detail(request: Request, schema: str, cycle_name: str, batch_id:
         if not data:
             raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found in schema '{schema}'")
 
+        # Get the display name field for this batch type
+        batch_type = data['summary']['batch_type']
+        display_name_field = BatchType.get_display_name_field(batch_type)
+
         return templates.TemplateResponse(
             "batch_detail.html",
             {
@@ -434,7 +439,8 @@ async def batch_detail(request: Request, schema: str, cycle_name: str, batch_id:
                 "batch_id": batch_id,
                 "data": data,
                 "error": None,
-                "format_timestamp": format_timestamp
+                "format_timestamp": format_timestamp,
+                "display_name_field": display_name_field
             }
         )
     except HTTPException:
@@ -449,7 +455,8 @@ async def batch_detail(request: Request, schema: str, cycle_name: str, batch_id:
                 "cycle_name": cycle_name,
                 "batch_id": batch_id,
                 "data": None,
-                "error": error
+                "error": error,
+                "display_name_field": None
             }
         )
 
