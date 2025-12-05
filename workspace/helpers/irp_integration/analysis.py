@@ -460,7 +460,7 @@ class AnalysisManager:
                     if len(analysis_response) == 0:
                         raise IRPAPIError(f"Analysis with this name does not exist: {name}")
                     if len(analysis_response) > 1:
-                        raise IRPAPIError(f"Duplicate analyses exist with name: {name}. Provide analysis_edm_map to disambiguate.")
+                        raise IRPAPIError(f"Duplicate analyses exist with name: {name}.")
 
             try:
                 analysis_uris.append(analysis_response[0]['uri'])
