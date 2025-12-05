@@ -193,6 +193,26 @@ class BatchType:
         TEST_MULTI_JOB: ASYNCHRONOUS,
     }
 
+    # Batch type to display name field mapping
+    # Specifies which field from job_configuration_data to show as "Name" in UI
+    _DISPLAY_NAME_FIELDS = {
+        EDM_CREATION: 'Database',
+        PORTFOLIO_CREATION: 'Portfolio',
+        MRI_IMPORT: 'Portfolio',
+        CREATE_REINSURANCE_TREATIES: 'Treaty Name',
+        EDM_DB_UPGRADE: 'Database',
+        GEOHAZ: 'Portfolio',
+        PORTFOLIO_MAPPING: 'Portfolio',
+        ANALYSIS: 'Analysis Name',
+        GROUPING: 'Group_Name',
+        GROUPING_ROLLUP: 'Group_Name',
+        EXPORT_TO_RDM: 'Group_Name',
+        STAGING_ETL: 'Database',
+        # Test-only
+        TEST_DEFAULT: 'name',
+        TEST_MULTI_JOB: 'name',
+    }
+
     @classmethod
     def all(cls):
         """Return all defined batch types"""
@@ -243,6 +263,20 @@ class BatchType:
         if pattern not in [cls.SYNCHRONOUS, cls.ASYNCHRONOUS]:
             raise ValueError(f"Invalid pattern: {pattern}. Use 'synchronous' or 'asynchronous'")
         return [bt for bt, p in cls._PATTERNS.items() if p == pattern]
+
+    @classmethod
+    def get_display_name_field(cls, batch_type: str) -> str:
+        """
+        Get the field name to display as 'Name' for a batch type in the UI.
+
+        Args:
+            batch_type: The batch type name
+
+        Returns:
+            Field name from job_configuration_data to use as display name,
+            or None if not configured
+        """
+        return cls._DISPLAY_NAME_FIELDS.get(batch_type)
 
 # ============================================================================
 # DISPLAY SETTINGS

@@ -97,15 +97,16 @@
                 <tr>
                     <th class="sortable" onclick="sortTable('jobsTable', 0)">ID</th>
                     <th class="sortable" onclick="sortTable('jobsTable', 1)">Moody's Job ID</th>
-                    <th class="sortable" onclick="sortTable('jobsTable', 2)">Moody's Job Status</th>
-                    <th class="sortable" onclick="sortTable('jobsTable', 3)">Status</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 2)">Name</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 3)">Moody's Job Status</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 4)">Status</th>
                     <th>Job Configuration JSON</th>
-                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 5)">Configuration Override</th> -->
-                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 6)">Age (hrs)</th> -->
-                    <th class="sortable" onclick="sortTable('jobsTable', 5)">Created</th>
-                    <th class="sortable" onclick="sortTable('jobsTable', 6)">Last Updated</th>
-                    <th class="sortable" onclick="sortTable('jobsTable', 7)">Next Best Action</th>
-                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 8)">Parent Job</th> -->
+                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 6)">Configuration Override</th> -->
+                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 7)">Age (hrs)</th> -->
+                    <th class="sortable" onclick="sortTable('jobsTable', 6)">Created</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 7)">Last Updated</th>
+                    <th class="sortable" onclick="sortTable('jobsTable', 8)">Next Best Action</th>
+                    <!-- <th class="sortable" onclick="sortTable('jobsTable', 9)">Parent Job</th> -->
                 </tr>
             </thead>
             <tbody>
@@ -114,6 +115,20 @@
                     <tr>
                         <td>{{ job.id }}</td>
                         <td>{{ job.moodys_workflow_id or '-' }}</td>
+                        <td>
+                            {%- if display_name_field and job.job_configuration_data -%}
+                                {%- set cfg = job.job_configuration_data -%}
+                                {%- if cfg.get(display_name_field) -%}
+                                    {{ cfg[display_name_field] }}
+                                {%- elif cfg.get('Metadata', {}).get(display_name_field) -%}
+                                    {{ cfg['Metadata'][display_name_field] }}
+                                {%- else -%}
+                                    -
+                                {%- endif -%}
+                            {%- else -%}
+                                -
+                            {%- endif -%}
+                        </td>
                         <td><span class="status-badge status-{{ job.status }}">{{ job.status }}</span></td>
                         <td><span class="status-badge status-{{ job.report_status }}">{{ job.report_status or '-' }}</span></td>
                         <td>
@@ -138,7 +153,7 @@
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="8" class="empty-state">No jobs found</td></tr>
+                    <tr><td colspan="9" class="empty-state">No jobs found</td></tr>
                 {% endif %}
             </tbody>
         </table>
@@ -162,14 +177,15 @@
             <thead>
                 <tr>
                     <th class="sortable" onclick="sortTable('configsTable', 0)">Config ID</th>
-                    <th class="sortable" onclick="sortTable('configsTable', 1)">Status</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 1)">Name</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 2)">Status</th>
                     <th>Configuration JSON</th>
-                    <th class="sortable" onclick="sortTable('configsTable', 3)">Total Jobs</th>
-                    <th class="sortable" onclick="sortTable('configsTable', 4)">Active</th>
-                    <th class="sortable" onclick="sortTable('configsTable', 5)">Finished</th>
-                    <th class="sortable" onclick="sortTable('configsTable', 6)">Failed</th>
-                    <th class="sortable" onclick="sortTable('configsTable', 7)">Progress %</th>
-                    <th class="sortable" onclick="sortTable('configsTable', 8)">Job Alerts</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 4)">Total Jobs</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 5)">Active</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 6)">Finished</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 7)">Failed</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 8)">Progress %</th>
+                    <th class="sortable" onclick="sortTable('configsTable', 9)">Job Alerts</th>
                 </tr>
             </thead>
             <tbody>
@@ -177,6 +193,20 @@
                     {% for config in configs %}
                     <tr>
                         <td>{{ config.config_id }}</td>
+                        <td>
+                            {%- if display_name_field and config.job_configuration_data -%}
+                                {%- set cfg = config.job_configuration_data -%}
+                                {%- if cfg.get(display_name_field) -%}
+                                    {{ cfg[display_name_field] }}
+                                {%- elif cfg.get('Metadata', {}).get(display_name_field) -%}
+                                    {{ cfg['Metadata'][display_name_field] }}
+                                {%- else -%}
+                                    -
+                                {%- endif -%}
+                            {%- else -%}
+                                -
+                            {%- endif -%}
+                        </td>
                         <td><span class="status-badge status-{{ config.config_report_status }}">{{ config.config_report_status }}</span></td>
                         <td>
                             <div class="json-preview" data-json="{{ config.job_configuration_data|tojson|forceescape }}" onclick="showJsonModal(this)">
@@ -203,7 +233,7 @@
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="9" class="empty-state">No configurations found</td></tr>
+                    <tr><td colspan="10" class="empty-state">No configurations found</td></tr>
                 {% endif %}
             </tbody>
         </table>
