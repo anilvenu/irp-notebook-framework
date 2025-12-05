@@ -334,6 +334,50 @@ def transform_analysis(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     return job_configs
 
 
+def _build_analysis_edm_map(config: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Build a mapping of analysis names to their EDM (database) names.
+
+    The mapping is built from the Analysis Table sheet, which contains
+    'Analysis Name' and 'Database' columns. This mapping is used when
+    looking up analyses in Moody's API, since analysis names are only
+    unique within an EDM.
+
+    Args:
+        config: Configuration dictionary containing 'Analysis Table'
+
+    Returns:
+        Dict mapping analysis names to EDM names
+    """
+    analysis_table = config.get('Analysis Table', [])
+    analysis_edm_map = {}
+
+    for row in analysis_table:
+        analysis_name = row.get('Analysis Name')
+        edm_name = row.get('Database')
+        if analysis_name and pd.notna(analysis_name) and edm_name and pd.notna(edm_name):
+            analysis_edm_map[analysis_name] = edm_name
+
+    return analysis_edm_map
+
+
+def _get_group_names(config: Dict[str, Any]) -> set:
+    """
+    Get the set of all group names from the Groupings sheet.
+
+    Args:
+        config: Configuration dictionary containing 'Groupings'
+
+    Returns:
+        Set of group names
+    """
+    groupings = config.get('Groupings', [])
+    return {
+        g.get('Group_Name') for g in groupings
+        if g.get('Group_Name') and pd.notna(g.get('Group_Name'))
+    }
+
+
 def classify_groupings(config: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Classify groupings into analysis-only groups and rollup groups.
@@ -357,10 +401,7 @@ def classify_groupings(config: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Li
     }
 
     # Build set of group names
-    group_names = {
-        g.get('Group_Name') for g in groupings
-        if g.get('Group_Name') and pd.notna(g.get('Group_Name'))
-    }
+    group_names = _get_group_names(config)
 
     analysis_only_groups = []
     rollup_groups = []
@@ -391,6 +432,10 @@ def transform_grouping(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     (not other group names). These can be created immediately since analyses
     already exist.
 
+    Each job config includes:
+    - analysis_edm_map: Mapping of analysis names to EDM names (for API lookup)
+    - group_names: Set of all group names (to distinguish groups from analyses)
+
     Args:
         config: Configuration dictionary
 
@@ -400,10 +445,16 @@ def transform_grouping(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     metadata = _extract_metadata(config)
     analysis_only_groups, _ = classify_groupings(config)
 
+    # Build lookup maps for API calls
+    analysis_edm_map = _build_analysis_edm_map(config)
+    group_names = list(_get_group_names(config))  # Convert to list for JSON serialization
+
     job_configs = []
     for group_row in analysis_only_groups:
         job_config = {
             'Metadata': metadata,
+            'analysis_edm_map': analysis_edm_map,
+            'group_names': group_names,
             **group_row
         }
         job_configs.append(job_config)
@@ -419,6 +470,10 @@ def transform_grouping_rollup(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     Rollup groups are groups that contain references to other groups.
     These must be created AFTER the child groups exist (requires chaining).
 
+    Each job config includes:
+    - analysis_edm_map: Mapping of analysis names to EDM names (for API lookup)
+    - group_names: Set of all group names (to distinguish groups from analyses)
+
     Args:
         config: Configuration dictionary
 
@@ -428,10 +483,16 @@ def transform_grouping_rollup(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     metadata = _extract_metadata(config)
     _, rollup_groups = classify_groupings(config)
 
+    # Build lookup maps for API calls
+    analysis_edm_map = _build_analysis_edm_map(config)
+    group_names = list(_get_group_names(config))  # Convert to list for JSON serialization
+
     job_configs = []
     for group_row in rollup_groups:
         job_config = {
             'Metadata': metadata,
+            'analysis_edm_map': analysis_edm_map,
+            'group_names': group_names,
             **group_row
         }
         job_configs.append(job_config)
