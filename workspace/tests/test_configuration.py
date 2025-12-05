@@ -1054,3 +1054,215 @@ def test_validate_configuration_file(test_schema):
     assert 'configuration_data' in result
     assert 'file_info' in result
     assert result['validation_passed'] is True
+
+
+# ============================================================================
+# Tests - Reference Data API Validation
+# ============================================================================
+
+@pytest.mark.unit
+def test_validate_reference_data_api_all_valid(mocker):
+    """Test successful validation when all reference data exists in API"""
+    from helpers.configuration import _validate_reference_data_api
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # Configure mock responses - all found
+    mock_ref_data.get_model_profile_by_name.return_value = {'count': 1, 'items': [{'id': 1, 'name': 'Profile1'}]}
+    mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1, 'name': 'Output1'}]
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1, 'name': 'Scheme1'}]}
+
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
+            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': None},  # Event Rate nullable
+        ]
+    }
+
+    errors = _validate_reference_data_api(config_data)
+    assert len(errors) == 0
+
+
+@pytest.mark.unit
+def test_validate_reference_data_api_model_profile_not_found(mocker):
+    """Test error when model profile not found in API"""
+    from helpers.configuration import _validate_reference_data_api
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # Model profile not found (count=0)
+    mock_ref_data.get_model_profile_by_name.return_value = {'count': 0, 'items': []}
+    mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Profile': 'InvalidProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'ValidScheme'}
+        ]
+    }
+
+    errors = _validate_reference_data_api(config_data)
+    assert len(errors) == 1
+    assert 'Model Profile' in errors[0]
+    assert 'InvalidProfile' in errors[0]
+    assert "not found in Moody's system" in errors[0]
+
+
+@pytest.mark.unit
+def test_validate_reference_data_api_output_profile_not_found(mocker):
+    """Test error when output profile not found in API"""
+    from helpers.configuration import _validate_reference_data_api
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # Output profile not found (empty list)
+    mock_ref_data.get_model_profile_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+    mock_ref_data.get_output_profile_by_name.return_value = []  # Empty list = not found
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Profile': 'ValidProfile', 'Output Profile': 'InvalidOutput', 'Event Rate': 'ValidScheme'}
+        ]
+    }
+
+    errors = _validate_reference_data_api(config_data)
+    assert len(errors) == 1
+    assert 'Output Profile' in errors[0]
+    assert 'InvalidOutput' in errors[0]
+    assert "not found in Moody's system" in errors[0]
+
+
+@pytest.mark.unit
+def test_validate_reference_data_api_event_rate_not_found(mocker):
+    """Test error when event rate scheme not found in API"""
+    from helpers.configuration import _validate_reference_data_api
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # Event rate scheme not found (count=0)
+    mock_ref_data.get_model_profile_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+    mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 0, 'items': []}
+
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Profile': 'ValidProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'InvalidScheme'}
+        ]
+    }
+
+    errors = _validate_reference_data_api(config_data)
+    assert len(errors) == 1
+    assert 'Event Rate Scheme' in errors[0]
+    assert 'InvalidScheme' in errors[0]
+    assert "not found in Moody's system" in errors[0]
+
+
+@pytest.mark.unit
+def test_validate_reference_data_api_multiple_errors(mocker):
+    """Test multiple reference data validation errors"""
+    from helpers.configuration import _validate_reference_data_api
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # All not found
+    mock_ref_data.get_model_profile_by_name.return_value = {'count': 0, 'items': []}
+    mock_ref_data.get_output_profile_by_name.return_value = []
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 0, 'items': []}
+
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Profile': 'BadProfile', 'Output Profile': 'BadOutput', 'Event Rate': 'BadScheme'}
+        ]
+    }
+
+    errors = _validate_reference_data_api(config_data)
+    assert len(errors) == 3
+    assert any('Model Profile' in e and 'BadProfile' in e for e in errors)
+    assert any('Output Profile' in e and 'BadOutput' in e for e in errors)
+    assert any('Event Rate Scheme' in e and 'BadScheme' in e for e in errors)
+
+
+@pytest.mark.unit
+def test_validate_reference_data_api_handles_api_error(mocker):
+    """Test handling of API errors during validation"""
+    from helpers.configuration import _validate_reference_data_api
+    from helpers.irp_integration.exceptions import IRPAPIError
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # API call raises error
+    mock_ref_data.get_model_profile_by_name.side_effect = IRPAPIError("Connection timeout")
+    mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Profile': 'SomeProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'ValidScheme'}
+        ]
+    }
+
+    errors = _validate_reference_data_api(config_data)
+    assert len(errors) == 1
+    assert 'Failed to validate reference data' in errors[0]
+    assert 'Connection timeout' in errors[0]
+
+
+@pytest.mark.unit
+def test_validate_reference_data_api_empty_analysis_table(mocker):
+    """Test validation with empty Analysis Table"""
+    from helpers.configuration import _validate_reference_data_api
+
+    # Mock IRPClient (should not be called)
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+
+    config_data = {
+        'Analysis Table': []
+    }
+
+    errors = _validate_reference_data_api(config_data)
+    assert len(errors) == 0
+
+
+@pytest.mark.unit
+def test_validate_reference_data_api_unique_values_only(mocker):
+    """Test that API is called only once per unique value"""
+    from helpers.configuration import _validate_reference_data_api
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # All found
+    mock_ref_data.get_model_profile_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+    mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+
+    # Same profile used in multiple rows
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
+            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
+            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
+        ]
+    }
+
+    errors = _validate_reference_data_api(config_data)
+    assert len(errors) == 0
+
+    # Each API method should only be called once (unique values)
+    assert mock_ref_data.get_model_profile_by_name.call_count == 1
+    assert mock_ref_data.get_output_profile_by_name.call_count == 1
+    assert mock_ref_data.get_event_rate_scheme_by_name.call_count == 1
