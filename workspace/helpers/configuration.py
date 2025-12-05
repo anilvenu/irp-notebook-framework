@@ -29,6 +29,8 @@ from helpers.constants import (
     ConfigurationStatus, CONFIGURATION_TAB_LIST,
     EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES, BatchType
 )
+from helpers.irp_integration import IRPClient
+from helpers.irp_integration.exceptions import IRPAPIError
 
 
 class ConfigurationError(Exception):
@@ -1094,6 +1096,82 @@ def _validate_special_references(config_data: Dict[str, Any]) -> List[str]:
     return errors
 
 
+def _validate_reference_data_api(config_data: Dict[str, Any]) -> List[str]:
+    """
+    Validate reference data exists in Moody's API.
+
+    Validates that all Analysis Profiles, Output Profiles, and Event Rate Schemes
+    used in the Analysis Table actually exist in Moody's system.
+
+    Args:
+        config_data: Parsed configuration data
+
+    Returns:
+        List of error messages (empty if all valid)
+
+    Raises:
+        ConfigurationError: If API connection fails entirely
+    """
+    errors = []
+    analysis_data = config_data.get('Analysis Table', [])
+
+    # Extract unique values from Analysis Table columns
+    model_profiles = set()
+    output_profiles = set()
+    event_rate_schemes = set()
+
+    for row in analysis_data:
+        if pd.notna(row.get('Analysis Profile')):
+            model_profiles.add(row['Analysis Profile'])
+        if pd.notna(row.get('Output Profile')):
+            output_profiles.add(row['Output Profile'])
+        if pd.notna(row.get('Event Rate')):  # Event Rate is nullable
+            event_rate_schemes.add(row['Event Rate'])
+
+    try:
+        irp_client = IRPClient()
+
+        # Validate Model Profiles (Analysis Profiles)
+        for profile_name in model_profiles:
+            if not profile_name:
+                continue
+            try:
+                result = irp_client.reference_data.get_model_profile_by_name(profile_name)
+                if result.get('count', 0) == 0:
+                    errors.append(_format_error('API-REF-001', value=profile_name))
+            except IRPAPIError as e:
+                errors.append(_format_error('API-REF-004', error=str(e)))
+
+        # Validate Output Profiles
+        for profile_name in output_profiles:
+            if not profile_name:
+                continue
+            try:
+                result = irp_client.reference_data.get_output_profile_by_name(profile_name)
+                if not result:  # Empty list = not found
+                    errors.append(_format_error('API-REF-002', value=profile_name))
+            except IRPAPIError as e:
+                errors.append(_format_error('API-REF-004', error=str(e)))
+
+        # Validate Event Rate Schemes
+        for scheme_name in event_rate_schemes:
+            if not scheme_name:
+                continue
+            try:
+                result = irp_client.reference_data.get_event_rate_scheme_by_name(scheme_name)
+                if result.get('count', 0) == 0:
+                    errors.append(_format_error('API-REF-003', value=scheme_name))
+            except IRPAPIError as e:
+                errors.append(_format_error('API-REF-004', error=str(e)))
+
+    except Exception as e:
+        raise ConfigurationError(
+            f"Failed to connect to Moody's API for reference data validation: {str(e)}"
+        )
+
+    return errors
+
+
 def _validate_groupings_references(config_data: Dict[str, Any]) -> List[str]:
     """
     Validate Groupings items reference valid entities (STRICT, order-dependent validation).
@@ -1458,6 +1536,12 @@ def _validate_excel_file(excel_config_path: str):
             cross_errors.extend(_validate_special_references(config_data))
             cross_errors.extend(_validate_groupings_references(config_data))
             cross_errors.extend(_validate_business_rules(config_data))
+
+            # Validate reference data against Moody's API
+            # Only run if no cross-sheet errors (avoid unnecessary API calls)
+            if not cross_errors:
+                api_errors = _validate_reference_data_api(config_data)
+                cross_errors.extend(api_errors)
 
             if cross_errors:
                 validation_results['_cross_sheet'] = {

@@ -642,6 +642,12 @@ VALIDATION_ERROR_CODES = {
     'REF-006': 'Event Rate Scheme "{value}" not found in Moody\'s Reference Data',
     'REF-007': 'Reinsurance Treaty "{value}" not found in Reinsurance Treaties',
 
+    # API Reference Data Validation errors
+    'API-REF-001': 'Model Profile "{value}" not found in Moody\'s system',
+    'API-REF-002': 'Output Profile "{value}" not found in Moody\'s system',
+    'API-REF-003': 'Event Rate Scheme "{value}" not found in Moody\'s system',
+    'API-REF-004': 'Failed to validate reference data against Moody\'s API: {error}',
+
     # Business rule errors
     'BUS-001': 'Database "{database}" has no Base Portfolio (at least one required)',
     'BUS-002': 'Expiration Date must be after Inception Date for treaty {treaty_name}',
