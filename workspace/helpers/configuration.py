@@ -1157,15 +1157,23 @@ def _validate_special_references(config_data: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_reference_data_api(config_data: Dict[str, Any]) -> List[str]:
+def validate_reference_data_with_api(
+    analysis_job_configs: List[Dict[str, Any]],
+    irp_client: Optional['IRPClient'] = None
+) -> List[str]:
     """
     Validate reference data exists in Moody's API.
 
-    Validates that all Analysis Profiles, Output Profiles, and Event Rate Schemes
-    used in the Analysis Table actually exist in Moody's system.
+    This is a shared validation function used by both configuration validation
+    and batch submission validation. It validates that Analysis Profiles,
+    Output Profiles, and Event Rate Schemes exist in Moody's system.
 
     Args:
-        config_data: Parsed configuration data
+        analysis_job_configs: List of job configuration dicts, each containing:
+            - 'Analysis Profile': Model profile name (required)
+            - 'Output Profile': Output profile name (required)
+            - 'Event Rate': Event rate scheme name (optional/nullable)
+        irp_client: Optional IRPClient instance. If not provided, one will be created.
 
     Returns:
         List of error messages (empty if all valid)
@@ -1174,30 +1182,29 @@ def _validate_reference_data_api(config_data: Dict[str, Any]) -> List[str]:
         ConfigurationError: If API connection fails entirely
     """
     errors = []
-    analysis_data = config_data.get('Analysis Table', [])
 
-    # Extract unique values from Analysis Table columns
+    # Extract unique values from job configs
     model_profiles = set()
     output_profiles = set()
     event_rate_schemes = set()
 
-    for row in analysis_data:
-        if pd.notna(row.get('Analysis Profile')):
-            model_profiles.add(row['Analysis Profile'])
-        if pd.notna(row.get('Output Profile')):
-            output_profiles.add(row['Output Profile'])
-        if pd.notna(row.get('Event Rate')):  # Event Rate is nullable
-            event_rate_schemes.add(row['Event Rate'])
+    for job_config in analysis_job_configs:
+        if pd.notna(job_config.get('Analysis Profile')):
+            model_profiles.add(job_config['Analysis Profile'])
+        if pd.notna(job_config.get('Output Profile')):
+            output_profiles.add(job_config['Output Profile'])
+        if pd.notna(job_config.get('Event Rate')):  # Event Rate is nullable
+            event_rate_schemes.add(job_config['Event Rate'])
 
     try:
-        irp_client = IRPClient()
+        client = irp_client if irp_client is not None else IRPClient()
 
         # Validate Model Profiles (Analysis Profiles)
         for profile_name in model_profiles:
             if not profile_name:
                 continue
             try:
-                result = irp_client.reference_data.get_model_profile_by_name(profile_name)
+                result = client.reference_data.get_model_profile_by_name(profile_name)
                 if result.get('count', 0) == 0:
                     errors.append(_format_error('API-REF-001', value=profile_name))
             except IRPAPIError as e:
@@ -1208,7 +1215,7 @@ def _validate_reference_data_api(config_data: Dict[str, Any]) -> List[str]:
             if not profile_name:
                 continue
             try:
-                result = irp_client.reference_data.get_output_profile_by_name(profile_name)
+                result = client.reference_data.get_output_profile_by_name(profile_name)
                 if not result:  # Empty list = not found
                     errors.append(_format_error('API-REF-002', value=profile_name))
             except IRPAPIError as e:
@@ -1219,7 +1226,7 @@ def _validate_reference_data_api(config_data: Dict[str, Any]) -> List[str]:
             if not scheme_name:
                 continue
             try:
-                result = irp_client.reference_data.get_event_rate_scheme_by_name(scheme_name)
+                result = client.reference_data.get_event_rate_scheme_by_name(scheme_name)
                 if result.get('count', 0) == 0:
                     errors.append(_format_error('API-REF-003', value=scheme_name))
             except IRPAPIError as e:
@@ -1601,7 +1608,8 @@ def _validate_excel_file(excel_config_path: str):
             # Validate reference data against Moody's API
             # Only run if no cross-sheet errors (avoid unnecessary API calls)
             if not cross_errors:
-                api_errors = _validate_reference_data_api(config_data)
+                analysis_table = config_data.get('Analysis Table', [])
+                api_errors = validate_reference_data_with_api(analysis_table)
                 cross_errors.extend(api_errors)
 
             if cross_errors:
