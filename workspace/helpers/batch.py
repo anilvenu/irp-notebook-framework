@@ -942,7 +942,7 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
         raise BatchError(f"Invalid batch_id: {batch_id}")
 
     # Terminal job statuses - jobs that won't change status anymore
-    TERMINAL_JOB_STATUSES = [JobStatus.FINISHED, JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.ERROR]
+    TERMINAL_JOB_STATUSES = JobStatus.terminal()
 
     # Get all job configurations (including skipped for counting)
     all_configs = get_batch_job_configurations(batch_id, schema=schema)
@@ -1174,9 +1174,13 @@ def reconcile_analysis_batch(
     """
     Reconcile an analysis batch by comparing job states with Moody's analyses.
 
-    Compares:
-    - Job statuses in our database
-    - Actual analyses that exist in Moody's
+    Categorizes jobs based on both Moody's state (source of truth) and job status:
+    - jobs_successful: Analysis exists in Moody's AND job is FINISHED
+    - jobs_failed: No analysis AND job is FAILED/ERROR/CANCELLED
+    - jobs_missing_analysis: No analysis AND job is FINISHED (mismatch)
+    - jobs_pending: Has workflow ID but not terminal (still processing)
+    - jobs_fresh: INITIATED, no workflow ID, no analysis (ready for submission)
+    - jobs_blocked: INITIATED but analysis already exists (need to delete first)
 
     Args:
         batch_id: Batch ID to reconcile
@@ -1188,8 +1192,12 @@ def reconcile_analysis_batch(
         - total_jobs: Total number of non-skipped jobs
         - jobs_by_status: Dict of status -> count
         - analyses_in_moodys: Number of analyses found in Moody's
-        - jobs_without_analysis: List of job dicts where analysis is missing
-        - jobs_with_analysis: List of job dicts where analysis exists
+        - jobs_successful: Jobs with analysis in Moody's and FINISHED status
+        - jobs_failed: Jobs with no analysis and FAILED/ERROR/CANCELLED status
+        - jobs_missing_analysis: Jobs with no analysis but FINISHED status
+        - jobs_pending: Jobs still processing (have workflow ID, not terminal)
+        - jobs_fresh: Jobs ready for submission (INITIATED, no workflow ID, no analysis)
+        - jobs_blocked: Jobs blocked by existing analysis (INITIATED but analysis exists)
         - existing_analyses: List of existing analysis dicts from Moody's
 
     Raises:
@@ -1202,6 +1210,9 @@ def reconcile_analysis_batch(
         raise BatchError(
             f"Batch {batch_id} is type '{batch['batch_type']}', not '{BatchType.ANALYSIS}'"
         )
+
+    # Get terminal statuses
+    terminal_statuses = JobStatus.terminal()
 
     # Get all non-skipped jobs and their configurations
     jobs = get_batch_jobs(batch_id, skipped=False, schema=schema)
@@ -1235,27 +1246,66 @@ def reconcile_analysis_batch(
         if analysis_name and edm_name:
             existing_keys.add((analysis_name, edm_name))
 
-    # Categorize jobs
-    jobs_without_analysis = []
-    jobs_with_analysis = []
+    # Categorize jobs based on Moody's state (source of truth) AND job status:
+    # 1. jobs_successful: Analysis exists in Moody's AND job is FINISHED
+    # 2. jobs_failed: No analysis AND job is in failed terminal state (FAILED, ERROR, CANCELLED)
+    # 3. jobs_missing_analysis: No analysis AND job is FINISHED (mismatch - analysis deleted?)
+    # 4. jobs_pending: Has workflow ID but not terminal (still processing)
+    # 5. jobs_fresh: INITIATED status, no workflow ID, no analysis (ready for first submission)
+    # 6. jobs_blocked: INITIATED but analysis already exists (need to delete before submitting)
+    jobs_successful = []
+    jobs_failed = []
+    jobs_missing_analysis = []
+    jobs_pending = []
+    jobs_fresh = []
+    jobs_blocked = []
+
+    failed_statuses = [JobStatus.FAILED, JobStatus.ERROR, JobStatus.CANCELLED]
 
     for job in jobs:
         job_config_data = config_lookup.get(job['job_configuration_id'], {})
         analysis_name = job_config_data.get('Analysis Name')
         edm_name = job_config_data.get('Database')
 
+        workflow_id = job.get('moodys_workflow_id')
+        has_workflow_id = workflow_id is not None and workflow_id != ''
+        is_terminal = job['status'] in terminal_statuses
+        has_analysis = (analysis_name, edm_name) in existing_keys
+        is_initiated = job['status'] == JobStatus.INITIATED
+        is_finished = job['status'] == JobStatus.FINISHED
+        is_failed_status = job['status'] in failed_statuses
+
         job_info = {
             'job_id': job['id'],
             'status': job['status'],
             'analysis_name': analysis_name,
             'edm_name': edm_name,
-            'job_configuration_id': job['job_configuration_id']
+            'job_configuration_id': job['job_configuration_id'],
+            'moodys_workflow_id': workflow_id,
+            'has_analysis': has_analysis
         }
 
-        if (analysis_name, edm_name) in existing_keys:
-            jobs_with_analysis.append(job_info)
+        if has_analysis and is_finished:
+            # Analysis exists and job FINISHED - truly successful
+            jobs_successful.append(job_info)
+        elif has_analysis and is_initiated:
+            # INITIATED but analysis already exists - blocked, need to delete first
+            jobs_blocked.append(job_info)
+        elif not has_analysis and is_failed_status:
+            # No analysis and job failed/errored/cancelled
+            jobs_failed.append(job_info)
+        elif not has_analysis and is_finished:
+            # Job says FINISHED but analysis is missing (was deleted or something went wrong)
+            jobs_missing_analysis.append(job_info)
+        elif has_workflow_id and not is_terminal:
+            # Has workflow ID but not terminal - still processing
+            jobs_pending.append(job_info)
+        elif is_initiated and not has_workflow_id and not has_analysis:
+            # INITIATED with no workflow ID and no analysis - ready for first submission
+            jobs_fresh.append(job_info)
         else:
-            jobs_without_analysis.append(job_info)
+            # Edge case: treat as pending
+            jobs_pending.append(job_info)
 
     return {
         'batch_id': batch_id,
@@ -1264,7 +1314,11 @@ def reconcile_analysis_batch(
         'total_jobs': len(jobs),
         'jobs_by_status': jobs_by_status,
         'analyses_in_moodys': len(existing_analyses),
-        'jobs_without_analysis': jobs_without_analysis,
-        'jobs_with_analysis': jobs_with_analysis,
+        'jobs_successful': jobs_successful,
+        'jobs_failed': jobs_failed,
+        'jobs_missing_analysis': jobs_missing_analysis,
+        'jobs_pending': jobs_pending,
+        'jobs_fresh': jobs_fresh,
+        'jobs_blocked': jobs_blocked,
         'existing_analyses': existing_analyses
     }

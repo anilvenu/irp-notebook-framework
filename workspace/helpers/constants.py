@@ -138,6 +138,11 @@ class JobStatus:
         """Statuses that are ready for submission (including retry of failed submissions)"""
         return [cls.INITIATED, cls.ERROR]
 
+    @classmethod
+    def terminal(cls):
+        """Terminal statuses - job has finished processing (success or failure)"""
+        return [cls.FINISHED, cls.FAILED, cls.CANCELLED, cls.ERROR]
+
     def __str__(self):
         return self.value
 
