@@ -693,8 +693,11 @@ def test_validate_business_rules_no_base_portfolio():
 
 @pytest.mark.unit
 @pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Valid Excel file not found")
-def test_validate_configuration_file_success():
+def test_validate_configuration_file_success(mocker):
     """Test validate_configuration_file() with valid Excel configuration"""
+    # Mock API validation to avoid real API calls
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+
     result = validate_configuration_file(excel_config_path=VALID_EXCEL_PATH)
 
     # Check result structure
@@ -736,8 +739,11 @@ def test_validate_configuration_file_success():
 @pytest.mark.database
 @pytest.mark.integration
 @pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Assurant Excel file not found")
-def test_load_assurant_config_success(test_schema):
+def test_load_assurant_config_success(test_schema, mocker):
     """Test loading the actual Assurant Excel configuration file"""
+    # Mock API validation to avoid real API calls
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+
     cycle_id = create_test_cycle(test_schema, 'test-assurant-load')
 
     # Load configuration
@@ -781,8 +787,11 @@ def test_load_assurant_config_success(test_schema):
 @pytest.mark.database
 @pytest.mark.integration
 @pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Assurant Excel file not found")
-def test_load_assurant_config_data_structure(test_schema):
+def test_load_assurant_config_data_structure(test_schema, mocker):
     """Test that loaded configuration has correct data structure"""
+    # Mock API validation to avoid real API calls
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+
     cycle_id = create_test_cycle(test_schema, 'test-assurant-structure')
 
     config_id = load_configuration_file(
@@ -853,8 +862,11 @@ def test_load_config_archived_cycle_fails(test_schema):
 @pytest.mark.database
 @pytest.mark.integration
 @pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Assurant Excel file not found")
-def test_load_config_replace_when_no_batches(test_schema):
+def test_load_config_replace_when_no_batches(test_schema, mocker):
     """Test that configuration can be replaced when no batches exist"""
+    # Mock API validation to avoid real API calls
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+
     from helpers.database import execute_query
     cycle_id = create_test_cycle(test_schema, 'test-replace-no-batches')
 
@@ -889,8 +901,11 @@ def test_load_config_replace_when_no_batches(test_schema):
 @pytest.mark.database
 @pytest.mark.integration
 @pytest.mark.skipif(not Path(VALID_EXCEL_PATH).exists(), reason="Assurant Excel file not found")
-def test_load_config_fails_when_batches_exist(test_schema):
+def test_load_config_fails_when_batches_exist(test_schema, mocker):
     """Test that configuration cannot be replaced when batches exist"""
+    # Mock API validation to avoid real API calls
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+
     from helpers.database import execute_insert
     cycle_id = create_test_cycle(test_schema, 'test-batches-exist')
 

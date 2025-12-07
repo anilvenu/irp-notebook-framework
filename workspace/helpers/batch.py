@@ -43,7 +43,8 @@ from helpers.database import (
 from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus, BatchType
 from helpers.configuration import (
     read_configuration, update_configuration_status,
-    create_job_configurations, BATCH_TYPE_TRANSFORMERS
+    create_job_configurations, BATCH_TYPE_TRANSFORMERS,
+    validate_reference_data_with_api
 )
 from helpers.cycle import get_active_cycle_id
 
@@ -565,6 +566,17 @@ def submit_batch(
             f"Cycle {cycle_id} has status '{cycle_status}'. "
             f"Must be ACTIVE to submit batch."
         )
+
+    # Validate reference data for Analysis batches before submission
+    if batch['batch_type'] == BatchType.ANALYSIS:
+        job_configs = get_batch_job_configurations(batch_id, skipped=False, schema=schema)
+        analysis_job_configs = [jc['job_configuration_data'] for jc in job_configs]
+        ref_data_errors = validate_reference_data_with_api(analysis_job_configs, irp_client)
+        if ref_data_errors:
+            raise BatchError(
+                f"Reference data validation failed. Cannot submit batch.\n"
+                + "\n".join(ref_data_errors[:10])
+            )
 
     # Update batch step_id if provided (allows re-associating batch with submission step)
     if step_id is not None:
