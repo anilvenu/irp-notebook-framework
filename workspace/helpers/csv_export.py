@@ -8,6 +8,7 @@ This module is designed to work with the output of execute_query_from_file() fro
 the sqlserver module, which returns a list of DataFrames.
 """
 
+import csv
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 import pandas as pd
@@ -298,8 +299,8 @@ def save_dataframes_to_csv(
         # Full path
         file_path = output_path / filename
 
-        # Save to CSV
-        df.to_csv(file_path, index=index)
+        # Save to CSV with proper quoting to handle commas in field values
+        df.to_csv(file_path, index=index, quoting=csv.QUOTE_NONNUMERIC)
 
         created_files.append(file_path)
 
