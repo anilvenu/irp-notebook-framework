@@ -684,12 +684,16 @@ def test_transform_analysis():
 
 @pytest.mark.unit
 def test_transform_grouping():
-    """Test Grouping transformer"""
+    """Test Grouping transformer includes analysis_edm_map and group_names"""
     config = {
         'Metadata': {'Current Date Value': '202503'},
+        'Analysis Table': [
+            {'Analysis Name': 'A1', 'Database': 'EDM1'},
+            {'Analysis Name': 'A2', 'Database': 'EDM2'}
+        ],
         'Groupings': [
-            {'Group_Name': 'G1', 'items': ['P1', 'P2']},
-            {'Group_Name': 'G2', 'items': ['A1', 'A2']}
+            {'Group_Name': 'G1', 'items': ['A1', 'A2']},
+            {'Group_Name': 'G2', 'items': ['A1']}
         ]
     }
 
@@ -698,7 +702,200 @@ def test_transform_grouping():
     assert len(result) == 2, "Should create one job per group"
     assert result[0]['Metadata'] == config['Metadata']
     assert result[0]['Group_Name'] == 'G1'
-    assert result[0]['items'] == ['P1', 'P2']
+    assert result[0]['items'] == ['A1', 'A2']
+
+    # Verify analysis_edm_map is included
+    assert 'analysis_edm_map' in result[0], "Should include analysis_edm_map"
+    assert result[0]['analysis_edm_map'] == {'A1': 'EDM1', 'A2': 'EDM2'}
+
+    # Verify group_names is included (as list for JSON serialization)
+    assert 'group_names' in result[0], "Should include group_names"
+    assert set(result[0]['group_names']) == {'G1', 'G2'}
+
+    # Verify same data in second job config
+    assert result[1]['analysis_edm_map'] == {'A1': 'EDM1', 'A2': 'EDM2'}
+    assert set(result[1]['group_names']) == {'G1', 'G2'}
+
+
+@pytest.mark.unit
+def test_transform_grouping_rollup():
+    """Test Grouping Rollup transformer includes analysis_edm_map and group_names"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Analysis Table': [
+            {'Analysis Name': 'A1', 'Database': 'EDM1'},
+            {'Analysis Name': 'A2', 'Database': 'EDM2'}
+        ],
+        'Groupings': [
+            {'Group_Name': 'G1', 'items': ['A1', 'A2']},  # Analysis-only group
+            {'Group_Name': 'G2', 'items': ['G1', 'A1']}   # Rollup group (contains G1)
+        ]
+    }
+
+    result = create_job_configurations('Grouping Rollup', config)
+
+    # Only rollup groups (those referencing other groups)
+    assert len(result) == 1, "Should create one job for rollup group G2"
+    assert result[0]['Group_Name'] == 'G2'
+    assert result[0]['items'] == ['G1', 'A1']
+
+    # Verify analysis_edm_map is included
+    assert 'analysis_edm_map' in result[0], "Should include analysis_edm_map"
+    assert result[0]['analysis_edm_map'] == {'A1': 'EDM1', 'A2': 'EDM2'}
+
+    # Verify group_names is included (as list for JSON serialization)
+    assert 'group_names' in result[0], "Should include group_names"
+    assert set(result[0]['group_names']) == {'G1', 'G2'}
+
+
+@pytest.mark.unit
+def test_build_analysis_edm_map():
+    """Test _build_analysis_edm_map helper function"""
+    from helpers.configuration import _build_analysis_edm_map
+
+    config = {
+        'Analysis Table': [
+            {'Analysis Name': 'Analysis_1', 'Database': 'EDM_A'},
+            {'Analysis Name': 'Analysis_2', 'Database': 'EDM_B'},
+            {'Analysis Name': 'Analysis_3', 'Database': 'EDM_A'},
+            {'Analysis Name': None, 'Database': 'EDM_C'},  # Missing analysis name
+            {'Analysis Name': 'Analysis_4', 'Database': None},  # Missing database
+        ]
+    }
+
+    result = _build_analysis_edm_map(config)
+
+    # Should only include rows with both analysis name and database
+    assert len(result) == 3
+    assert result['Analysis_1'] == 'EDM_A'
+    assert result['Analysis_2'] == 'EDM_B'
+    assert result['Analysis_3'] == 'EDM_A'
+    assert 'Analysis_4' not in result
+
+
+@pytest.mark.unit
+def test_build_analysis_edm_map_empty():
+    """Test _build_analysis_edm_map with empty/missing data"""
+    from helpers.configuration import _build_analysis_edm_map
+
+    # Empty Analysis Table
+    result = _build_analysis_edm_map({'Analysis Table': []})
+    assert result == {}
+
+    # Missing Analysis Table
+    result = _build_analysis_edm_map({})
+    assert result == {}
+
+
+@pytest.mark.unit
+def test_get_group_names():
+    """Test _get_group_names helper function"""
+    from helpers.configuration import _get_group_names
+
+    config = {
+        'Groupings': [
+            {'Group_Name': 'Group_A', 'items': ['A1', 'A2']},
+            {'Group_Name': 'Group_B', 'items': ['A3']},
+            {'Group_Name': None, 'items': ['A4']},  # Missing group name
+        ]
+    }
+
+    result = _get_group_names(config)
+
+    # Should only include rows with group name
+    assert isinstance(result, set)
+    assert result == {'Group_A', 'Group_B'}
+
+
+@pytest.mark.unit
+def test_get_group_names_empty():
+    """Test _get_group_names with empty/missing data"""
+    from helpers.configuration import _get_group_names
+
+    # Empty Groupings
+    result = _get_group_names({'Groupings': []})
+    assert result == set()
+
+    # Missing Groupings
+    result = _get_group_names({})
+    assert result == set()
+
+
+@pytest.mark.unit
+def test_classify_groupings():
+    """Test classify_groupings separates analysis-only and rollup groups"""
+    from helpers.configuration import classify_groupings
+
+    config = {
+        'Analysis Table': [
+            {'Analysis Name': 'A1'},
+            {'Analysis Name': 'A2'},
+            {'Analysis Name': 'A3'}
+        ],
+        'Groupings': [
+            {'Group_Name': 'G1', 'items': ['A1', 'A2']},       # Analysis-only
+            {'Group_Name': 'G2', 'items': ['A3']},              # Analysis-only
+            {'Group_Name': 'G3', 'items': ['G1', 'G2']},        # Rollup (contains groups)
+            {'Group_Name': 'G4', 'items': ['G1', 'A3']},        # Rollup (contains G1)
+            {'Group_Name': 'G5', 'items': []}                   # Empty - excluded
+        ]
+    }
+
+    analysis_only, rollup = classify_groupings(config)
+
+    # Analysis-only groups
+    assert len(analysis_only) == 2
+    assert analysis_only[0]['Group_Name'] == 'G1'
+    assert analysis_only[1]['Group_Name'] == 'G2'
+
+    # Rollup groups (contain references to other groups)
+    assert len(rollup) == 2
+    assert rollup[0]['Group_Name'] == 'G3'
+    assert rollup[1]['Group_Name'] == 'G4'
+
+
+@pytest.mark.unit
+def test_transform_grouping_with_rollup_groups_excluded():
+    """Test that Grouping transformer excludes rollup groups"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Analysis Table': [
+            {'Analysis Name': 'A1', 'Database': 'EDM1'},
+            {'Analysis Name': 'A2', 'Database': 'EDM1'}
+        ],
+        'Groupings': [
+            {'Group_Name': 'G1', 'items': ['A1', 'A2']},  # Analysis-only
+            {'Group_Name': 'G2', 'items': ['G1']}         # Rollup - should be excluded
+        ]
+    }
+
+    result = create_job_configurations('Grouping', config)
+
+    # Only analysis-only groups should be included
+    assert len(result) == 1, "Should only include analysis-only groups"
+    assert result[0]['Group_Name'] == 'G1'
+
+
+@pytest.mark.unit
+def test_transform_grouping_rollup_excludes_analysis_only():
+    """Test that Grouping Rollup transformer excludes analysis-only groups"""
+    config = {
+        'Metadata': {'Current Date Value': '202503'},
+        'Analysis Table': [
+            {'Analysis Name': 'A1', 'Database': 'EDM1'},
+            {'Analysis Name': 'A2', 'Database': 'EDM1'}
+        ],
+        'Groupings': [
+            {'Group_Name': 'G1', 'items': ['A1', 'A2']},  # Analysis-only - should be excluded
+            {'Group_Name': 'G2', 'items': ['G1']}         # Rollup
+        ]
+    }
+
+    result = create_job_configurations('Grouping Rollup', config)
+
+    # Only rollup groups should be included
+    assert len(result) == 1, "Should only include rollup groups"
+    assert result[0]['Group_Name'] == 'G2'
 
 
 @pytest.mark.unit

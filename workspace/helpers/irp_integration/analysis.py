@@ -325,14 +325,25 @@ class AnalysisManager:
             raise IRPAPIError(f"Failed to submit analysis job '{job_name}' for portfolio {portfolio_name}: {e}")
 
 
-    def submit_analysis_grouping_jobs(self, grouping_data_list: List[Dict[str, Any]]) -> List[int]:
+    def submit_analysis_grouping_jobs(
+        self,
+        grouping_data_list: List[Dict[str, Any]],
+        analysis_edm_map: Optional[Dict[str, str]] = None,
+        group_names: Optional[set] = None
+    ) -> List[int]:
         """
         Submit multiple analysis grouping jobs.
 
         Args:
             grouping_data_list: List of grouping data dicts, each containing:
                 - group_name: str
-                - analysis_names: List[str]
+                - analysis_names: List[str] (can include both analysis names and group names)
+            analysis_edm_map: Optional mapping of analysis names to EDM names.
+                Used to look up analyses by name + EDM (since analysis names are only
+                unique within an EDM). If not provided, lookups use name only.
+            group_names: Optional set of known group names. Items in this set are
+                looked up as groups (by name only), all others are looked up as
+                analyses (by name + EDM if mapping provided).
 
         Returns:
             List of job IDs
@@ -355,7 +366,9 @@ class AnalysisManager:
 
             job_ids.append(self.submit_analysis_grouping_job(
                 group_name=group_name,
-                analysis_names=analysis_names
+                analysis_names=analysis_names,
+                analysis_edm_map=analysis_edm_map,
+                group_names=group_names
             ))
 
         return job_ids
@@ -373,14 +386,31 @@ class AnalysisManager:
         simulation_window_end: str = "12/31/2021",
         region_peril_simulation_set: List[Dict[str, Any]] = None,
         description: str = "",
-        currency: Dict[str, str] = None
+        currency: Dict[str, str] = None,
+        analysis_edm_map: Optional[Dict[str, str]] = None,
+        group_names: Optional[set] = None
     ) -> int:
         """
         Submit analysis grouping job.
 
         Args:
             group_name: Name for analysis group
-            analysis_names: List of analysis names to include in the group
+            analysis_names: List of names to include in the group (can be analyses or groups)
+            simulate_to_plt: Whether to simulate to PLT (default: True)
+            num_simulations: Number of simulations (default: 50000)
+            propagate_detailed_losses: Whether to propagate detailed losses (default: False)
+            reporting_window_start: Reporting window start date (default: "01/01/2021")
+            simulation_window_start: Simulation window start date (default: "01/01/2021")
+            simulation_window_end: Simulation window end date (default: "12/31/2021")
+            region_peril_simulation_set: Region/peril simulation set (default: None)
+            description: Group description (default: "")
+            currency: Currency configuration (default: None, uses system default)
+            analysis_edm_map: Optional mapping of analysis names to EDM names.
+                Used to look up analyses by name + EDM (since analysis names are only
+                unique within an EDM). If not provided, lookups use name only.
+            group_names: Optional set of known group names. Items in this set are
+                looked up as groups (by name only), all others are looked up as
+                analyses (by name + EDM if mapping provided).
 
         Returns:
             Analysis group job ID
@@ -392,24 +422,51 @@ class AnalysisManager:
         validate_non_empty_string(group_name, "group_name")
         validate_list_not_empty(analysis_names, "analysis_names")
 
+        # Initialize defaults
+        if analysis_edm_map is None:
+            analysis_edm_map = {}
+        if group_names is None:
+            group_names = set()
+
         # Check if analysis group with this name already exists
         analysis_response = self.search_analyses(filter=f"analysisName = \"{group_name}\"")
         if len(analysis_response) > 0:
             raise IRPAPIError(f"Analysis Group with this name already exists: {group_name}")
 
-        # Resolve analysis names to URIs
+        # Resolve analysis/group names to URIs
         analysis_uris = []
         for name in analysis_names:
-            analysis_response = self.search_analyses(filter=f"analysisName = \"{name}\"")
-            if len(analysis_response) == 0:
-                raise IRPAPIError(f"Analysis with this name does not exist: {name}")
-            if len(analysis_response) > 1:
-                raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
+            # Determine if this is a group name or an analysis name
+            if name in group_names:
+                # Group names are globally unique - search by name only
+                analysis_response = self.search_analyses(filter=f"analysisName = \"{name}\"")
+                if len(analysis_response) == 0:
+                    raise IRPAPIError(f"Group with this name does not exist: {name}")
+                if len(analysis_response) > 1:
+                    raise IRPAPIError(f"Duplicate groups exist with name: {name}")
+            else:
+                # Analysis names - search by name + EDM if mapping provided
+                edm_name = analysis_edm_map.get(name)
+                if edm_name:
+                    filter_str = f"analysisName = \"{name}\" AND exposureName = \"{edm_name}\""
+                    analysis_response = self.search_analyses(filter=filter_str)
+                    if len(analysis_response) == 0:
+                        raise IRPAPIError(f"Analysis '{name}' not found for EDM '{edm_name}'")
+                    if len(analysis_response) > 1:
+                        raise IRPAPIError(f"Multiple analyses found with name '{name}' for EDM '{edm_name}'")
+                else:
+                    # Fallback to name-only search (legacy behavior)
+                    analysis_response = self.search_analyses(filter=f"analysisName = \"{name}\"")
+                    if len(analysis_response) == 0:
+                        raise IRPAPIError(f"Analysis with this name does not exist: {name}")
+                    if len(analysis_response) > 1:
+                        raise IRPAPIError(f"Duplicate analyses exist with name: {name}.")
+
             try:
                 analysis_uris.append(analysis_response[0]['uri'])
             except (KeyError, IndexError, TypeError) as e:
                 raise IRPAPIError(
-                    f"Failed to extract analysis URI for analysis '{name}': {e}"
+                    f"Failed to extract URI for '{name}': {e}"
                 ) from e
 
         if currency is None:

@@ -918,7 +918,9 @@ def _submit_grouping_job(
         job_id: Job ID
         job_config: Job configuration data containing:
             - Group_Name: Name for the analysis group
-            - items: List of analysis names to include in the group
+            - items: List of analysis/group names to include in the group
+            - analysis_edm_map: Mapping of analysis names to EDM names (for lookup)
+            - group_names: List of known group names (to distinguish from analyses)
         client: IRPClient instance
 
     Returns:
@@ -932,6 +934,11 @@ def _submit_grouping_job(
     group_name = job_config.get('Group_Name')
     analysis_names = job_config.get('items', [])
 
+    # Extract optional lookup fields for proper analysis/group resolution
+    analysis_edm_map = job_config.get('analysis_edm_map', {})
+    group_names_list = job_config.get('group_names', [])
+    group_names_set = set(group_names_list) if group_names_list else set()
+
     # Validate required fields
     if not group_name:
         raise ValueError("Missing required field: Group_Name")
@@ -942,7 +949,9 @@ def _submit_grouping_job(
     try:
         moody_job_id = client.analysis.submit_analysis_grouping_job(
             group_name=group_name,
-            analysis_names=analysis_names
+            analysis_names=analysis_names,
+            analysis_edm_map=analysis_edm_map,
+            group_names=group_names_set
         )
     except Exception as e:
         raise JobError(f"Failed to submit grouping job: {str(e)}")
@@ -957,7 +966,9 @@ def _submit_grouping_job(
         'configuration': job_config,
         'api_request': {
             'group_name': group_name,
-            'analysis_names': analysis_names
+            'analysis_names': analysis_names,
+            'analysis_edm_map': analysis_edm_map,
+            'group_names': group_names_list
         },
         'submitted_at': datetime.now().isoformat()
     }
