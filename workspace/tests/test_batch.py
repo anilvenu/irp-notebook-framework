@@ -1080,3 +1080,146 @@ def test_reconcile_analysis_batch_excludes_skipped(test_schema):
     # Should only count 2 jobs (1 and 3), not the skipped one
     assert result['total_jobs'] == 2
     assert len(result['jobs_without_analysis']) == 2
+
+
+# ============================================================================
+# Tests - Submit Batch Reference Data Validation
+# ============================================================================
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_submit_analysis_batch_reference_data_valid(test_schema, mocker):
+    """Test submit_batch succeeds when all reference data is valid for Analysis batch."""
+    from helpers.constants import BatchType
+    from helpers.job import create_job_with_config
+    from unittest.mock import MagicMock
+
+    # Mock the reference data validation to return no errors
+    mocker.patch('helpers.batch.validate_reference_data_with_api', return_value=[])
+
+    # Create hierarchy with Analysis batch
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_ref_data_valid', 'ACTIVE'),
+        schema=test_schema
+    )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps({}), ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, BatchType.ANALYSIS, BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    # Create job with reference data fields
+    job_config = {
+        'Analysis Profile': 'ValidProfile',
+        'Output Profile': 'ValidOutput',
+        'Event Rate': 'ValidScheme'
+    }
+    create_job_with_config(batch_id, config_id, job_configuration_data=job_config, schema=test_schema)
+
+    # Mock IRP client
+    mock_client = MagicMock()
+
+    # Submit should succeed (no reference data errors)
+    result = submit_batch(batch_id, mock_client, schema=test_schema)
+    assert result['batch_id'] == batch_id
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_submit_analysis_batch_reference_data_invalid(test_schema, mocker):
+    """Test submit_batch fails when reference data is invalid for Analysis batch."""
+    from helpers.constants import BatchType
+    from helpers.job import create_job_with_config
+    from unittest.mock import MagicMock
+
+    # Mock the reference data validation to return errors
+    mocker.patch('helpers.batch.validate_reference_data_with_api', return_value=[
+        'Model Profile "InvalidProfile" not found in Moody\'s system'
+    ])
+
+    # Create hierarchy with Analysis batch
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_ref_data_invalid', 'ACTIVE'),
+        schema=test_schema
+    )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps({}), ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, BatchType.ANALYSIS, BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    # Create job with invalid reference data
+    job_config = {
+        'Analysis Profile': 'InvalidProfile',
+        'Output Profile': 'ValidOutput',
+        'Event Rate': 'ValidScheme'
+    }
+    create_job_with_config(batch_id, config_id, job_configuration_data=job_config, schema=test_schema)
+
+    # Mock IRP client
+    mock_client = MagicMock()
+
+    # Submit should fail with reference data error
+    with pytest.raises(BatchError, match="Reference data validation failed"):
+        submit_batch(batch_id, mock_client, schema=test_schema)
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_submit_non_analysis_batch_skips_reference_validation(test_schema, mocker):
+    """Test submit_batch skips reference data validation for non-Analysis batches."""
+    from helpers.job import create_job_with_config
+    from unittest.mock import MagicMock
+
+    # Mock reference data validation - should NOT be called for non-Analysis batch
+    mock_validate = mocker.patch('helpers.batch.validate_reference_data_with_api', return_value=[])
+
+    # Create hierarchy with EDM Creation batch (non-Analysis)
+    cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_non_analysis_skip')
+    batch_id = create_batch('EDM Creation', config_id, step_id, schema=test_schema)
+
+    # Mock IRP client
+    mock_client = MagicMock()
+
+    # Submit should succeed without calling reference data validation
+    result = submit_batch(batch_id, mock_client, schema=test_schema)
+    assert result['batch_id'] == batch_id
+
+    # Verify reference data validation was NOT called
+    mock_validate.assert_not_called()

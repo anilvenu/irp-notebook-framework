@@ -325,7 +325,7 @@ def test_update_configuration_status_to_error(test_schema):
 def test_load_configuration_file_success(test_schema, mocker):
     """Test loading valid configuration file"""
     # Mock API validation to avoid real API calls
-    mocker.patch('helpers.configuration._validate_reference_data_api', return_value=[])
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
 
     cycle_id = create_test_cycle(test_schema, 'test-load-success')
 
@@ -411,7 +411,7 @@ def test_load_configuration_file_validation_errors(test_schema):
 def test_load_configuration_active_cycle(test_schema, mocker):
     """Test loading configuration for active cycle"""
     # Mock API validation to avoid real API calls
-    mocker.patch('helpers.configuration._validate_reference_data_api', return_value=[])
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
 
     active_cycle_id = create_test_cycle(test_schema, 'test-active')
 
@@ -453,7 +453,7 @@ def test_load_configuration_archived_cycle_fails(test_schema):
 def test_load_configuration_replace_when_no_batches(test_schema, mocker):
     """Test that configuration can be replaced when no batches exist (even if ACTIVE)"""
     # Mock API validation to avoid real API calls
-    mocker.patch('helpers.configuration._validate_reference_data_api', return_value=[])
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
 
     from helpers.database import execute_command
     cycle_id = create_test_cycle(test_schema, 'test-replace-no-batches')
@@ -491,7 +491,7 @@ def test_load_configuration_replace_when_no_batches(test_schema, mocker):
 def test_load_configuration_fails_when_batches_exist(test_schema, mocker):
     """Test that configuration cannot be replaced when batches exist"""
     # Mock API validation to avoid real API calls
-    mocker.patch('helpers.configuration._validate_reference_data_api', return_value=[])
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
 
     cycle_id = create_test_cycle(test_schema, 'test-batches-exist')
 
@@ -1247,7 +1247,7 @@ def test_load_configuration_file_not_excel(test_schema):
 def test_validate_configuration_file(test_schema, mocker):
     """Test validate_configuration_file (validation only, no DB insert)"""
     # Mock API validation to avoid real API calls
-    mocker.patch('helpers.configuration._validate_reference_data_api', return_value=[])
+    mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
 
     cycle_id = create_test_cycle(test_schema, 'test-validate-only')
 
@@ -1273,9 +1273,9 @@ def test_validate_configuration_file(test_schema, mocker):
 # ============================================================================
 
 @pytest.mark.unit
-def test_validate_reference_data_api_all_valid(mocker):
+def test_validate_reference_data_with_api_all_valid(mocker):
     """Test successful validation when all reference data exists in API"""
-    from helpers.configuration import _validate_reference_data_api
+    from helpers.configuration import validate_reference_data_with_api
 
     # Mock IRPClient
     mock_client = mocker.patch('helpers.configuration.IRPClient')
@@ -1286,21 +1286,19 @@ def test_validate_reference_data_api_all_valid(mocker):
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1, 'name': 'Output1'}]
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1, 'name': 'Scheme1'}]}
 
-    config_data = {
-        'Analysis Table': [
-            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
-            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': None},  # Event Rate nullable
-        ]
-    }
+    analysis_job_configs = [
+        {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
+        {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': None},  # Event Rate nullable
+    ]
 
-    errors = _validate_reference_data_api(config_data)
+    errors = validate_reference_data_with_api(analysis_job_configs)
     assert len(errors) == 0
 
 
 @pytest.mark.unit
-def test_validate_reference_data_api_model_profile_not_found(mocker):
+def test_validate_reference_data_with_api_model_profile_not_found(mocker):
     """Test error when model profile not found in API"""
-    from helpers.configuration import _validate_reference_data_api
+    from helpers.configuration import validate_reference_data_with_api
 
     # Mock IRPClient
     mock_client = mocker.patch('helpers.configuration.IRPClient')
@@ -1311,13 +1309,11 @@ def test_validate_reference_data_api_model_profile_not_found(mocker):
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
 
-    config_data = {
-        'Analysis Table': [
-            {'Analysis Profile': 'InvalidProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'ValidScheme'}
-        ]
-    }
+    analysis_job_configs = [
+        {'Analysis Profile': 'InvalidProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'ValidScheme'}
+    ]
 
-    errors = _validate_reference_data_api(config_data)
+    errors = validate_reference_data_with_api(analysis_job_configs)
     assert len(errors) == 1
     assert 'Model Profile' in errors[0]
     assert 'InvalidProfile' in errors[0]
@@ -1325,9 +1321,9 @@ def test_validate_reference_data_api_model_profile_not_found(mocker):
 
 
 @pytest.mark.unit
-def test_validate_reference_data_api_output_profile_not_found(mocker):
+def test_validate_reference_data_with_api_output_profile_not_found(mocker):
     """Test error when output profile not found in API"""
-    from helpers.configuration import _validate_reference_data_api
+    from helpers.configuration import validate_reference_data_with_api
 
     # Mock IRPClient
     mock_client = mocker.patch('helpers.configuration.IRPClient')
@@ -1338,13 +1334,11 @@ def test_validate_reference_data_api_output_profile_not_found(mocker):
     mock_ref_data.get_output_profile_by_name.return_value = []  # Empty list = not found
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
 
-    config_data = {
-        'Analysis Table': [
-            {'Analysis Profile': 'ValidProfile', 'Output Profile': 'InvalidOutput', 'Event Rate': 'ValidScheme'}
-        ]
-    }
+    analysis_job_configs = [
+        {'Analysis Profile': 'ValidProfile', 'Output Profile': 'InvalidOutput', 'Event Rate': 'ValidScheme'}
+    ]
 
-    errors = _validate_reference_data_api(config_data)
+    errors = validate_reference_data_with_api(analysis_job_configs)
     assert len(errors) == 1
     assert 'Output Profile' in errors[0]
     assert 'InvalidOutput' in errors[0]
@@ -1352,9 +1346,9 @@ def test_validate_reference_data_api_output_profile_not_found(mocker):
 
 
 @pytest.mark.unit
-def test_validate_reference_data_api_event_rate_not_found(mocker):
+def test_validate_reference_data_with_api_event_rate_not_found(mocker):
     """Test error when event rate scheme not found in API"""
-    from helpers.configuration import _validate_reference_data_api
+    from helpers.configuration import validate_reference_data_with_api
 
     # Mock IRPClient
     mock_client = mocker.patch('helpers.configuration.IRPClient')
@@ -1365,13 +1359,11 @@ def test_validate_reference_data_api_event_rate_not_found(mocker):
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 0, 'items': []}
 
-    config_data = {
-        'Analysis Table': [
-            {'Analysis Profile': 'ValidProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'InvalidScheme'}
-        ]
-    }
+    analysis_job_configs = [
+        {'Analysis Profile': 'ValidProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'InvalidScheme'}
+    ]
 
-    errors = _validate_reference_data_api(config_data)
+    errors = validate_reference_data_with_api(analysis_job_configs)
     assert len(errors) == 1
     assert 'Event Rate Scheme' in errors[0]
     assert 'InvalidScheme' in errors[0]
@@ -1379,9 +1371,9 @@ def test_validate_reference_data_api_event_rate_not_found(mocker):
 
 
 @pytest.mark.unit
-def test_validate_reference_data_api_multiple_errors(mocker):
+def test_validate_reference_data_with_api_multiple_errors(mocker):
     """Test multiple reference data validation errors"""
-    from helpers.configuration import _validate_reference_data_api
+    from helpers.configuration import validate_reference_data_with_api
 
     # Mock IRPClient
     mock_client = mocker.patch('helpers.configuration.IRPClient')
@@ -1392,13 +1384,11 @@ def test_validate_reference_data_api_multiple_errors(mocker):
     mock_ref_data.get_output_profile_by_name.return_value = []
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 0, 'items': []}
 
-    config_data = {
-        'Analysis Table': [
-            {'Analysis Profile': 'BadProfile', 'Output Profile': 'BadOutput', 'Event Rate': 'BadScheme'}
-        ]
-    }
+    analysis_job_configs = [
+        {'Analysis Profile': 'BadProfile', 'Output Profile': 'BadOutput', 'Event Rate': 'BadScheme'}
+    ]
 
-    errors = _validate_reference_data_api(config_data)
+    errors = validate_reference_data_with_api(analysis_job_configs)
     assert len(errors) == 3
     assert any('Model Profile' in e and 'BadProfile' in e for e in errors)
     assert any('Output Profile' in e and 'BadOutput' in e for e in errors)
@@ -1406,9 +1396,9 @@ def test_validate_reference_data_api_multiple_errors(mocker):
 
 
 @pytest.mark.unit
-def test_validate_reference_data_api_handles_api_error(mocker):
+def test_validate_reference_data_with_api_handles_api_error(mocker):
     """Test handling of API errors during validation"""
-    from helpers.configuration import _validate_reference_data_api
+    from helpers.configuration import validate_reference_data_with_api
     from helpers.irp_integration.exceptions import IRPAPIError
 
     # Mock IRPClient
@@ -1420,38 +1410,34 @@ def test_validate_reference_data_api_handles_api_error(mocker):
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
 
-    config_data = {
-        'Analysis Table': [
-            {'Analysis Profile': 'SomeProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'ValidScheme'}
-        ]
-    }
+    analysis_job_configs = [
+        {'Analysis Profile': 'SomeProfile', 'Output Profile': 'ValidOutput', 'Event Rate': 'ValidScheme'}
+    ]
 
-    errors = _validate_reference_data_api(config_data)
+    errors = validate_reference_data_with_api(analysis_job_configs)
     assert len(errors) == 1
     assert 'Failed to validate reference data' in errors[0]
     assert 'Connection timeout' in errors[0]
 
 
 @pytest.mark.unit
-def test_validate_reference_data_api_empty_analysis_table(mocker):
-    """Test validation with empty Analysis Table"""
-    from helpers.configuration import _validate_reference_data_api
+def test_validate_reference_data_with_api_empty_job_configs(mocker):
+    """Test validation with empty job configs list"""
+    from helpers.configuration import validate_reference_data_with_api
 
     # Mock IRPClient (should not be called)
     mock_client = mocker.patch('helpers.configuration.IRPClient')
 
-    config_data = {
-        'Analysis Table': []
-    }
+    analysis_job_configs = []
 
-    errors = _validate_reference_data_api(config_data)
+    errors = validate_reference_data_with_api(analysis_job_configs)
     assert len(errors) == 0
 
 
 @pytest.mark.unit
-def test_validate_reference_data_api_unique_values_only(mocker):
+def test_validate_reference_data_with_api_unique_values_only(mocker):
     """Test that API is called only once per unique value"""
-    from helpers.configuration import _validate_reference_data_api
+    from helpers.configuration import validate_reference_data_with_api
 
     # Mock IRPClient
     mock_client = mocker.patch('helpers.configuration.IRPClient')
@@ -1463,15 +1449,13 @@ def test_validate_reference_data_api_unique_values_only(mocker):
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
 
     # Same profile used in multiple rows
-    config_data = {
-        'Analysis Table': [
-            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
-            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
-            {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
-        ]
-    }
+    analysis_job_configs = [
+        {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
+        {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
+        {'Analysis Profile': 'Profile1', 'Output Profile': 'Output1', 'Event Rate': 'Scheme1'},
+    ]
 
-    errors = _validate_reference_data_api(config_data)
+    errors = validate_reference_data_with_api(analysis_job_configs)
     assert len(errors) == 0
 
     # Each API method should only be called once (unique values)
