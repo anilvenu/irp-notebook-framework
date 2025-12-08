@@ -934,6 +934,7 @@ class AnalysisManager:
                 'analysisId': analysis.get('analysisId'),
                 'exposureResourceId': analysis.get('exposureResourceId'),
                 'analysisName': analysis.get('analysisName'),
+                'engineType': analysis.get('engineType'),  # 'HD' or 'DLM'
                 'raw': analysis
             }
         except IRPAPIError:
@@ -1102,7 +1103,8 @@ class AnalysisManager:
         params = {
             'perspectiveCode': perspective_code,
             'exposureResourceType': 'PORTFOLIO',
-            'exposureResourceId': exposure_resource_id
+            'exposureResourceId': exposure_resource_id,
+            'limit': 100000
         }
 
         try:
