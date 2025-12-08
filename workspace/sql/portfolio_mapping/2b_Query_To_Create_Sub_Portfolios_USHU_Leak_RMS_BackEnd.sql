@@ -50,7 +50,7 @@ DECLARE @Date		VARCHAR(MAX)
 DECLARE @portinfoidLeak	INT
 DECLARE @SQL		VARCHAR(MAX)
 
-SET @portinfoidLeak = {{ PORTFOLIO_ID_LEAK }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
+SET @portinfoidLeak = {{ PORTFOLIO_ID }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
 SET @Date = {{ DATETIME_VALUE }} --Update by running (Select getdate())
 
 

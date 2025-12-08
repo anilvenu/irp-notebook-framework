@@ -30,7 +30,7 @@ DECLARE @Date		VARCHAR(MAX)
 DECLARE @portinfoidFull	INT
 DECLARE @SQL		VARCHAR(MAX)
 
-SET @portinfoidFull = {{ PORTFOLIO_ID_FULL }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
+SET @portinfoidFull = {{ PORTFOLIO_ID }} --Update by running (Select * from portinfo). This corresponds to the portfolio you imported that you will now break up into LOBs using this script
 SET @Date = {{ DATETIME_VALUE }} --Update by running (Select getdate())
 
 
