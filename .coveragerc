@@ -15,7 +15,9 @@ omit =
     workspace/helpers/ux.py
     workspace/helpers/notebook*.py
     # Exclude sqlserver.py
-    workspace/helpers/sqlserver.py 
+    workspace/helpers/sqlserver.py
+    # Exclude analysis_results_validator.py
+    workspace/helpers/analysis_results_validator.py
     # Exclude __pycache__ and .pyc files
     */__pycache__/*
     */.pytest_cache/*
