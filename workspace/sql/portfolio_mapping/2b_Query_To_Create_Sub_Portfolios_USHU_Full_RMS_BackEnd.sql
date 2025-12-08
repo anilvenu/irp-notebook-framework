@@ -65,7 +65,7 @@ where name = 'portacct'
 --Manufactured Housing full
 
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USHU_Full_Manufact','USHU_Full_Manufactured',@Date,'USHU_Full_Manufact'
+select max(portinfoid)+1,'USHU_Full_Manufact','USHU_Full_Manufact',@Date,'USHU_Full_Manufact'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_13 INT
