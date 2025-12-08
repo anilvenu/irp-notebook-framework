@@ -256,8 +256,12 @@ class AnalysisManager:
             raise IRPReferenceDataError(f"Output profile '{output_profile_name}' not found")
 
         try:
-            model_profile_id = model_profile_response['items'][0]['id']
-            if "HD" in model_profile_response['items'][0]['softwareVersionCode']:
+            model_profile = model_profile_response['items'][0]
+            model_profile_id = model_profile['id']
+            # Extract perilCode and modelRegionCode for event rate scheme lookup
+            model_peril_code = model_profile.get('perilCode')
+            model_region_code = model_profile.get('modelRegionCode')
+            if "HD" in model_profile['softwareVersionCode']:
                 job_type = "HD"
             else:
                 job_type = "DLM"
@@ -274,11 +278,17 @@ class AnalysisManager:
             ) from e
 
         # Event rate scheme is required for DLM analyses but optional for HD
+        # Use perilCode and modelRegionCode from model profile to filter the correct event rate scheme
         event_rate_scheme_id = None
         if event_rate_scheme_name:
-            event_rate_scheme_response = self.reference_data_manager.get_event_rate_scheme_by_name(event_rate_scheme_name)
+            event_rate_scheme_response = self.reference_data_manager.get_event_rate_scheme_by_name(
+                event_rate_scheme_name,
+                peril_code=model_peril_code,
+                model_region_code=model_region_code
+            )
             if event_rate_scheme_response.get('count', 0) == 0:
-                raise IRPReferenceDataError(f"Event rate scheme '{event_rate_scheme_name}' not found")
+                filter_info = f" (perilCode={model_peril_code}, modelRegionCode={model_region_code})" if model_peril_code or model_region_code else ""
+                raise IRPReferenceDataError(f"Event rate scheme '{event_rate_scheme_name}'{filter_info} not found")
             try:
                 event_rate_scheme_id = event_rate_scheme_response['items'][0]['eventRateSchemeId']
             except (KeyError, IndexError, TypeError) as e:
