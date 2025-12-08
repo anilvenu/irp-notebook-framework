@@ -170,12 +170,23 @@ class ReferenceDataManager:
             raise IRPAPIError(f"Failed to get event rate schemes: {e}")
 
 
-    def get_event_rate_scheme_by_name(self, scheme_name: str) -> Dict[str, Any]:
+    def get_event_rate_scheme_by_name(
+        self,
+        scheme_name: str,
+        peril_code: str = None,
+        model_region_code: str = None
+    ) -> Dict[str, Any]:
         """
-        Retrieve event rate scheme by name.
+        Retrieve event rate scheme by name with optional peril and region filtering.
+
+        When the same event rate scheme name exists for multiple peril/region combinations,
+        use the peril_code and model_region_code parameters to filter to the correct one.
+        These values can be obtained from the corresponding model profile.
 
         Args:
             scheme_name: Event rate scheme name
+            peril_code: Optional peril code (e.g., "CS", "WS") to filter results
+            model_region_code: Optional model region code (e.g., "NACS", "NAWS") to filter results
 
         Returns:
             Dict containing event rate scheme details
@@ -186,7 +197,14 @@ class ReferenceDataManager:
         """
         validate_non_empty_string(scheme_name, "scheme_name")
 
-        params = {'where': f"eventRateSchemeName=\"{scheme_name}\""}
+        # Build where clause with optional peril and region filters
+        where_parts = [f'eventRateSchemeName="{scheme_name}"']
+        if peril_code:
+            where_parts.append(f'perilCode="{peril_code}"')
+        if model_region_code:
+            where_parts.append(f'modelRegionCode="{model_region_code}"')
+
+        params = {'where': ' AND '.join(where_parts)}
 
         try:
             response = self.client.request('GET', GET_EVENT_RATE_SCHEME, params=params)

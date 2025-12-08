@@ -1200,20 +1200,28 @@ def validate_reference_data_with_api(
     # Extract unique values from job configs
     model_profiles = set()
     output_profiles = set()
-    event_rate_schemes = set()
+    # Track (model_profile, event_rate) pairs for validation with peril/region context
+    model_event_rate_pairs = set()
 
     for job_config in analysis_job_configs:
         if pd.notna(job_config.get('Analysis Profile')):
             model_profiles.add(job_config['Analysis Profile'])
         if pd.notna(job_config.get('Output Profile')):
             output_profiles.add(job_config['Output Profile'])
-        if pd.notna(job_config.get('Event Rate')):  # Event Rate is nullable
-            event_rate_schemes.add(job_config['Event Rate'])
+        # Collect model profile + event rate pairs for context-aware validation
+        if pd.notna(job_config.get('Event Rate')):
+            model_profile = job_config.get('Analysis Profile', '')
+            event_rate = job_config['Event Rate']
+            if pd.notna(model_profile):
+                model_event_rate_pairs.add((model_profile, event_rate))
 
     try:
         client = irp_client if irp_client is not None else IRPClient()
 
-        # Validate Model Profiles (Analysis Profiles)
+        # Cache model profile lookups to avoid duplicate API calls
+        model_profile_cache = {}
+
+        # Validate Model Profiles (Analysis Profiles) and cache results
         for profile_name in model_profiles:
             if not profile_name:
                 continue
@@ -1221,6 +1229,9 @@ def validate_reference_data_with_api(
                 result = client.reference_data.get_model_profile_by_name(profile_name)
                 if result.get('count', 0) == 0:
                     errors.append(_format_error('API-REF-001', value=profile_name))
+                else:
+                    # Cache for event rate validation
+                    model_profile_cache[profile_name] = result['items'][0]
             except IRPAPIError as e:
                 errors.append(_format_error('API-REF-004', error=str(e)))
 
@@ -1235,14 +1246,39 @@ def validate_reference_data_with_api(
             except IRPAPIError as e:
                 errors.append(_format_error('API-REF-004', error=str(e)))
 
-        # Validate Event Rate Schemes
-        for scheme_name in event_rate_schemes:
+        # Validate Event Rate Schemes with model profile context (perilCode, modelRegionCode)
+        # Each (model_profile, event_rate) pair is validated with the model's peril/region
+        validated_schemes = set()  # Track validated (scheme, peril, region) to avoid duplicates
+        for model_profile_name, scheme_name in model_event_rate_pairs:
             if not scheme_name:
                 continue
+
+            # Get peril and region from cached model profile
+            peril_code = None
+            model_region_code = None
+            if model_profile_name in model_profile_cache:
+                profile_data = model_profile_cache[model_profile_name]
+                peril_code = profile_data.get('perilCode')
+                model_region_code = profile_data.get('modelRegionCode')
+
+            # Create unique key to avoid duplicate validations
+            validation_key = (scheme_name, peril_code, model_region_code)
+            if validation_key in validated_schemes:
+                continue
+            validated_schemes.add(validation_key)
+
             try:
-                result = client.reference_data.get_event_rate_scheme_by_name(scheme_name)
+                result = client.reference_data.get_event_rate_scheme_by_name(
+                    scheme_name,
+                    peril_code=peril_code,
+                    model_region_code=model_region_code
+                )
                 if result.get('count', 0) == 0:
-                    errors.append(_format_error('API-REF-003', value=scheme_name))
+                    # Include peril/region context in error message for clarity
+                    filter_info = ""
+                    if peril_code or model_region_code:
+                        filter_info = f" (perilCode={peril_code}, modelRegionCode={model_region_code})"
+                    errors.append(_format_error('API-REF-003', value=f"{scheme_name}{filter_info}"))
             except IRPAPIError as e:
                 errors.append(_format_error('API-REF-004', error=str(e)))
 
