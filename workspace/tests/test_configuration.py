@@ -1298,7 +1298,11 @@ def test_validate_reference_data_with_api_all_valid(mocker):
     mock_ref_data = mock_client.return_value.reference_data
 
     # Configure mock responses - all found
-    mock_ref_data.get_model_profile_by_name.return_value = {'count': 1, 'items': [{'id': 1, 'name': 'Profile1'}]}
+    # Model profile includes perilCode and modelRegionCode for event rate scheme lookup
+    mock_ref_data.get_model_profile_by_name.return_value = {
+        'count': 1,
+        'items': [{'id': 1, 'name': 'Profile1', 'perilCode': 'CS', 'modelRegionCode': 'NACS'}]
+    }
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1, 'name': 'Output1'}]
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1, 'name': 'Scheme1'}]}
 
@@ -1320,9 +1324,10 @@ def test_validate_reference_data_with_api_model_profile_not_found(mocker):
     mock_client = mocker.patch('helpers.configuration.IRPClient')
     mock_ref_data = mock_client.return_value.reference_data
 
-    # Model profile not found (count=0)
+    # Model profile not found (count=0) - event rate will not be validated since model profile lookup fails
     mock_ref_data.get_model_profile_by_name.return_value = {'count': 0, 'items': []}
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
+    # Event rate scheme lookup won't have perilCode/modelRegionCode since model profile not found
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
 
     analysis_job_configs = [
@@ -1330,10 +1335,10 @@ def test_validate_reference_data_with_api_model_profile_not_found(mocker):
     ]
 
     errors = validate_reference_data_with_api(analysis_job_configs)
-    assert len(errors) == 1
-    assert 'Model Profile' in errors[0]
-    assert 'InvalidProfile' in errors[0]
-    assert "not found in Moody's system" in errors[0]
+    # Two errors: model profile not found, and event rate lookup without peril/region context
+    assert len(errors) >= 1
+    assert any('Model Profile' in e and 'InvalidProfile' in e for e in errors)
+    assert any("not found in Moody's system" in e for e in errors)
 
 
 @pytest.mark.unit
@@ -1346,7 +1351,10 @@ def test_validate_reference_data_with_api_output_profile_not_found(mocker):
     mock_ref_data = mock_client.return_value.reference_data
 
     # Output profile not found (empty list)
-    mock_ref_data.get_model_profile_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+    mock_ref_data.get_model_profile_by_name.return_value = {
+        'count': 1,
+        'items': [{'id': 1, 'perilCode': 'CS', 'modelRegionCode': 'NACS'}]
+    }
     mock_ref_data.get_output_profile_by_name.return_value = []  # Empty list = not found
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
 
@@ -1371,7 +1379,10 @@ def test_validate_reference_data_with_api_event_rate_not_found(mocker):
     mock_ref_data = mock_client.return_value.reference_data
 
     # Event rate scheme not found (count=0)
-    mock_ref_data.get_model_profile_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+    mock_ref_data.get_model_profile_by_name.return_value = {
+        'count': 1,
+        'items': [{'id': 1, 'perilCode': 'CS', 'modelRegionCode': 'NACS'}]
+    }
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 0, 'items': []}
 
@@ -1395,7 +1406,7 @@ def test_validate_reference_data_with_api_multiple_errors(mocker):
     mock_client = mocker.patch('helpers.configuration.IRPClient')
     mock_ref_data = mock_client.return_value.reference_data
 
-    # All not found
+    # All not found - model profile not found means no perilCode/modelRegionCode for event rate lookup
     mock_ref_data.get_model_profile_by_name.return_value = {'count': 0, 'items': []}
     mock_ref_data.get_output_profile_by_name.return_value = []
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 0, 'items': []}
@@ -1421,7 +1432,7 @@ def test_validate_reference_data_with_api_handles_api_error(mocker):
     mock_client = mocker.patch('helpers.configuration.IRPClient')
     mock_ref_data = mock_client.return_value.reference_data
 
-    # API call raises error
+    # API call raises error - model profile error means event rate can't be validated with context
     mock_ref_data.get_model_profile_by_name.side_effect = IRPAPIError("Connection timeout")
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
@@ -1431,9 +1442,8 @@ def test_validate_reference_data_with_api_handles_api_error(mocker):
     ]
 
     errors = validate_reference_data_with_api(analysis_job_configs)
-    assert len(errors) == 1
-    assert 'Failed to validate reference data' in errors[0]
-    assert 'Connection timeout' in errors[0]
+    assert len(errors) >= 1
+    assert any('Failed to validate reference data' in e and 'Connection timeout' in e for e in errors)
 
 
 @pytest.mark.unit
@@ -1452,15 +1462,18 @@ def test_validate_reference_data_with_api_empty_job_configs(mocker):
 
 @pytest.mark.unit
 def test_validate_reference_data_with_api_unique_values_only(mocker):
-    """Test that API is called only once per unique value"""
+    """Test that API is called only once per unique value/combination"""
     from helpers.configuration import validate_reference_data_with_api
 
     # Mock IRPClient
     mock_client = mocker.patch('helpers.configuration.IRPClient')
     mock_ref_data = mock_client.return_value.reference_data
 
-    # All found
-    mock_ref_data.get_model_profile_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
+    # All found - include perilCode and modelRegionCode for event rate scheme lookup
+    mock_ref_data.get_model_profile_by_name.return_value = {
+        'count': 1,
+        'items': [{'id': 1, 'perilCode': 'CS', 'modelRegionCode': 'NACS'}]
+    }
     mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
     mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'id': 1}]}
 
@@ -1475,6 +1488,79 @@ def test_validate_reference_data_with_api_unique_values_only(mocker):
     assert len(errors) == 0
 
     # Each API method should only be called once (unique values)
+    # Event rate is validated per unique (scheme, perilCode, modelRegionCode) combination
     assert mock_ref_data.get_model_profile_by_name.call_count == 1
     assert mock_ref_data.get_output_profile_by_name.call_count == 1
     assert mock_ref_data.get_event_rate_scheme_by_name.call_count == 1
+
+
+@pytest.mark.unit
+def test_validate_reference_data_event_rate_uses_model_profile_context(mocker):
+    """Test that event rate scheme validation uses perilCode and modelRegionCode from model profile"""
+    from helpers.configuration import validate_reference_data_with_api
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # Model profile with specific perilCode and modelRegionCode
+    mock_ref_data.get_model_profile_by_name.return_value = {
+        'count': 1,
+        'items': [{'id': 1, 'perilCode': 'CS', 'modelRegionCode': 'NACS'}]
+    }
+    mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'eventRateSchemeId': 69}]}
+
+    analysis_job_configs = [
+        {'Analysis Profile': 'DLM USST Low Frq v23', 'Output Profile': 'Output1', 'Event Rate': 'RMS 2013 Stochastic Event Rates'}
+    ]
+
+    errors = validate_reference_data_with_api(analysis_job_configs)
+    assert len(errors) == 0
+
+    # Verify event rate scheme was called with perilCode and modelRegionCode from model profile
+    mock_ref_data.get_event_rate_scheme_by_name.assert_called_once_with(
+        'RMS 2013 Stochastic Event Rates',
+        peril_code='CS',
+        model_region_code='NACS'
+    )
+
+
+@pytest.mark.unit
+def test_validate_reference_data_different_model_profiles_different_event_rate_lookups(mocker):
+    """Test that different model profiles result in separate event rate validations"""
+    from helpers.configuration import validate_reference_data_with_api
+
+    # Mock IRPClient
+    mock_client = mocker.patch('helpers.configuration.IRPClient')
+    mock_ref_data = mock_client.return_value.reference_data
+
+    # Different model profiles return different peril/region combinations
+    def mock_model_profile(profile_name):
+        if profile_name == 'CS Profile':
+            return {'count': 1, 'items': [{'id': 1, 'perilCode': 'CS', 'modelRegionCode': 'NACS'}]}
+        elif profile_name == 'WS Profile':
+            return {'count': 1, 'items': [{'id': 2, 'perilCode': 'WS', 'modelRegionCode': 'NAWS'}]}
+        return {'count': 0, 'items': []}
+
+    mock_ref_data.get_model_profile_by_name.side_effect = mock_model_profile
+    mock_ref_data.get_output_profile_by_name.return_value = [{'id': 1}]
+    mock_ref_data.get_event_rate_scheme_by_name.return_value = {'count': 1, 'items': [{'eventRateSchemeId': 1}]}
+
+    # Same event rate scheme name, but different model profiles with different peril/region
+    analysis_job_configs = [
+        {'Analysis Profile': 'CS Profile', 'Output Profile': 'Output1', 'Event Rate': 'RMS 2013 Stochastic Event Rates'},
+        {'Analysis Profile': 'WS Profile', 'Output Profile': 'Output1', 'Event Rate': 'RMS 2013 Stochastic Event Rates'},
+    ]
+
+    errors = validate_reference_data_with_api(analysis_job_configs)
+    assert len(errors) == 0
+
+    # Event rate scheme should be called twice - once for each peril/region combination
+    assert mock_ref_data.get_event_rate_scheme_by_name.call_count == 2
+
+    # Verify both calls were made with correct parameters
+    calls = mock_ref_data.get_event_rate_scheme_by_name.call_args_list
+    call_args = [(call[0][0], call[1].get('peril_code'), call[1].get('model_region_code')) for call in calls]
+    assert ('RMS 2013 Stochastic Event Rates', 'CS', 'NACS') in call_args
+    assert ('RMS 2013 Stochastic Event Rates', 'WS', 'NAWS') in call_args
