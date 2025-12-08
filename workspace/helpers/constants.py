@@ -143,6 +143,11 @@ class JobStatus:
         """Terminal statuses - job has finished processing (success or failure)"""
         return [cls.FINISHED, cls.FAILED, cls.CANCELLED, cls.ERROR]
 
+    @classmethod
+    def failed(cls):
+        """Failed terminal statuses - job ended unsuccessfully"""
+        return [cls.FAILED, cls.CANCELLED, cls.ERROR]
+
     def __str__(self):
         return self.value
 

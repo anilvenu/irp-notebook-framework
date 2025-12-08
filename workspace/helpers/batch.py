@@ -1260,7 +1260,7 @@ def reconcile_analysis_batch(
     jobs_fresh = []
     jobs_blocked = []
 
-    failed_statuses = [JobStatus.FAILED, JobStatus.ERROR, JobStatus.CANCELLED]
+    failed_statuses = JobStatus.failed()
 
     for job in jobs:
         job_config_data = config_lookup.get(job['job_configuration_id'], {})

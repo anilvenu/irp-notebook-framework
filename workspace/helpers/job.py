@@ -1921,3 +1921,56 @@ def resubmit_jobs(
         'success_count': len(successful),
         'failure_count': len(failed)
     }
+
+
+def delete_analyses_for_jobs(
+    jobs_to_delete: List[Dict[str, Any]],
+    existing_analyses: List[Dict[str, Any]],
+    irp_client: IRPClient
+) -> List[str]:
+    """
+    Delete analyses in Moody's for jobs that have existing analyses.
+
+    This is used during resubmission workflows when analyses need to be
+    deleted before jobs can be resubmitted.
+
+    Args:
+        jobs_to_delete: List of job dicts with 'analysis_name' and 'edm_name' keys
+        existing_analyses: List of analysis dicts from reconcile_analysis_batch(),
+                          each with 'job_config' and 'analysis' keys
+        irp_client: IRPClient instance for Moody's API calls
+
+    Returns:
+        List of error messages for any deletions that failed.
+        Empty list if all deletions succeeded.
+
+    Example:
+        >>> errors = delete_analyses_for_jobs(
+        ...     jobs_to_delete=[{'analysis_name': 'Test', 'edm_name': 'EDM1'}],
+        ...     existing_analyses=recon['existing_analyses'],
+        ...     irp_client=client
+        ... )
+        >>> if errors:
+        ...     print(f"{len(errors)} deletion(s) failed")
+    """
+    errors = []
+
+    for job in jobs_to_delete:
+        # Find the matching analysis from existing_analyses
+        matching_analysis = None
+        for item in existing_analyses:
+            if (item['job_config'].get('Analysis Name') == job['analysis_name'] and
+                item['job_config'].get('Database') == job['edm_name']):
+                matching_analysis = item
+                break
+
+        if matching_analysis:
+            analysis_id = matching_analysis['analysis']['analysisId']
+            analysis_name = job['analysis_name']
+            try:
+                irp_client.analysis.delete_analysis(analysis_id)
+            except Exception as e:
+                error_msg = f"{analysis_name} (ID: {analysis_id}): {e}"
+                errors.append(error_msg)
+
+    return errors
