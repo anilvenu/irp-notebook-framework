@@ -1215,6 +1215,87 @@ def test_reconcile_analysis_batch_blocked_jobs(test_schema):
     assert len(result['jobs_pending']) == 0
 
 
+@pytest.mark.database
+@pytest.mark.integration
+def test_reconcile_analysis_batch_missing_analysis(test_schema):
+    """Test reconcile_analysis_batch with jobs_missing_analysis (FINISHED but no analysis in Moody's)."""
+    from helpers.batch import reconcile_analysis_batch
+    from helpers.constants import BatchType
+    from helpers.job import create_job_with_config
+    from helpers.database import execute_command
+    from unittest.mock import MagicMock
+
+    # Create hierarchy
+    cycle_id = execute_insert(
+        "INSERT INTO irp_cycle (cycle_name, status) VALUES (%s, %s)",
+        ('test_reconcile_missing', 'ACTIVE'),
+        schema=test_schema
+    )
+    stage_id = execute_insert(
+        "INSERT INTO irp_stage (cycle_id, stage_num, stage_name) VALUES (%s, %s, %s)",
+        (cycle_id, 1, 'test_stage'),
+        schema=test_schema
+    )
+    step_id = execute_insert(
+        "INSERT INTO irp_step (stage_id, step_num, step_name) VALUES (%s, %s, %s)",
+        (stage_id, 1, 'test_step'),
+        schema=test_schema
+    )
+    config_id = execute_insert(
+        """INSERT INTO irp_configuration
+           (cycle_id, configuration_file_name, configuration_data, status, file_last_updated_ts)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (cycle_id, '/test/config.xlsx', json.dumps({}), ConfigurationStatus.VALID, datetime.now()),
+        schema=test_schema
+    )
+    batch_id = execute_insert(
+        "INSERT INTO irp_batch (step_id, configuration_id, batch_type, status) VALUES (%s, %s, %s, %s)",
+        (step_id, config_id, BatchType.ANALYSIS, BatchStatus.INITIATED),
+        schema=test_schema
+    )
+
+    # Create 2 jobs - both FINISHED with workflow IDs, but only one has analysis in Moody's
+    job_config_1 = {'Database': 'TestEDM', 'Analysis Name': 'Analysis_1'}  # FINISHED with analysis
+    job_config_2 = {'Database': 'TestEDM', 'Analysis Name': 'Analysis_2'}  # FINISHED but no analysis (deleted?)
+    job1_id = create_job_with_config(batch_id, config_id, job_configuration_data=job_config_1, schema=test_schema)
+    job2_id = create_job_with_config(batch_id, config_id, job_configuration_data=job_config_2, schema=test_schema)
+
+    # Set both jobs to FINISHED with workflow IDs
+    execute_command(
+        "UPDATE irp_job SET moodys_workflow_id = %s, status = %s WHERE id = %s",
+        ('workflow-1', JobStatus.FINISHED, job1_id),
+        schema=test_schema
+    )
+    execute_command(
+        "UPDATE irp_job SET moodys_workflow_id = %s, status = %s WHERE id = %s",
+        ('workflow-2', JobStatus.FINISHED, job2_id),
+        schema=test_schema
+    )
+
+    # Mock IRP client - only Analysis_1 exists (Analysis_2 was deleted or never created)
+    mock_client = MagicMock()
+    mock_client.analysis.find_existing_analyses_from_job_configs.return_value = [
+        {'job_config': job_config_1, 'analysis': {'analysisId': 'A001'}},
+    ]
+
+    result = reconcile_analysis_batch(batch_id, mock_client, schema=test_schema)
+
+    assert result['total_jobs'] == 2
+    assert result['analyses_in_moodys'] == 1
+    # Job 1 is FINISHED with analysis - successful
+    assert len(result['jobs_successful']) == 1
+    assert result['jobs_successful'][0]['job_id'] == job1_id
+    # Job 2 is FINISHED but no analysis - missing_analysis
+    assert len(result['jobs_missing_analysis']) == 1
+    assert result['jobs_missing_analysis'][0]['job_id'] == job2_id
+    assert result['jobs_missing_analysis'][0]['has_analysis'] == False
+    # No other categories
+    assert len(result['jobs_failed']) == 0
+    assert len(result['jobs_fresh']) == 0
+    assert len(result['jobs_pending']) == 0
+    assert len(result['jobs_blocked']) == 0
+
+
 # ============================================================================
 # Tests - Submit Batch Reference Data Validation
 # ============================================================================
