@@ -515,6 +515,10 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     Analysis names come from the Analysis Table sheet.
     Group names come from the Groupings sheet.
 
+    Each job config includes:
+    - analysis_edm_map: Mapping of analysis names to EDM names (for API lookup)
+    - group_names_set: List of all group names (to distinguish groups from analyses)
+
     Args:
         config: Configuration dictionary
 
@@ -545,6 +549,10 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     rdm_name = metadata.get('Export RDM Name')
     server_name = 'databridge-1'
 
+    # Build lookup maps for API calls
+    analysis_edm_map = _build_analysis_edm_map(config)
+    group_names_set = list(_get_group_names(config))  # Convert to list for JSON serialization
+
     # If within limit, create single job (no seed needed)
     if len(all_export_names) <= CHUNK_SIZE:
         return [{
@@ -555,7 +563,9 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
             'analysis_count': len(analysis_names),
             'group_count': len(group_names),
             'is_seed_job': False,
-            'database_id': None
+            'database_id': None,
+            'analysis_edm_map': analysis_edm_map,
+            'group_names_set': group_names_set
         }]
 
     # Chunking needed: seed job (1 analysis) + remaining chunks
@@ -570,7 +580,9 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
         'analysis_count': 1 if analysis_names else 0,
         'group_count': 1 if not analysis_names and group_names else 0,
         'is_seed_job': True,
-        'database_id': None
+        'database_id': None,
+        'analysis_edm_map': analysis_edm_map,
+        'group_names_set': group_names_set
     })
 
     # Remaining items in chunks of up to 100
@@ -586,7 +598,9 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
             'analysis_count': len([n for n in chunk if n in analysis_names]),
             'group_count': len([n for n in chunk if n in group_names]),
             'is_seed_job': False,
-            'database_id': None  # Will be populated after seed job completes
+            'database_id': None,  # Will be populated after seed job completes
+            'analysis_edm_map': analysis_edm_map,
+            'group_names_set': group_names_set
         })
 
     return job_configs

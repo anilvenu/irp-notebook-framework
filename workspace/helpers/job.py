@@ -997,6 +997,8 @@ def _submit_export_to_rdm_job(
             - rdm_name: Target RDM database name
             - server_name: Database server name (e.g., 'databridge-1')
             - analysis_names: List of analysis and group names to export
+            - analysis_edm_map: Mapping of analysis names to EDM names (for lookup)
+            - group_names_set: List of known group names (to distinguish from analyses)
         client: IRPClient instance
 
     Returns:
@@ -1012,6 +1014,11 @@ def _submit_export_to_rdm_job(
     analysis_names = job_config.get('analysis_names', [])
     database_id = job_config.get('database_id')  # May be None for seed job
 
+    # Extract optional lookup fields for proper analysis/group resolution
+    analysis_edm_map = job_config.get('analysis_edm_map', {})
+    group_names_list = job_config.get('group_names_set', [])
+    group_names_set = set(group_names_list) if group_names_list else set()
+
     # Validate required fields
     if not rdm_name:
         raise ValueError("Missing required field: rdm_name")
@@ -1026,7 +1033,9 @@ def _submit_export_to_rdm_job(
             server_name=server_name,
             rdm_name=rdm_name,
             analysis_names=analysis_names,
-            database_id=database_id
+            database_id=database_id,
+            analysis_edm_map=analysis_edm_map,
+            group_names=group_names_set
         )
     except Exception as e:
         raise JobError(f"Failed to submit RDM export job: {str(e)}")
@@ -1042,7 +1051,9 @@ def _submit_export_to_rdm_job(
         'api_request': {
             'rdm_name': rdm_name,
             'server_name': server_name,
-            'analysis_count': len(analysis_names)
+            'analysis_count': len(analysis_names),
+            'analysis_edm_map': analysis_edm_map,
+            'group_names_set': group_names_list
         },
         'submitted_at': datetime.now().isoformat()
     }

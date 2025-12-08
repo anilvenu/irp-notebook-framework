@@ -80,7 +80,9 @@ class RDMManager:
             server_name: str,
             rdm_name: str,
             analysis_names: List[str],
-            database_id: Optional[int] = None
+            database_id: Optional[int] = None,
+            analysis_edm_map: Optional[Dict[str, str]] = None,
+            group_names: Optional[set] = None
     ) -> int:
         """
         Submit RDM export job.
@@ -91,7 +93,14 @@ class RDMManager:
         Args:
             server_name: Database server name
             rdm_name: Name for the RDM
-            analysis_names: List of analysis names to export
+            analysis_names: List of analysis and group names to export
+            database_id: Optional database ID (for appending to existing RDM)
+            analysis_edm_map: Optional mapping of analysis names to EDM names.
+                Used to look up analyses by name + EDM (since analysis names are only
+                unique within an EDM). If not provided, lookups use name only.
+            group_names: Optional set of known group names. Items in this set are
+                looked up as groups (by name only), all others are looked up as
+                analyses (by name + EDM if mapping provided).
 
         Returns:
             Job ID
@@ -104,6 +113,12 @@ class RDMManager:
         validate_non_empty_string(rdm_name, "rdm_name")
         validate_list_not_empty(analysis_names, "analysis_names")
 
+        # Initialize defaults
+        if analysis_edm_map is None:
+            analysis_edm_map = {}
+        if group_names is None:
+            group_names = set()
+
         # Look up server ID
         database_servers = self.edm_manager.search_database_servers(filter=f"serverName=\"{server_name}\"")
         try:
@@ -113,19 +128,40 @@ class RDMManager:
                 f"Failed to extract server ID for server '{server_name}': {e}"
             ) from e
 
-        # Resolve analysis names to URIs
+        # Resolve analysis/group names to URIs
         resource_uris = []
         for name in analysis_names:
-            analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
-            if len(analysis_response) == 0:
-                raise IRPAPIError(f"Analysis with this name does not exist: {name}")
-            if len(analysis_response) > 1:
-                raise IRPAPIError(f"Duplicate analyses exist with name: {name}")
+            # Determine if this is a group name or an analysis name
+            if name in group_names:
+                # Group names are globally unique - search by name only
+                analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
+                if len(analysis_response) == 0:
+                    raise IRPAPIError(f"Group with this name does not exist: {name}")
+                if len(analysis_response) > 1:
+                    raise IRPAPIError(f"Duplicate groups exist with name: {name}")
+            else:
+                # Analysis names - search by name + EDM if mapping provided
+                edm_name = analysis_edm_map.get(name)
+                if edm_name:
+                    filter_str = f"analysisName = \"{name}\" AND exposureName = \"{edm_name}\""
+                    analysis_response = self.analysis_manager.search_analyses(filter=filter_str)
+                    if len(analysis_response) == 0:
+                        raise IRPAPIError(f"Analysis '{name}' not found for EDM '{edm_name}'")
+                    if len(analysis_response) > 1:
+                        raise IRPAPIError(f"Multiple analyses found with name '{name}' for EDM '{edm_name}'")
+                else:
+                    # Fallback to name-only search (legacy behavior)
+                    analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
+                    if len(analysis_response) == 0:
+                        raise IRPAPIError(f"Analysis with this name does not exist: {name}")
+                    if len(analysis_response) > 1:
+                        raise IRPAPIError(f"Duplicate analyses exist with name: {name}.")
+
             try:
                 resource_uris.append(analysis_response[0]['uri'])
             except (KeyError, IndexError, TypeError) as e:
                 raise IRPAPIError(
-                    f"Failed to extract analysis URI for analysis '{name}': {e}"
+                    f"Failed to extract URI for '{name}': {e}"
                 ) from e
 
         # Build settings - use databaseId if provided (appending to existing RDM),
