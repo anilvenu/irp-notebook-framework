@@ -916,8 +916,8 @@ def test_transform_export_to_rdm():
     config = {
         'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'TestRDM'},
         'Analysis Table': [
-            {'Analysis Name': 'A1'},
-            {'Analysis Name': 'A2'}
+            {'Analysis Name': 'A1', 'Database': 'EDM1'},
+            {'Analysis Name': 'A2', 'Database': 'EDM2'}
         ],
         'Groupings': [
             {'Group_Name': 'G1'},
@@ -938,23 +938,31 @@ def test_transform_export_to_rdm():
     assert result[0]['is_seed_job'] is False
     assert result[0]['database_id'] is None
 
+    # Verify analysis_edm_map is included
+    assert 'analysis_edm_map' in result[0], "Should include analysis_edm_map"
+    assert result[0]['analysis_edm_map'] == {'A1': 'EDM1', 'A2': 'EDM2'}
+
+    # Verify group_names_set is included (as list for JSON serialization)
+    assert 'group_names_set' in result[0], "Should include group_names_set"
+    assert set(result[0]['group_names_set']) == {'G1', 'G2'}
+
 
 @pytest.mark.unit
 def test_transform_export_to_rdm_chunking():
     """Test Export to RDM transformer - chunking when >100 items"""
-    # Create config with 150 analyses (requires seed job + 2 chunks)
-    # seed (1) + remaining 149 split into [100, 49] = 3 jobs total
-    analysis_names = [{'Analysis Name': f'Analysis_{i}'} for i in range(150)]
+    # Create config with 150 analyses + 1 group = 151 total items (requires seed job + 2 chunks)
+    # seed (1) + remaining 150 split into [100, 50] = 3 jobs total
+    analysis_names = [{'Analysis Name': f'Analysis_{i}', 'Database': f'EDM_{i % 3}'} for i in range(150)]
     config = {
         'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'LargeRDM'},
         'Analysis Table': analysis_names,
-        'Groupings': []
+        'Groupings': [{'Group_Name': 'TestGroup'}]
     }
 
     result = create_job_configurations('Export to RDM', config)
 
-    # Should create seed job (1 analysis) + 2 chunks (100 + 49)
-    assert len(result) == 3, "Should create seed + 2 chunks for 150 items"
+    # Should create seed job (1 item) + 2 chunks (100 + 50)
+    assert len(result) == 3, "Should create seed + 2 chunks for 151 items"
 
     # First job is seed job with 1 analysis
     assert result[0]['is_seed_job'] is True
@@ -968,10 +976,18 @@ def test_transform_export_to_rdm_chunking():
     assert result[1]['analysis_names'][0] == 'Analysis_1'
     assert result[1]['database_id'] is None
 
-    # Third job has remaining 49
+    # Third job has remaining 50 (49 analyses + 1 group)
     assert result[2]['is_seed_job'] is False
-    assert len(result[2]['analysis_names']) == 49
+    assert len(result[2]['analysis_names']) == 50
     assert result[2]['analysis_names'][0] == 'Analysis_101'
+    assert 'TestGroup' in result[2]['analysis_names']  # Group should be in last chunk
+
+    # Verify analysis_edm_map and group_names_set are included in ALL chunks
+    for i, job in enumerate(result):
+        assert 'analysis_edm_map' in job, f"Job {i} should include analysis_edm_map"
+        assert 'group_names_set' in job, f"Job {i} should include group_names_set"
+        assert len(job['analysis_edm_map']) == 150, f"Job {i} should have full EDM map"
+        assert job['group_names_set'] == ['TestGroup'], f"Job {i} should have group names"
 
 
 @pytest.mark.unit
