@@ -161,7 +161,11 @@ class AnalysisManager:
         treaty_names: List[str],
         tag_names: List[str],
         currency: Dict[str, str] = None,
-        skip_duplicate_check: bool = False
+        skip_duplicate_check: bool = False,
+        franchise_deductible: bool = False,
+        min_loss_threshold: int = 0,
+        treat_construction_occupancy_as_unknown: bool = True,
+        num_max_loss_event: int = 1
     ) -> int:
         """
         Submit portfolio analysis job (submits but doesn't wait).
@@ -177,6 +181,10 @@ class AnalysisManager:
             tag_names: List of tag names to apply
             currency: Optional currency configuration
             skip_duplicate_check: Skip checking if analysis name already exists (for batch operations)
+            franchise_deductible: Whether to apply franchise deductible (default: False)
+            min_loss_threshold: Minimum loss threshold value (default: 0)
+            treat_construction_occupancy_as_unknown: Treat construction/occupancy as unknown (default: True)
+            num_max_loss_event: Number of max loss events to include (default: 1)
 
         Returns:
             Workflow ID (Moody's job ID)
@@ -313,7 +321,11 @@ class AnalysisManager:
             "outputProfileId": output_profile_id,
             "treatyIds": treaty_ids,
             "tagIds": tag_ids,
-            "currency": currency
+            "currency": currency,
+            "franchiseDeductible": franchise_deductible,
+            "minLossThreshold": min_loss_threshold,
+            "treatConstructionOccupancyAsUnknown": treat_construction_occupancy_as_unknown,
+            "numMaxLossEvent": num_max_loss_event
         }
 
         # Only include eventRateSchemeId for DLM analyses
