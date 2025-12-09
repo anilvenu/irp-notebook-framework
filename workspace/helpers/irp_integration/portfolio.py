@@ -35,20 +35,22 @@ class PortfolioManager:
         return self._edm_manager
 
     
-    def search_portfolios(self, exposure_id: int, filter: str = "") -> List[Dict[str, Any]]:
+    def search_portfolios(self, exposure_id: int, filter: str = "", limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Search portfolios within an exposure.
 
         Args:
             exposure_id: Exposure ID
             filter: Optional filter string for portfolio names
+            limit: Maximum results per page (default: 100)
+            offset: Offset for pagination (default: 0)
 
         Returns:
-            Dict containing list of portfolios
+            List of portfolio dictionaries
         """
         validate_positive_int(exposure_id, "exposure_id")
 
-        params = {}
+        params = {'limit': limit, 'offset': offset}
         if filter:
             params['filter'] = filter
 
@@ -61,6 +63,36 @@ class PortfolioManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to search portfolios for exposure ID '{exposure_id}': {e}")
+
+    def search_portfolios_paginated(self, exposure_id: int, filter: str = "") -> List[Dict[str, Any]]:
+        """
+        Search all portfolios within an exposure with automatic pagination.
+
+        Fetches all pages of results matching the filter criteria.
+
+        Args:
+            exposure_id: Exposure ID
+            filter: Optional filter string for portfolio names
+
+        Returns:
+            Complete list of all matching portfolios across all pages
+        """
+        validate_positive_int(exposure_id, "exposure_id")
+
+        all_results = []
+        offset = 0
+        limit = 100
+
+        while True:
+            results = self.search_portfolios(exposure_id=exposure_id, filter=filter, limit=limit, offset=offset)
+            all_results.extend(results)
+
+            # If we got fewer results than the limit, we've reached the end
+            if len(results) < limit:
+                break
+            offset += limit
+
+        return all_results
 
 
     def search_accounts_by_portfolio(self, exposure_id: int, portfolio_id: int) -> List[Dict[str, Any]]:

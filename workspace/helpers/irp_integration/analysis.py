@@ -817,12 +817,14 @@ class AnalysisManager:
             time.sleep(interval)
 
 
-    def search_analyses(self, filter: str = "") -> List[Dict[str, Any]]:
+    def search_analyses(self, filter: str = "", limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Search analysis results with optional filtering.
 
         Args:
             filter: Optional filter string (default: "")
+            limit: Maximum results per page (default: 100)
+            offset: Offset for pagination (default: 0)
 
         Returns:
             List of analysis result dicts
@@ -830,7 +832,7 @@ class AnalysisManager:
         Raises:
             IRPAPIError: If search fails
         """
-        params = {}
+        params: Dict[str, Any] = {'limit': limit, 'offset': offset}
         if filter:
             params['filter'] = filter
 
@@ -839,6 +841,36 @@ class AnalysisManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to search analysis results : {e}")
+
+    def search_analyses_paginated(self, filter: str = "") -> List[Dict[str, Any]]:
+        """
+        Search all analysis results with automatic pagination.
+
+        Fetches all pages of results matching the filter criteria.
+
+        Args:
+            filter: Optional filter string (default: "")
+
+        Returns:
+            Complete list of all matching analysis results across all pages
+
+        Raises:
+            IRPAPIError: If search fails
+        """
+        all_results = []
+        offset = 0
+        limit = 100
+
+        while True:
+            results = self.search_analyses(filter=filter, limit=limit, offset=offset)
+            all_results.extend(results)
+
+            # If we got fewer results than the limit, we've reached the end
+            if len(results) < limit:
+                break
+            offset += limit
+
+        return all_results
 
     def get_analysis_by_name(self, analysis_name: str, edm_name: str) -> Dict[str, Any]:
         """
