@@ -53,23 +53,25 @@ class TreatyManager:
         return self._reference_data_manager
 
 
-    def search_treaties(self, exposure_id: int, filter: str = '') -> List[Dict[str, Any]]:
+    def search_treaties(self, exposure_id: int, filter: str = '', limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Search treaties for a given exposure ID.
 
         Args:
             exposure_id: Exposure ID
             filter: Optional filter string
+            limit: Maximum results per page (default: 100)
+            offset: Offset for pagination (default: 0)
 
         Returns:
-            Dict with treaty search results
+            List of treaty dictionaries
 
         Raises:
             IRPValidationError: If parameters are invalid
             IRPAPIError: If API request fails
         """
         validate_positive_int(exposure_id, "exposure_id")
-        params = {}
+        params = {'limit': limit, 'offset': offset}
         if filter:
             params['filter'] = filter
         try:
@@ -77,6 +79,40 @@ class TreatyManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to search treaties: {e}")
+
+    def search_treaties_paginated(self, exposure_id: int, filter: str = '') -> List[Dict[str, Any]]:
+        """
+        Search all treaties for a given exposure ID with automatic pagination.
+
+        Fetches all pages of results matching the filter criteria.
+
+        Args:
+            exposure_id: Exposure ID
+            filter: Optional filter string
+
+        Returns:
+            Complete list of all matching treaties across all pages
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If API request fails
+        """
+        validate_positive_int(exposure_id, "exposure_id")
+
+        all_results = []
+        offset = 0
+        limit = 100
+
+        while True:
+            results = self.search_treaties(exposure_id=exposure_id, filter=filter, limit=limit, offset=offset)
+            all_results.extend(results)
+
+            # If we got fewer results than the limit, we've reached the end
+            if len(results) < limit:
+                break
+            offset += limit
+
+        return all_results
 
 
     def create_treaties(self, treaty_data_list: List[Dict[str, Any]]) -> List[int]:

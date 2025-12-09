@@ -331,13 +331,15 @@ class RDMManager:
         except (KeyError, IndexError) as e:
             raise IRPAPIError(f"Failed to extract databaseName for RDM '{rdm_name}': {e}")
 
-    def search_databases(self, server_name: str, filter: str = "") -> List[Dict[str, Any]]:
+    def search_databases(self, server_name: str, filter: str = "", limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Search databases on a server.
 
         Args:
             server_name: Name of the database server
             filter: Optional filter string (e.g., 'databaseName="MyRDM"')
+            limit: Maximum results per page (default: 100)
+            offset: Offset for pagination (default: 0)
 
         Returns:
             List of database records
@@ -355,7 +357,7 @@ class RDMManager:
         except (KeyError, IndexError) as e:
             raise IRPAPIError(f"Failed to extract server ID: {e}")
 
-        params = {}
+        params: Dict[str, Any] = {'limit': limit, 'offset': offset}
         if filter:
             params['filter'] = filter
 
@@ -368,3 +370,34 @@ class RDMManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to search databases: {e}")
+
+    def search_databases_paginated(self, server_name: str, filter: str = "") -> List[Dict[str, Any]]:
+        """
+        Search all databases on a server with automatic pagination.
+
+        Fetches all pages of results matching the filter criteria.
+
+        Args:
+            server_name: Name of the database server
+            filter: Optional filter string (e.g., 'databaseName="MyRDM"')
+
+        Returns:
+            Complete list of all matching database records across all pages
+
+        Raises:
+            IRPAPIError: If request fails
+        """
+        all_results = []
+        offset = 0
+        limit = 100
+
+        while True:
+            results = self.search_databases(server_name=server_name, filter=filter, limit=limit, offset=offset)
+            all_results.extend(results)
+
+            # If we got fewer results than the limit, we've reached the end
+            if len(results) < limit:
+                break
+            offset += limit
+
+        return all_results

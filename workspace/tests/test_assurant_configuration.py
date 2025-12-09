@@ -697,6 +697,8 @@ def test_validate_configuration_file_success(mocker):
     """Test validate_configuration_file() with valid Excel configuration"""
     # Mock API validation to avoid real API calls
     mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+    mock_validator = mocker.patch('helpers.configuration.EntityValidator')
+    mock_validator.return_value.validate_config_entities_not_exist.return_value = []
 
     result = validate_configuration_file(excel_config_path=VALID_EXCEL_PATH)
 
@@ -743,6 +745,8 @@ def test_load_assurant_config_success(test_schema, mocker):
     """Test loading the actual Assurant Excel configuration file"""
     # Mock API validation to avoid real API calls
     mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+    mock_validator = mocker.patch('helpers.configuration.EntityValidator')
+    mock_validator.return_value.validate_config_entities_not_exist.return_value = []
 
     cycle_id = create_test_cycle(test_schema, 'test-assurant-load')
 
@@ -791,6 +795,8 @@ def test_load_assurant_config_data_structure(test_schema, mocker):
     """Test that loaded configuration has correct data structure"""
     # Mock API validation to avoid real API calls
     mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+    mock_validator = mocker.patch('helpers.configuration.EntityValidator')
+    mock_validator.return_value.validate_config_entities_not_exist.return_value = []
 
     cycle_id = create_test_cycle(test_schema, 'test-assurant-structure')
 
@@ -866,6 +872,8 @@ def test_load_config_replace_when_no_batches(test_schema, mocker):
     """Test that configuration can be replaced when no batches exist"""
     # Mock API validation to avoid real API calls
     mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+    mock_validator = mocker.patch('helpers.configuration.EntityValidator')
+    mock_validator.return_value.validate_config_entities_not_exist.return_value = []
 
     from helpers.database import execute_query
     cycle_id = create_test_cycle(test_schema, 'test-replace-no-batches')
@@ -905,6 +913,8 @@ def test_load_config_fails_when_batches_exist(test_schema, mocker):
     """Test that configuration cannot be replaced when batches exist"""
     # Mock API validation to avoid real API calls
     mocker.patch('helpers.configuration.validate_reference_data_with_api', return_value=[])
+    mock_validator = mocker.patch('helpers.configuration.EntityValidator')
+    mock_validator.return_value.validate_config_entities_not_exist.return_value = []
 
     from helpers.database import execute_insert
     cycle_id = create_test_cycle(test_schema, 'test-batches-exist')

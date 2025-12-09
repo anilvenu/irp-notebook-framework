@@ -658,6 +658,15 @@ VALIDATION_ERROR_CODES = {
     'API-REF-003': 'Event Rate Scheme "{value}" not found in Moody\'s system',
     'API-REF-004': 'Failed to validate reference data against Moody\'s API: {error}',
 
+    # Entity Existence Validation errors (entities already exist in Moody's)
+    'ENT-EDM-001': 'EDMs already exist: {names}',
+    'ENT-PORT-001': 'Portfolios already exist: {names}',
+    'ENT-TREATY-001': 'Treaties already exist: {names}',
+    'ENT-ANALYSIS-001': 'Analyses already exist: {names}',
+    'ENT-GROUP-001': 'Groups already exist: {names}',
+    'ENT-RDM-001': 'RDM already exists: {name}',
+    'ENT-API-001': 'Entity validation API error: {error}',
+
     # Business rule errors
     'BUS-001': 'Database "{database}" has no Base Portfolio (at least one required)',
     'BUS-002': 'Expiration Date must be after Inception Date for treaty {treaty_name}',

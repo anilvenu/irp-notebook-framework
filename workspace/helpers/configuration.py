@@ -31,6 +31,7 @@ from helpers.constants import (
 )
 from helpers.irp_integration import IRPClient
 from helpers.irp_integration.exceptions import IRPAPIError
+from helpers.entity_validator import EntityValidator
 
 
 class ConfigurationError(Exception):
@@ -1655,8 +1656,15 @@ def _validate_excel_file(excel_config_path: str):
             cross_errors.extend(_validate_groupings_references(config_data))
             cross_errors.extend(_validate_business_rules(config_data))
 
-            # Validate reference data against Moody's API
+            # Validate entities don't already exist in Moody's
             # Only run if no cross-sheet errors (avoid unnecessary API calls)
+            if not cross_errors:
+                validator = EntityValidator()
+                entity_errors = validator.validate_config_entities_not_exist(config_data)
+                cross_errors.extend(entity_errors)
+
+            # Validate reference data against Moody's API
+            # Only run if no prior errors (avoid unnecessary API calls)
             if not cross_errors:
                 analysis_table = config_data.get('Analysis Table', [])
                 api_errors = validate_reference_data_with_api(analysis_table)

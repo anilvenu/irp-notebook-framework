@@ -184,17 +184,19 @@ class EDMManager:
             raise IRPAPIError(f"Failed to create exposure set '{name}': {e}")
 
 
-    def search_edms(self, filter: str = "") -> List[Dict[str, Any]]:
+    def search_edms(self, filter: str = "", limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Search EDMs (exposures).
 
         Args:
             filter: Optional filter string for EDM names
+            limit: Maximum results per page (default: 100)
+            offset: Offset for pagination (default: 0)
 
         Returns:
-            Dict containing list of EDMs
+            List of EDM dictionaries
         """
-        params = {}
+        params = {'limit': limit, 'offset': offset}
         if filter:
             params['filter'] = filter
         try:
@@ -202,6 +204,33 @@ class EDMManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to search EDMs: {e}")
+
+    def search_edms_paginated(self, filter: str = "") -> List[Dict[str, Any]]:
+        """
+        Search all EDMs with automatic pagination.
+
+        Fetches all pages of results matching the filter criteria.
+
+        Args:
+            filter: Optional filter string for EDM names
+
+        Returns:
+            Complete list of all matching EDMs across all pages
+        """
+        all_results = []
+        offset = 0
+        limit = 100
+
+        while True:
+            results = self.search_edms(filter=filter, limit=limit, offset=offset)
+            all_results.extend(results)
+
+            # If we got fewer results than the limit, we've reached the end
+            if len(results) < limit:
+                break
+            offset += limit
+
+        return all_results
         
 
     def submit_create_edm_job(self, edm_name: str, server_name: str = "databridge-1") -> int:
