@@ -4,7 +4,6 @@ RDM (Risk Data Model) export operations.
 Handles exporting analysis results to RDM via databridge.
 """
 
-import json
 import time
 from typing import Dict, List, Any, Optional
 
@@ -127,6 +126,20 @@ class RDMManager:
             raise IRPAPIError(
                 f"Failed to extract server ID for server '{server_name}': {e}"
             ) from e
+
+        # Check if RDM with same name already exists (only for new RDM creation, not appending)
+        if not database_id:
+            existing_rdms = self.search_databases(
+                server_name=server_name,
+                filter=f"databaseName LIKE \"{rdm_name}*\""
+            )
+            if existing_rdms:
+                existing_name = existing_rdms[0].get('databaseName', rdm_name)
+                raise IRPAPIError(
+                    f"RDM with name '{rdm_name}' already exists on server '{server_name}' "
+                    f"(found: '{existing_name}'). Please use a different RDM name or delete "
+                    f"the existing RDM first."
+                )
 
         # Resolve analysis/group names to URIs
         resource_uris = []
