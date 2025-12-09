@@ -319,6 +319,8 @@ class TestValidateConfigEntitiesNotExist:
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._edm_manager.search_edms_paginated.return_value = []
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.return_value = []
 
         config_data = {
             'Databases': [],
@@ -333,26 +335,30 @@ class TestValidateConfigEntitiesNotExist:
         assert errors == []
 
     def test_no_edms_exist_skips_downstream_checks(self):
-        """If no EDMs exist, should not check portfolios/treaties/etc."""
+        """If no EDMs exist, should not check portfolios/treaties/analyses but still check groups."""
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._edm_manager.search_edms_paginated.return_value = []
         validator._portfolio_manager = Mock()
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.return_value = []
 
         config_data = {
             'Databases': [{'Database': 'EDM1'}],
             'Portfolios': [{'Database': 'EDM1', 'Portfolio': 'Port1'}],
             'Reinsurance Treaties': [],
             'Analysis Table': [],
-            'Groupings': [],
+            'Groupings': [{'Group Name': 'Group1'}],
             'Metadata': {}
         }
 
         errors = validator.validate_config_entities_not_exist(config_data)
 
         assert errors == []
-        # Portfolio manager should not have been called
+        # Portfolio manager should not have been called (EDMs don't exist)
         validator._portfolio_manager.search_portfolios_paginated.assert_not_called()
+        # But groups should always be checked
+        validator._analysis_manager.search_analyses_paginated.assert_called_once()
 
     def test_edms_exist_triggers_portfolio_treaty_checks(self):
         """If EDMs exist, should check portfolios and treaties."""
@@ -365,6 +371,8 @@ class TestValidateConfigEntitiesNotExist:
         validator._portfolio_manager.search_portfolios_paginated.return_value = []
         validator._treaty_manager = Mock()
         validator._treaty_manager.search_treaties_paginated.return_value = []
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.return_value = []
 
         config_data = {
             'Databases': [{'Database': 'EDM1'}],

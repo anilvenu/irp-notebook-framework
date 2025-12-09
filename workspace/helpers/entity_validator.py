@@ -418,8 +418,7 @@ class EntityValidator:
            - Check Treaties don't exist (in those EDMs)
         3. If any Portfolios exist:
            - Check Analyses don't exist
-        4. If any Analyses exist:
-           - Check Groups don't exist
+        4. Always check Groups (they are global, not scoped to EDMs)
         5. If any Analyses or Groups exist:
            - Check RDM doesn't exist
 
@@ -470,15 +469,19 @@ class EntityValidator:
                     analyses, edm_exposure_ids
                 )
                 all_errors.extend(analysis_errors)
+            else:
+                existing_analyses = []
 
-                # Step 4: If analyses exist, check Groups
-                if existing_analyses:
-                    existing_groups, group_errors = self.validate_groups_not_exist(groupings)
-                    all_errors.extend(group_errors)
+        else:
+            existing_analyses = []
 
-                    # Step 5: If analyses or groups exist, check RDM
-                    if (existing_analyses or existing_groups) and rdm_name:
-                        rdm_errors = self.validate_rdm_not_exists(rdm_name)
-                        all_errors.extend(rdm_errors)
+        # Step 4: Always check Groups (they are global, not scoped to EDMs)
+        existing_groups, group_errors = self.validate_groups_not_exist(groupings)
+        all_errors.extend(group_errors)
+
+        # Step 5: If analyses or groups exist, check RDM
+        if (existing_analyses or existing_groups) and rdm_name:
+            rdm_errors = self.validate_rdm_not_exists(rdm_name)
+            all_errors.extend(rdm_errors)
 
         return all_errors
