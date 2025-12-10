@@ -666,6 +666,104 @@ class EntityValidator:
 
         return existing, errors
 
+    def validate_analyses_exist(
+        self,
+        analysis_names: List[str],
+        analysis_edm_map: Dict[str, str]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Check that analyses exist (for grouping validation).
+
+        Args:
+            analysis_names: List of analysis names to check
+            analysis_edm_map: Mapping of analysis names to EDM names
+
+        Returns:
+            Tuple of (missing_analysis_identifiers, error_messages)
+            Identifiers are in format "EDM_NAME/ANALYSIS_NAME"
+        """
+        if not analysis_names:
+            return [], []
+
+        errors = []
+        missing = []
+
+        # Group analyses by EDM for efficient lookup
+        by_edm: Dict[str, List[str]] = {}
+        for analysis_name in analysis_names:
+            edm_name = analysis_edm_map.get(analysis_name)
+            if edm_name:
+                by_edm.setdefault(edm_name, []).append(analysis_name)
+            else:
+                # No EDM mapping - can't look up
+                missing.append(f"?/{analysis_name} (no EDM mapping)")
+
+        for edm_name, names in by_edm.items():
+            try:
+                # Build filter for analyses in this EDM
+                quoted = ", ".join(f'"{name}"' for name in names)
+                filter_str = f'analysisName IN ({quoted}) AND exposureName = "{edm_name}"'
+
+                found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
+                found_names = {a.get('analysisName') for a in found}
+
+                for name in names:
+                    if name not in found_names:
+                        missing.append(f"{edm_name}/{name}")
+
+            except IRPAPIError as e:
+                errors.append(f"ENT-API-001: Failed to check analyses in {edm_name}: {e}")
+
+        if missing:
+            errors.insert(0,
+                f"ENT-ANALYSIS-002: The following analyses were not found:{_format_entity_list(missing)}"
+            )
+
+        return missing, errors
+
+    def validate_groups_exist(
+        self,
+        group_names: List[str]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Check that analysis groups exist (for rollup grouping validation).
+
+        Group names are globally unique (not scoped to an EDM).
+
+        Args:
+            group_names: List of group names to check
+
+        Returns:
+            Tuple of (missing_group_names, error_messages)
+        """
+        if not group_names:
+            return [], []
+
+        errors = []
+        missing = []
+
+        try:
+            # Build IN filter for all group names
+            quoted = ", ".join(f'"{name}"' for name in group_names)
+            filter_str = f"analysisName IN ({quoted})"
+
+            found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
+            found_names = {g.get('analysisName') for g in found}
+
+            for name in group_names:
+                if name not in found_names:
+                    missing.append(name)
+
+        except IRPAPIError as e:
+            errors.append(f"ENT-API-001: Failed to check group existence: {e}")
+
+        if missing:
+            errors.insert(0,
+                f"ENT-GROUP-002: The following groups were not found:{_format_entity_list(missing)}"
+            )
+
+        return missing, errors
+
     def validate_rdm_not_exists(
         self,
         rdm_name: str,
@@ -1135,6 +1233,138 @@ class EntityValidator:
                     sub_portfolios, edm_exposure_ids
                 )
                 all_errors.extend(sub_errors)
+
+        return all_errors
+
+    def validate_grouping_batch(
+        self,
+        groupings: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Validate Grouping batch submission (analysis-only groups).
+
+        Pre-requisites (must exist):
+        - All analyses referenced in items must exist
+
+        Entities to be created (must NOT exist):
+        - Group names must not already exist
+
+        Args:
+            groupings: List of grouping dicts with 'Group_Name', 'items',
+                      and 'analysis_edm_map' keys
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not groupings:
+            return []
+
+        all_errors = []
+
+        # Collect all analysis names and the edm map from job configs
+        all_analysis_names = []
+        analysis_edm_map = {}
+        group_names_to_create = []
+
+        for group in groupings:
+            group_name = group.get('Group_Name')
+            if group_name:
+                group_names_to_create.append({'Group Name': group_name})
+
+            items = group.get('items', [])
+            all_analysis_names.extend(items)
+
+            # Merge analysis_edm_map from each job config
+            edm_map = group.get('analysis_edm_map', {})
+            analysis_edm_map.update(edm_map)
+
+        # Pre-requisite: Analyses must exist
+        if all_analysis_names:
+            # Deduplicate
+            unique_analyses = list(set(all_analysis_names))
+            _, analysis_errors = self.validate_analyses_exist(
+                unique_analyses, analysis_edm_map
+            )
+            all_errors.extend(analysis_errors)
+
+        # Groups must NOT exist
+        if group_names_to_create:
+            _, group_errors = self.validate_groups_not_exist(group_names_to_create)
+            all_errors.extend(group_errors)
+
+        return all_errors
+
+    def validate_grouping_rollup_batch(
+        self,
+        groupings: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Validate Grouping Rollup batch submission.
+
+        Pre-requisites (must exist):
+        - Child groups referenced in items must exist
+        - Analyses referenced in items must exist
+
+        Entities to be created (must NOT exist):
+        - Rollup group names must not already exist
+
+        Args:
+            groupings: List of grouping dicts with 'Group_Name', 'items',
+                      'analysis_edm_map', and 'group_names' keys
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not groupings:
+            return []
+
+        all_errors = []
+
+        # Collect items, separating groups from analyses
+        all_child_groups = []
+        all_analysis_names = []
+        analysis_edm_map = {}
+        known_group_names = set()
+        group_names_to_create = []
+
+        for group in groupings:
+            group_name = group.get('Group_Name')
+            if group_name:
+                group_names_to_create.append({'Group Name': group_name})
+
+            items = group.get('items', [])
+            group_names_list = group.get('group_names', [])
+            known_group_names.update(group_names_list)
+
+            # Merge analysis_edm_map from each job config
+            edm_map = group.get('analysis_edm_map', {})
+            analysis_edm_map.update(edm_map)
+
+            # Separate items into groups vs analyses
+            for item in items:
+                if item in known_group_names:
+                    all_child_groups.append(item)
+                else:
+                    all_analysis_names.append(item)
+
+        # Pre-requisite 1: Child groups must exist
+        if all_child_groups:
+            unique_groups = list(set(all_child_groups))
+            _, group_exist_errors = self.validate_groups_exist(unique_groups)
+            all_errors.extend(group_exist_errors)
+
+        # Pre-requisite 2: Analyses must exist
+        if all_analysis_names:
+            unique_analyses = list(set(all_analysis_names))
+            _, analysis_errors = self.validate_analyses_exist(
+                unique_analyses, analysis_edm_map
+            )
+            all_errors.extend(analysis_errors)
+
+        # Rollup groups must NOT exist
+        if group_names_to_create:
+            _, group_errors = self.validate_groups_not_exist(group_names_to_create)
+            all_errors.extend(group_errors)
 
         return all_errors
 

@@ -2432,3 +2432,452 @@ class TestValidatePortfolioMappingBatch:
         # Portfolio manager should not have been called
         validator._portfolio_manager.search_portfolios_paginated.assert_not_called()
         validator._portfolio_manager.search_accounts_by_portfolio.assert_not_called()
+
+
+class TestValidateAnalysesExist:
+    """Tests for validate_analyses_exist method."""
+
+    def test_empty_list_returns_no_errors(self):
+        """Empty analysis list should return no errors."""
+        validator = EntityValidator()
+        missing, errors = validator.validate_analyses_exist([], {})
+        assert missing == []
+        assert errors == []
+
+    def test_all_analyses_exist_returns_no_errors(self):
+        """All analyses existing should return no errors."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Analysis1'},
+            {'analysisName': 'Analysis2'}
+        ]
+
+        analysis_names = ['Analysis1', 'Analysis2']
+        analysis_edm_map = {'Analysis1': 'EDM1', 'Analysis2': 'EDM1'}
+
+        missing, errors = validator.validate_analyses_exist(analysis_names, analysis_edm_map)
+
+        assert missing == []
+        assert errors == []
+
+    def test_missing_analysis_returns_error(self):
+        """Missing analysis should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Analysis1'}
+        ]
+
+        analysis_names = ['Analysis1', 'Analysis2']
+        analysis_edm_map = {'Analysis1': 'EDM1', 'Analysis2': 'EDM1'}
+
+        missing, errors = validator.validate_analyses_exist(analysis_names, analysis_edm_map)
+
+        assert 'EDM1/Analysis2' in missing
+        assert len(errors) == 1
+        assert 'ENT-ANALYSIS-002' in errors[0]
+
+    def test_no_edm_mapping_returns_error(self):
+        """Analysis without EDM mapping should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        analysis_names = ['Analysis1']
+        analysis_edm_map = {}  # No mapping
+
+        missing, errors = validator.validate_analyses_exist(analysis_names, analysis_edm_map)
+
+        assert '?/Analysis1 (no EDM mapping)' in missing
+        assert len(errors) == 1
+        assert 'ENT-ANALYSIS-002' in errors[0]
+
+    def test_multiple_edms_checked(self):
+        """Analyses across multiple EDMs should all be checked."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'A1'}],  # EDM1
+            [{'analysisName': 'A2'}]   # EDM2
+        ]
+
+        analysis_names = ['A1', 'A2']
+        analysis_edm_map = {'A1': 'EDM1', 'A2': 'EDM2'}
+
+        missing, errors = validator.validate_analyses_exist(analysis_names, analysis_edm_map)
+
+        assert missing == []
+        assert errors == []
+
+    def test_api_error_handled(self):
+        """API errors should be captured."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.side_effect = IRPAPIError("API failed")
+
+        analysis_names = ['Analysis1']
+        analysis_edm_map = {'Analysis1': 'EDM1'}
+
+        missing, errors = validator.validate_analyses_exist(analysis_names, analysis_edm_map)
+
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+
+
+class TestValidateGroupsExist:
+    """Tests for validate_groups_exist method."""
+
+    def test_empty_list_returns_no_errors(self):
+        """Empty group list should return no errors."""
+        validator = EntityValidator()
+        missing, errors = validator.validate_groups_exist([])
+        assert missing == []
+        assert errors == []
+
+    def test_all_groups_exist_returns_no_errors(self):
+        """All groups existing should return no errors."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Group1'},
+            {'analysisName': 'Group2'}
+        ]
+
+        group_names = ['Group1', 'Group2']
+
+        missing, errors = validator.validate_groups_exist(group_names)
+
+        assert missing == []
+        assert errors == []
+
+    def test_missing_group_returns_error(self):
+        """Missing group should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Group1'}
+        ]
+
+        group_names = ['Group1', 'Group2']
+
+        missing, errors = validator.validate_groups_exist(group_names)
+
+        assert 'Group2' in missing
+        assert len(errors) == 1
+        assert 'ENT-GROUP-002' in errors[0]
+
+    def test_api_error_handled(self):
+        """API errors should be captured."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._analysis_manager.search_analyses_paginated.side_effect = IRPAPIError("API failed")
+
+        group_names = ['Group1']
+
+        missing, errors = validator.validate_groups_exist(group_names)
+
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+
+
+class TestValidateGroupingBatch:
+    """Tests for validate_grouping_batch method."""
+
+    def test_empty_groupings_returns_no_errors(self):
+        """Empty grouping list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_grouping_batch([])
+        assert errors == []
+
+    def test_valid_batch_returns_no_errors(self):
+        """Valid grouping batch should return no errors."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # Analyses exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'A1'}, {'analysisName': 'A2'}],  # Check analyses exist
+            []  # Check group doesn't exist
+        ]
+
+        groupings = [{
+            'Group_Name': 'NewGroup',
+            'items': ['A1', 'A2'],
+            'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_batch(groupings)
+
+        assert errors == []
+
+    def test_missing_analysis_returns_error(self):
+        """Missing analysis should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # A2 doesn't exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'A1'}],  # Only A1 exists
+            []  # Group doesn't exist
+        ]
+
+        groupings = [{
+            'Group_Name': 'NewGroup',
+            'items': ['A1', 'A2'],
+            'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_batch(groupings)
+
+        assert len(errors) == 1
+        assert 'ENT-ANALYSIS-002' in errors[0]
+        assert 'A2' in errors[0]
+
+    def test_existing_group_returns_error(self):
+        """Existing group name should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # Analyses exist, but group also exists
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'A1'}],  # Analysis exists
+            [{'analysisName': 'ExistingGroup'}]  # Group already exists!
+        ]
+
+        groupings = [{
+            'Group_Name': 'ExistingGroup',
+            'items': ['A1'],
+            'analysis_edm_map': {'A1': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_batch(groupings)
+
+        assert len(errors) == 1
+        assert 'ENT-GROUP-001' in errors[0]
+        assert 'ExistingGroup' in errors[0]
+
+    def test_multiple_groups_validated(self):
+        """Multiple groups should all be validated."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # All analyses exist, no groups exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'A1'}, {'analysisName': 'A2'}],  # Analyses exist
+            []  # No groups exist
+        ]
+
+        groupings = [
+            {
+                'Group_Name': 'Group1',
+                'items': ['A1'],
+                'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
+            },
+            {
+                'Group_Name': 'Group2',
+                'items': ['A2'],
+                'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
+            }
+        ]
+
+        errors = validator.validate_grouping_batch(groupings)
+
+        assert errors == []
+
+    def test_multiple_errors_returned(self):
+        """Multiple validation failures should all be reported."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # A2 doesn't exist, and group already exists
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'A1'}],  # Only A1 exists
+            [{'analysisName': 'ExistingGroup'}]  # Group exists
+        ]
+
+        groupings = [{
+            'Group_Name': 'ExistingGroup',
+            'items': ['A1', 'A2'],
+            'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_batch(groupings)
+
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-ANALYSIS-002' in error_codes
+        assert 'ENT-GROUP-001' in error_codes
+
+
+class TestValidateGroupingRollupBatch:
+    """Tests for validate_grouping_rollup_batch method."""
+
+    def test_empty_groupings_returns_no_errors(self):
+        """Empty grouping list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_grouping_rollup_batch([])
+        assert errors == []
+
+    def test_valid_batch_returns_no_errors(self):
+        """Valid rollup batch should return no errors."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # Child group exists, analysis exists, rollup group doesn't exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'ChildGroup'}],  # Child group exists
+            [{'analysisName': 'Analysis1'}],   # Analysis exists
+            []  # Rollup group doesn't exist
+        ]
+
+        groupings = [{
+            'Group_Name': 'RollupGroup',
+            'items': ['ChildGroup', 'Analysis1'],
+            'group_names': ['ChildGroup', 'RollupGroup'],
+            'analysis_edm_map': {'Analysis1': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_rollup_batch(groupings)
+
+        assert errors == []
+
+    def test_missing_child_group_returns_error(self):
+        """Missing child group should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # Child group doesn't exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [],  # Child group doesn't exist
+            []   # Rollup group doesn't exist
+        ]
+
+        groupings = [{
+            'Group_Name': 'RollupGroup',
+            'items': ['MissingChildGroup'],
+            'group_names': ['MissingChildGroup', 'RollupGroup'],
+            'analysis_edm_map': {}
+        }]
+
+        errors = validator.validate_grouping_rollup_batch(groupings)
+
+        assert len(errors) == 1
+        assert 'ENT-GROUP-002' in errors[0]
+        assert 'MissingChildGroup' in errors[0]
+
+    def test_missing_analysis_returns_error(self):
+        """Missing analysis in rollup should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # Analysis doesn't exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [],  # Analysis doesn't exist
+            []   # Rollup group doesn't exist
+        ]
+
+        groupings = [{
+            'Group_Name': 'RollupGroup',
+            'items': ['MissingAnalysis'],
+            'group_names': ['RollupGroup'],  # MissingAnalysis not in group_names
+            'analysis_edm_map': {'MissingAnalysis': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_rollup_batch(groupings)
+
+        assert len(errors) == 1
+        assert 'ENT-ANALYSIS-002' in errors[0]
+
+    def test_existing_rollup_group_returns_error(self):
+        """Existing rollup group name should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # All prereqs exist, but rollup group also exists
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'ChildGroup'}],     # Child group exists
+            [{'analysisName': 'ExistingRollup'}]  # Rollup already exists!
+        ]
+
+        groupings = [{
+            'Group_Name': 'ExistingRollup',
+            'items': ['ChildGroup'],
+            'group_names': ['ChildGroup', 'ExistingRollup'],
+            'analysis_edm_map': {}
+        }]
+
+        errors = validator.validate_grouping_rollup_batch(groupings)
+
+        assert len(errors) == 1
+        assert 'ENT-GROUP-001' in errors[0]
+        assert 'ExistingRollup' in errors[0]
+
+    def test_mixed_items_validated(self):
+        """Rollup with both groups and analyses should validate all."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # Both child group and analysis exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'ChildGroup'}],  # Child group exists
+            [{'analysisName': 'Analysis1'}],   # Analysis exists
+            []  # Rollup doesn't exist
+        ]
+
+        groupings = [{
+            'Group_Name': 'RollupGroup',
+            'items': ['ChildGroup', 'Analysis1'],
+            'group_names': ['ChildGroup', 'RollupGroup'],
+            'analysis_edm_map': {'Analysis1': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_rollup_batch(groupings)
+
+        assert errors == []
+
+    def test_multiple_errors_returned(self):
+        """Multiple validation failures should all be reported."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # Child group missing, analysis missing, and rollup exists
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [],  # Child group doesn't exist
+            [],  # Analysis doesn't exist
+            [{'analysisName': 'ExistingRollup'}]  # Rollup exists
+        ]
+
+        groupings = [{
+            'Group_Name': 'ExistingRollup',
+            'items': ['MissingGroup', 'MissingAnalysis'],
+            'group_names': ['MissingGroup', 'ExistingRollup'],
+            'analysis_edm_map': {'MissingAnalysis': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_rollup_batch(groupings)
+
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-GROUP-002' in error_codes   # Missing child group
+        assert 'ENT-ANALYSIS-002' in error_codes  # Missing analysis
+        assert 'ENT-GROUP-001' in error_codes   # Rollup already exists
+
+    def test_only_analyses_no_child_groups(self):
+        """Rollup with only analyses (no child groups) should work."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+
+        # Only analyses, no child groups
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'A1'}, {'analysisName': 'A2'}],  # Analyses exist
+            []  # Rollup doesn't exist
+        ]
+
+        groupings = [{
+            'Group_Name': 'RollupGroup',
+            'items': ['A1', 'A2'],
+            'group_names': ['RollupGroup'],  # Only rollup in group_names
+            'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
+        }]
+
+        errors = validator.validate_grouping_rollup_batch(groupings)
+
+        assert errors == []

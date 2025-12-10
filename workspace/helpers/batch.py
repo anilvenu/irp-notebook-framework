@@ -573,6 +573,17 @@ def _validate_batch_submission(
         portfolios = [jc['job_configuration_data'] for jc in job_configs]
         return validator.validate_portfolio_mapping_batch(portfolios=portfolios)
 
+    elif batch_type == BatchType.GROUPING:
+        # Grouping validates: Analyses exist, Group names don't exist
+        groupings = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_grouping_batch(groupings=groupings)
+
+    elif batch_type == BatchType.GROUPING_ROLLUP:
+        # Grouping Rollup validates: Child groups exist, Analyses exist,
+        # Rollup group names don't exist
+        groupings = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_grouping_rollup_batch(groupings=groupings)
+
     # Add validation for other batch types here as needed
 
     return []
