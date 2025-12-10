@@ -365,7 +365,7 @@ def mock_irp_client(mocker):
     - get_risk_data_job(): Returns job with FINISHED status
 
     Also mocks:
-    - _validate_batch_submission: Returns empty list (no validation errors)
+    - validate_batch: Returns empty list (no validation errors)
       This prevents entity validation from making real API calls during tests.
 
     You can customize behavior per test using side_effect or return_value:
@@ -392,7 +392,7 @@ def mock_irp_client(mocker):
     from unittest.mock import MagicMock
 
     # Mock entity validation to prevent real API calls during batch submission tests
-    mocker.patch('helpers.batch._validate_batch_submission', return_value=[])
+    mocker.patch('helpers.batch.validate_batch', return_value=[])
 
     # Create main mock client
     mock_client = MagicMock()

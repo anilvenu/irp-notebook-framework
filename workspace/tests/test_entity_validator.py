@@ -252,7 +252,7 @@ class TestValidateAnalysesNotExist:
     def test_empty_inputs_returns_no_errors(self):
         """Empty analyses should return empty results."""
         validator = EntityValidator()
-        existing, errors = validator.validate_analyses_not_exist([], {})
+        existing, errors = validator.validate_analyses_not_exist([])
         assert existing == []
         assert errors == []
 
@@ -268,9 +268,8 @@ class TestValidateAnalysesNotExist:
             {'Database': 'EDM1', 'Analysis Name': 'Analysis1'},
             {'Database': 'EDM1', 'Analysis Name': 'Analysis2'}
         ]
-        edm_ids = {'EDM1': 123}
 
-        existing, errors = validator.validate_analyses_not_exist(analyses, edm_ids)
+        existing, errors = validator.validate_analyses_not_exist(analyses)
 
         assert existing == ['EDM1/Analysis1']
         assert len(errors) == 1
