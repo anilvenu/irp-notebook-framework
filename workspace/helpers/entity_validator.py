@@ -230,6 +230,123 @@ class EntityValidator:
 
         return existing, errors
 
+    def validate_portfolios_exist(
+        self,
+        portfolios: List[Dict[str, str]],
+        edm_exposure_ids: Dict[str, int]
+    ) -> Tuple[Dict[str, Dict[str, int]], List[str]]:
+        """
+        Check that portfolios exist within their EDMs (for pre-requisite validation).
+
+        Args:
+            portfolios: List of dicts with 'Database' and 'Portfolio' keys
+            edm_exposure_ids: Mapping of EDM names to exposure IDs
+
+        Returns:
+            Tuple of (portfolio_ids mapping, error_messages)
+            portfolio_ids maps "EDM_NAME/PORTFOLIO_NAME" to {'exposure_id': X, 'portfolio_id': Y}
+        """
+        if not portfolios or not edm_exposure_ids:
+            return {}, []
+
+        errors = []
+        portfolio_ids: Dict[str, Dict[str, int]] = {}
+        missing = []
+
+        # Group portfolios by EDM for efficient lookup
+        by_edm: Dict[str, List[str]] = {}
+        for p in portfolios:
+            edm = p.get('Database')
+            portfolio = p.get('Portfolio')
+            if edm and portfolio:
+                by_edm.setdefault(edm, []).append(portfolio)
+
+        for edm_name, portfolio_names in by_edm.items():
+            exposure_id = edm_exposure_ids.get(edm_name)
+            if not exposure_id:
+                # EDM doesn't exist, so portfolios can't exist - add all to missing
+                for name in portfolio_names:
+                    missing.append(f"{edm_name}/{name}")
+                continue
+
+            try:
+                # Build IN filter for all portfolio names in this EDM
+                quoted = ", ".join(f'"{name}"' for name in portfolio_names)
+                filter_str = f"portfolioName IN ({quoted})"
+
+                found = self.portfolio_manager.search_portfolios_paginated(
+                    exposure_id=exposure_id,
+                    filter=filter_str
+                )
+
+                # Build set of found portfolio names
+                found_names = {p.get('portfolioName'): p.get('portfolioId') for p in found}
+
+                for name in portfolio_names:
+                    key = f"{edm_name}/{name}"
+                    if name in found_names:
+                        portfolio_ids[key] = {
+                            'exposure_id': exposure_id,
+                            'portfolio_id': found_names[name]
+                        }
+                    else:
+                        missing.append(key)
+
+            except IRPAPIError as e:
+                errors.append(f"ENT-API-001: Failed to check portfolios in {edm_name}: {e}")
+
+        if missing:
+            errors.insert(0,
+                f"ENT-PORT-002: The following required portfolios were not found:{_format_entity_list(missing)}"
+            )
+
+        return portfolio_ids, errors
+
+    def validate_accounts_not_exist(
+        self,
+        portfolio_ids: Dict[str, Dict[str, int]]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Check that portfolios have no accounts (for MRI Import validation).
+
+        Args:
+            portfolio_ids: Mapping of "EDM_NAME/PORTFOLIO_NAME" to {'exposure_id': X, 'portfolio_id': Y}
+
+        Returns:
+            Tuple of (portfolios_with_accounts, error_messages)
+        """
+        if not portfolio_ids:
+            return [], []
+
+        errors = []
+        has_accounts = []
+
+        for portfolio_key, ids in portfolio_ids.items():
+            exposure_id = ids.get('exposure_id')
+            portfolio_id = ids.get('portfolio_id')
+
+            if not exposure_id or not portfolio_id:
+                continue
+
+            try:
+                accounts = self.portfolio_manager.search_accounts_by_portfolio(
+                    exposure_id=exposure_id,
+                    portfolio_id=portfolio_id
+                )
+
+                if accounts and len(accounts) > 0:
+                    has_accounts.append(portfolio_key)
+
+            except IRPAPIError as e:
+                errors.append(f"ENT-API-001: Failed to check accounts for {portfolio_key}: {e}")
+
+        if has_accounts:
+            errors.insert(0,
+                f"ENT-ACCT-001: The following portfolios already have accounts (must be empty for import):{_format_entity_list(has_accounts)}"
+            )
+
+        return has_accounts, errors
+
     def validate_treaties_not_exist(
         self,
         treaties: List[Dict[str, str]],
@@ -629,3 +746,105 @@ class EntityValidator:
             all_errors.extend(portfolio_errors)
 
         return all_errors
+
+    def validate_mri_import_batch(
+        self,
+        portfolios: List[Dict[str, str]],
+        working_files_dir: str
+    ) -> List[str]:
+        """
+        Validate MRI Import batch submission.
+
+        Pre-requisites (must exist):
+        - EDMs that portfolios belong to
+        - Portfolios within their EDMs
+        - CSV import files in working_files directory
+
+        Entities to be created (must NOT exist):
+        - Accounts in portfolios (portfolios must be empty)
+
+        Args:
+            portfolios: List of portfolio dicts with 'Database', 'Portfolio',
+                       'accounts_import_file', and 'locations_import_file' keys
+            working_files_dir: Path to the working_files directory
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not portfolios:
+            return []
+
+        all_errors = []
+
+        # Extract unique EDM names from portfolios
+        edm_names = list(set(
+            p.get('Database') for p in portfolios if p.get('Database')
+        ))
+
+        # Pre-requisite 1: EDMs must exist
+        edm_exposure_ids, edm_errors = self.validate_edms_exist(edm_names)
+        all_errors.extend(edm_errors)
+
+        # Pre-requisite 2: Portfolios must exist (and get their IDs for account check)
+        portfolio_ids = {}
+        if edm_exposure_ids:
+            portfolio_ids, portfolio_errors = self.validate_portfolios_exist(
+                portfolios, edm_exposure_ids
+            )
+            all_errors.extend(portfolio_errors)
+
+        # Pre-requisite 3: CSV files must exist
+        csv_errors = self._validate_csv_files_exist(portfolios, working_files_dir)
+        all_errors.extend(csv_errors)
+
+        # Accounts must NOT exist (portfolios must be empty)
+        if portfolio_ids:
+            _, account_errors = self.validate_accounts_not_exist(portfolio_ids)
+            all_errors.extend(account_errors)
+
+        return all_errors
+
+    def _validate_csv_files_exist(
+        self,
+        portfolios: List[Dict[str, str]],
+        working_files_dir: str
+    ) -> List[str]:
+        """
+        Check that CSV import files exist in the working_files directory.
+
+        Args:
+            portfolios: List of portfolio dicts with 'accounts_import_file'
+                       and 'locations_import_file' keys
+            working_files_dir: Path to the working_files directory
+
+        Returns:
+            List of error messages (empty if all files exist)
+        """
+        from pathlib import Path
+
+        if not portfolios or not working_files_dir:
+            return []
+
+        missing_files = []
+        working_path = Path(working_files_dir)
+
+        for portfolio in portfolios:
+            accounts_file = portfolio.get('accounts_import_file')
+            locations_file = portfolio.get('locations_import_file')
+
+            if accounts_file:
+                accounts_path = working_path / accounts_file
+                if not accounts_path.exists():
+                    missing_files.append(accounts_file)
+
+            if locations_file:
+                locations_path = working_path / locations_file
+                if not locations_path.exists():
+                    missing_files.append(locations_file)
+
+        if missing_files:
+            return [
+                f"ENT-FILE-001: The following required CSV files were not found:{_format_entity_list(missing_files)}"
+            ]
+
+        return []

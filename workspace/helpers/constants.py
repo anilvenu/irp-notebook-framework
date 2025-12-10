@@ -668,11 +668,14 @@ VALIDATION_ERROR_CODES = {
     'ENT-EDM-001': 'EDMs already exist: {names}',
     'ENT-EDM-002': 'Required EDMs not found: {names}',
     'ENT-PORT-001': 'Portfolios already exist: {names}',
+    'ENT-PORT-002': 'Required portfolios not found: {names}',
+    'ENT-ACCT-001': 'Portfolios already have accounts (must be empty for import): {names}',
     'ENT-TREATY-001': 'Treaties already exist: {names}',
     'ENT-ANALYSIS-001': 'Analyses already exist: {names}',
     'ENT-GROUP-001': 'Groups already exist: {names}',
     'ENT-RDM-001': 'RDM already exists: {name}',
     'ENT-SERVER-001': 'Database server not found: {name}',
+    'ENT-FILE-001': 'Required files not found: {names}',
     'ENT-API-001': 'Entity validation API error: {error}',
 
     # Business rule errors

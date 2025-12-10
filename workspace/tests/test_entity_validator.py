@@ -842,3 +842,480 @@ class TestValidatePortfolioBatch:
         assert len(errors) == 1
         assert 'ENT-PORT-001' in errors[0]
         assert 'SubPortfolio1' in errors[0]
+
+
+class TestValidatePortfoliosExist:
+    """Tests for validate_portfolios_exist method."""
+
+    def test_empty_portfolios_returns_no_errors(self):
+        """Empty portfolio list should return empty results."""
+        validator = EntityValidator()
+        portfolio_ids, errors = validator.validate_portfolios_exist([], {})
+        assert portfolio_ids == {}
+        assert errors == []
+
+    def test_empty_edm_exposure_ids_returns_no_errors(self):
+        """Empty EDM exposure IDs should return empty results."""
+        validator = EntityValidator()
+        portfolios = [{'Database': 'EDM1', 'Portfolio': 'Port1'}]
+        portfolio_ids, errors = validator.validate_portfolios_exist(portfolios, {})
+        assert portfolio_ids == {}
+        assert errors == []
+
+    def test_all_portfolios_exist(self):
+        """When all portfolios exist, should return their IDs and no errors."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 100},
+            {'portfolioName': 'Port2', 'portfolioId': 200}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Port1'},
+            {'Database': 'EDM1', 'Portfolio': 'Port2'}
+        ]
+        edm_exposure_ids = {'EDM1': 123}
+
+        portfolio_ids, errors = validator.validate_portfolios_exist(portfolios, edm_exposure_ids)
+
+        assert 'EDM1/Port1' in portfolio_ids
+        assert portfolio_ids['EDM1/Port1'] == {'exposure_id': 123, 'portfolio_id': 100}
+        assert 'EDM1/Port2' in portfolio_ids
+        assert errors == []
+
+    def test_some_portfolios_missing(self):
+        """When some portfolios don't exist, should return error."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 100}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Port1'},
+            {'Database': 'EDM1', 'Portfolio': 'Port2'}
+        ]
+        edm_exposure_ids = {'EDM1': 123}
+
+        portfolio_ids, errors = validator.validate_portfolios_exist(portfolios, edm_exposure_ids)
+
+        assert 'EDM1/Port1' in portfolio_ids
+        assert 'EDM1/Port2' not in portfolio_ids
+        assert len(errors) == 1
+        assert 'ENT-PORT-002' in errors[0]
+        assert 'Port2' in errors[0]
+
+    def test_edm_not_in_exposure_ids_adds_to_missing(self):
+        """When EDM not in exposure IDs, portfolios should be marked as missing."""
+        validator = EntityValidator()
+
+        portfolios = [{'Database': 'EDM1', 'Portfolio': 'Port1'}]
+        edm_exposure_ids = {'EDM2': 456}  # Different EDM
+
+        portfolio_ids, errors = validator.validate_portfolios_exist(portfolios, edm_exposure_ids)
+
+        assert portfolio_ids == {}
+        assert len(errors) == 1
+        assert 'ENT-PORT-002' in errors[0]
+        assert 'EDM1/Port1' in errors[0]
+
+    def test_api_error_handled(self):
+        """API errors should be caught and returned as error messages."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_portfolios_paginated.side_effect = IRPAPIError("Connection failed")
+
+        portfolios = [{'Database': 'EDM1', 'Portfolio': 'Port1'}]
+        edm_exposure_ids = {'EDM1': 123}
+
+        portfolio_ids, errors = validator.validate_portfolios_exist(portfolios, edm_exposure_ids)
+
+        assert portfolio_ids == {}
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+
+
+class TestValidateAccountsNotExist:
+    """Tests for validate_accounts_not_exist method."""
+
+    def test_empty_portfolio_ids_returns_no_errors(self):
+        """Empty portfolio IDs should return empty results."""
+        validator = EntityValidator()
+        has_accounts, errors = validator.validate_accounts_not_exist({})
+        assert has_accounts == []
+        assert errors == []
+
+    def test_portfolios_have_no_accounts(self):
+        """When portfolios have no accounts, should return no errors."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        portfolio_ids = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 100}
+        }
+
+        has_accounts, errors = validator.validate_accounts_not_exist(portfolio_ids)
+
+        assert has_accounts == []
+        assert errors == []
+
+    def test_portfolios_have_accounts_returns_error(self):
+        """When portfolios have accounts, should return error."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'accountName': 'Account1'}
+        ]
+
+        portfolio_ids = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 100}
+        }
+
+        has_accounts, errors = validator.validate_accounts_not_exist(portfolio_ids)
+
+        assert has_accounts == ['EDM1/Port1']
+        assert len(errors) == 1
+        assert 'ENT-ACCT-001' in errors[0]
+        assert 'EDM1/Port1' in errors[0]
+
+    def test_multiple_portfolios_with_accounts(self):
+        """When multiple portfolios have accounts, all should be reported."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        # All portfolios have accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'accountName': 'Account1'}
+        ]
+
+        portfolio_ids = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 100},
+            'EDM1/Port2': {'exposure_id': 123, 'portfolio_id': 200}
+        }
+
+        has_accounts, errors = validator.validate_accounts_not_exist(portfolio_ids)
+
+        assert len(has_accounts) == 2
+        assert 'EDM1/Port1' in has_accounts
+        assert 'EDM1/Port2' in has_accounts
+        assert len(errors) == 1
+        assert 'ENT-ACCT-001' in errors[0]
+
+    def test_api_error_handled(self):
+        """API errors should be caught and returned as error messages."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.side_effect = IRPAPIError("Connection failed")
+
+        portfolio_ids = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 100}
+        }
+
+        has_accounts, errors = validator.validate_accounts_not_exist(portfolio_ids)
+
+        assert has_accounts == []
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+
+
+class TestValidateCsvFilesExist:
+    """Tests for _validate_csv_files_exist method."""
+
+    def test_empty_portfolios_returns_no_errors(self):
+        """Empty portfolio list should return no errors."""
+        validator = EntityValidator()
+        errors = validator._validate_csv_files_exist([], '/tmp')
+        assert errors == []
+
+    def test_empty_working_dir_returns_no_errors(self):
+        """Empty working dir should return no errors."""
+        validator = EntityValidator()
+        portfolios = [{'accounts_import_file': 'test.csv'}]
+        errors = validator._validate_csv_files_exist(portfolios, '')
+        assert errors == []
+
+    def test_files_exist_returns_no_errors(self, tmp_path):
+        """When all files exist, should return no errors."""
+        validator = EntityValidator()
+
+        # Create test files
+        accounts_file = tmp_path / 'accounts.csv'
+        locations_file = tmp_path / 'locations.csv'
+        accounts_file.touch()
+        locations_file.touch()
+
+        portfolios = [
+            {
+                'accounts_import_file': 'accounts.csv',
+                'locations_import_file': 'locations.csv'
+            }
+        ]
+
+        errors = validator._validate_csv_files_exist(portfolios, str(tmp_path))
+
+        assert errors == []
+
+    def test_missing_files_returns_error(self, tmp_path):
+        """When files don't exist, should return error."""
+        validator = EntityValidator()
+
+        portfolios = [
+            {
+                'accounts_import_file': 'missing_accounts.csv',
+                'locations_import_file': 'missing_locations.csv'
+            }
+        ]
+
+        errors = validator._validate_csv_files_exist(portfolios, str(tmp_path))
+
+        assert len(errors) == 1
+        assert 'ENT-FILE-001' in errors[0]
+        assert 'missing_accounts.csv' in errors[0]
+        assert 'missing_locations.csv' in errors[0]
+
+    def test_partial_files_missing(self, tmp_path):
+        """When some files exist and some don't, should report missing ones."""
+        validator = EntityValidator()
+
+        # Create only one file
+        accounts_file = tmp_path / 'accounts.csv'
+        accounts_file.touch()
+
+        portfolios = [
+            {
+                'accounts_import_file': 'accounts.csv',
+                'locations_import_file': 'missing_locations.csv'
+            }
+        ]
+
+        errors = validator._validate_csv_files_exist(portfolios, str(tmp_path))
+
+        assert len(errors) == 1
+        assert 'ENT-FILE-001' in errors[0]
+        assert 'accounts.csv' not in errors[0]
+        assert 'missing_locations.csv' in errors[0]
+
+
+class TestValidateMriImportBatch:
+    """Tests for validate_mri_import_batch method."""
+
+    def test_empty_portfolios_returns_no_errors(self):
+        """Empty portfolio list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_mri_import_batch([], '/tmp')
+        assert errors == []
+
+    def test_valid_batch_returns_no_errors(self, tmp_path):
+        """Valid MRI Import batch should return no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolios exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 100}
+        ]
+        # No accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        # Create CSV files
+        accounts_file = tmp_path / 'accounts.csv'
+        locations_file = tmp_path / 'locations.csv'
+        accounts_file.touch()
+        locations_file.touch()
+
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'Port1',
+                'accounts_import_file': 'accounts.csv',
+                'locations_import_file': 'locations.csv'
+            }
+        ]
+
+        errors = validator.validate_mri_import_batch(portfolios, str(tmp_path))
+
+        assert errors == []
+
+    def test_edm_not_found_returns_error(self, tmp_path):
+        """Missing EDM should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        # Create CSV files
+        accounts_file = tmp_path / 'accounts.csv'
+        locations_file = tmp_path / 'locations.csv'
+        accounts_file.touch()
+        locations_file.touch()
+
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'Port1',
+                'accounts_import_file': 'accounts.csv',
+                'locations_import_file': 'locations.csv'
+            }
+        ]
+
+        errors = validator.validate_mri_import_batch(portfolios, str(tmp_path))
+
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+
+    def test_portfolio_not_found_returns_error(self, tmp_path):
+        """Missing portfolio should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolios don't exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = []
+
+        # Create CSV files
+        accounts_file = tmp_path / 'accounts.csv'
+        locations_file = tmp_path / 'locations.csv'
+        accounts_file.touch()
+        locations_file.touch()
+
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'Port1',
+                'accounts_import_file': 'accounts.csv',
+                'locations_import_file': 'locations.csv'
+            }
+        ]
+
+        errors = validator.validate_mri_import_batch(portfolios, str(tmp_path))
+
+        assert len(errors) == 1
+        assert 'ENT-PORT-002' in errors[0]
+
+    def test_accounts_exist_returns_error(self, tmp_path):
+        """Portfolios with accounts should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolios exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 100}
+        ]
+        # Accounts exist (should fail)
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'accountName': 'Account1'}
+        ]
+
+        # Create CSV files
+        accounts_file = tmp_path / 'accounts.csv'
+        locations_file = tmp_path / 'locations.csv'
+        accounts_file.touch()
+        locations_file.touch()
+
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'Port1',
+                'accounts_import_file': 'accounts.csv',
+                'locations_import_file': 'locations.csv'
+            }
+        ]
+
+        errors = validator.validate_mri_import_batch(portfolios, str(tmp_path))
+
+        assert len(errors) == 1
+        assert 'ENT-ACCT-001' in errors[0]
+
+    def test_csv_files_missing_returns_error(self):
+        """Missing CSV files should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolios exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 100}
+        ]
+        # No accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'Port1',
+                'accounts_import_file': 'missing_accounts.csv',
+                'locations_import_file': 'missing_locations.csv'
+            }
+        ]
+
+        # Use non-existent directory
+        errors = validator.validate_mri_import_batch(portfolios, '/nonexistent/path')
+
+        assert len(errors) == 1
+        assert 'ENT-FILE-001' in errors[0]
+
+    def test_multiple_errors_returned(self, tmp_path):
+        """Multiple validation failures should all be reported."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # Only EDM1 exists, EDM2 is missing
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolio exists in EDM1
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 100}
+        ]
+        # Accounts exist (should fail)
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'accountName': 'Account1'}
+        ]
+
+        # Only create some files
+        accounts_file = tmp_path / 'accounts1.csv'
+        accounts_file.touch()
+
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'Port1',
+                'accounts_import_file': 'accounts1.csv',
+                'locations_import_file': 'missing_locations1.csv'
+            },
+            {
+                'Database': 'EDM2',
+                'Portfolio': 'Port2',
+                'accounts_import_file': 'missing_accounts2.csv',
+                'locations_import_file': 'missing_locations2.csv'
+            }
+        ]
+
+        errors = validator.validate_mri_import_batch(portfolios, str(tmp_path))
+
+        # Should have: EDM2 missing, Port2 missing (because EDM2 missing), CSV files missing, accounts exist
+        assert len(errors) == 4
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-EDM-002' in error_codes
+        assert 'ENT-PORT-002' in error_codes  # Port2 missing since EDM2 doesn't exist
+        assert 'ENT-FILE-001' in error_codes
+        assert 'ENT-ACCT-001' in error_codes

@@ -537,6 +537,20 @@ def _validate_batch_submission(
         portfolios = config_data.get('Portfolios', [])
         return validator.validate_portfolio_batch(portfolios=portfolios)
 
+    elif batch_type == BatchType.MRI_IMPORT:
+        # MRI Import validates: EDMs exist, Portfolios exist, CSV files exist, Accounts don't exist
+        # Extract portfolio data from job configs (Database, Portfolio, accounts_import_file, locations_import_file)
+        from helpers.csv_export import get_working_files_path
+        portfolios = [jc['job_configuration_data'] for jc in job_configs]
+        try:
+            working_files_dir = str(get_working_files_path())
+        except ValueError:
+            working_files_dir = ""  # Will fail CSV validation if can't determine path
+        return validator.validate_mri_import_batch(
+            portfolios=portfolios,
+            working_files_dir=working_files_dir
+        )
+
     # Add validation for other batch types here as needed
 
     return []
