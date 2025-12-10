@@ -560,21 +560,22 @@ class EntityValidator:
 
     def validate_analyses_not_exist(
         self,
-        analyses: List[Dict[str, str]],
-        edm_exposure_ids: Dict[str, int]
+        analyses: List[Dict[str, str]]
     ) -> Tuple[List[str], List[str]]:
         """
         Check that analyses don't already exist.
 
+        Searches by analysis name and EDM name (exposureName), which doesn't
+        require the EDM to exist or have an exposure ID.
+
         Args:
             analyses: List of dicts with 'Database' and 'Analysis Name' keys
-            edm_exposure_ids: Mapping of EDM names to exposure IDs
 
         Returns:
             Tuple of (existing_analysis_identifiers, error_messages)
             Identifiers are in format "EDM_NAME/ANALYSIS_NAME"
         """
-        if not analyses or not edm_exposure_ids:
+        if not analyses:
             return [], []
 
         errors = []
@@ -589,10 +590,6 @@ class EntityValidator:
                 by_edm.setdefault(edm, []).append(analysis_name)
 
         for edm_name, analysis_names in by_edm.items():
-            exposure_id = edm_exposure_ids.get(edm_name)
-            if not exposure_id:
-                continue  # EDM doesn't exist in Moody's, so analyses can't exist either
-
             try:
                 # Build filter for analyses in this EDM
                 # Need to combine analysisName IN (...) with exposureName filter
@@ -883,35 +880,27 @@ class EntityValidator:
             edm_exposure_ids = self._get_exposure_ids(existing_edms)
 
             # Step 2a: Check Portfolios
-            existing_portfolios, portfolio_errors = self.validate_portfolios_not_exist(
+            _, portfolio_errors = self.validate_portfolios_not_exist(
                 portfolios, edm_exposure_ids
             )
             all_errors.extend(portfolio_errors)
 
             # Step 2b: Check Treaties
-            existing_treaties, treaty_errors = self.validate_treaties_not_exist(
+            _, treaty_errors = self.validate_treaties_not_exist(
                 treaties, edm_exposure_ids
             )
             all_errors.extend(treaty_errors)
 
-            # Step 3: If portfolios exist, check Analyses
-            if existing_portfolios:
-                existing_analyses, analysis_errors = self.validate_analyses_not_exist(
-                    analyses, edm_exposure_ids
-                )
-                all_errors.extend(analysis_errors)
-            else:
-                existing_analyses = []
-
-        else:
-            existing_analyses = []
+        # Step 3: Always check Analyses (searches by EDM name, doesn't require EDM to exist)
+        _, analysis_errors = self.validate_analyses_not_exist(analyses)
+        all_errors.extend(analysis_errors)
 
         # Step 4: Always check Groups (they are global, not scoped to EDMs)
-        existing_groups, group_errors = self.validate_groups_not_exist(groupings)
+        _, group_errors = self.validate_groups_not_exist(groupings)
         all_errors.extend(group_errors)
 
         # Step 5: If analyses or groups exist, check RDM
-        if (existing_analyses or existing_groups) and rdm_name:
+        if rdm_name:
             rdm_errors = self.validate_rdm_not_exists(rdm_name)
             all_errors.extend(rdm_errors)
 
