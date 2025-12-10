@@ -509,6 +509,63 @@ def send_teams_notification(
     return client.send_notification(style, title, message, actions)
 
 
+def send_validation_failure_notification(
+    cycle_name: str,
+    stage_name: str,
+    step_name: str,
+    validation_errors: List[str],
+    notebook_path: Optional[str] = None
+) -> bool:
+    """
+    Send a Teams notification for validation failures in a notebook.
+
+    Use this when a notebook's validation fails and the step will be marked
+    as FAILED. This provides a clean, user-friendly notification.
+
+    Args:
+        cycle_name: Name of the cycle (e.g., "Analysis-2025-Q1")
+        stage_name: Name of the stage (e.g., "Stage_03_Data_Import")
+        step_name: Name of the step (e.g., "Step_02_Create_Base_Portfolios")
+        validation_errors: List of validation error messages
+        notebook_path: Optional path to notebook for action buttons
+
+    Returns:
+        True if notification was sent successfully
+
+    Example:
+        >>> send_validation_failure_notification(
+        ...     cycle_name="Q1-2025",
+        ...     stage_name="Stage_03_Data_Import",
+        ...     step_name="Step_02_Create_Base_Portfolios",
+        ...     validation_errors=["Portfolio 'ABC' already exists in EDM1"]
+        ... )
+        True
+    """
+    from helpers.database import get_current_schema
+
+    client = TeamsNotificationClient()
+
+    # Build error summary
+    error_summary = "\n".join(f"• {e}" for e in validation_errors[:10])
+    if len(validation_errors) > 10:
+        error_summary += f"\n... and {len(validation_errors) - 10} more"
+
+    # Build action buttons if notebook path provided
+    actions = None
+    if notebook_path:
+        schema = get_current_schema()
+        actions = build_notification_actions(notebook_path, cycle_name, schema)
+
+    return client.send_error(
+        title=f"[{cycle_name}] Validation Failed: {step_name}",
+        message=f"**Cycle:** {cycle_name}\n"
+                f"**Stage:** {stage_name}\n"
+                f"**Step:** {step_name}\n\n"
+                f"**Validation Errors:**\n{error_summary}",
+        actions=actions
+    )
+
+
 # ============================================================================
 # MAIN (for testing)
 # ============================================================================
