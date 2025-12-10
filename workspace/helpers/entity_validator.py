@@ -105,6 +105,71 @@ class EntityValidator:
 
         return existing, errors
 
+    def validate_edms_exist(self, edm_names: List[str]) -> Tuple[Dict[str, int], List[str]]:
+        """
+        Check that EDM names exist in Moody's (for pre-requisite validation).
+
+        Args:
+            edm_names: List of EDM names that must exist
+
+        Returns:
+            Tuple of (edm_exposure_ids mapping, error_messages)
+            edm_exposure_ids maps EDM names to their exposure IDs for found EDMs
+        """
+        if not edm_names:
+            return {}, []
+
+        errors = []
+        edm_exposure_ids = {}
+
+        # Build IN filter for efficiency
+        unique_names = list(set(edm_names))
+        quoted = ", ".join(f'"{name}"' for name in unique_names)
+        filter_str = f"exposureName IN ({quoted})"
+
+        try:
+            edms = self.edm_manager.search_edms_paginated(filter=filter_str)
+            for edm in edms:
+                name = edm.get('exposureName')
+                exposure_id = edm.get('exposureId')
+                if name and exposure_id:
+                    edm_exposure_ids[name] = exposure_id
+
+            # Find which EDMs were not found
+            missing = [name for name in unique_names if name not in edm_exposure_ids]
+
+            if missing:
+                errors.append(
+                    f"ENT-EDM-002: The following required EDMs were not found:{_format_entity_list(missing)}"
+                )
+        except IRPAPIError as e:
+            errors.append(f"ENT-API-001: Failed to check EDM existence: {e}")
+
+        return edm_exposure_ids, errors
+
+    def validate_server_exists(self, server_name: str) -> List[str]:
+        """
+        Check that a database server exists in Moody's.
+
+        Args:
+            server_name: Name of the database server to check
+
+        Returns:
+            List of error messages (empty if server exists)
+        """
+        if not server_name:
+            return ["ENT-SERVER-001: Database server name is required"]
+
+        try:
+            servers = self.edm_manager.search_database_servers(
+                filter=f'serverName="{server_name}"'
+            )
+            if not servers:
+                return [f"ENT-SERVER-001: Database server '{server_name}' not found"]
+            return []
+        except IRPAPIError as e:
+            return [f"ENT-API-001: Failed to check server existence: {e}"]
+
     def validate_portfolios_not_exist(
         self,
         portfolios: List[Dict[str, str]],
@@ -483,5 +548,84 @@ class EntityValidator:
         if (existing_analyses or existing_groups) and rdm_name:
             rdm_errors = self.validate_rdm_not_exists(rdm_name)
             all_errors.extend(rdm_errors)
+
+        return all_errors
+
+    # =========================================================================
+    # Batch Submission Validations
+    # =========================================================================
+
+    def validate_edm_batch(
+        self,
+        edm_names: List[str],
+        server_name: str
+    ) -> List[str]:
+        """
+        Validate EDM batch submission.
+
+        Pre-requisites (must exist):
+        - Database server
+
+        Entities to be created (must NOT exist):
+        - EDM names
+
+        Args:
+            edm_names: List of EDM names to be created
+            server_name: Database server name
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        all_errors = []
+
+        # Pre-requisite: Server must exist
+        server_errors = self.validate_server_exists(server_name)
+        all_errors.extend(server_errors)
+
+        # EDMs must not already exist
+        _, edm_errors = self.validate_edms_not_exist(edm_names)
+        all_errors.extend(edm_errors)
+
+        return all_errors
+
+    def validate_portfolio_batch(
+        self,
+        portfolios: List[Dict[str, str]]
+    ) -> List[str]:
+        """
+        Validate Portfolio Creation batch submission.
+
+        Pre-requisites (must exist):
+        - EDMs that portfolios will be created in
+
+        Entities to be created (must NOT exist):
+        - Portfolio names (both base portfolios and sub-portfolios)
+
+        Args:
+            portfolios: List of portfolio dicts with 'Database' and 'Portfolio' keys
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not portfolios:
+            return []
+
+        all_errors = []
+
+        # Extract unique EDM names from portfolios
+        edm_names = list(set(
+            p.get('Database') for p in portfolios if p.get('Database')
+        ))
+
+        # Pre-requisite: EDMs must exist
+        edm_exposure_ids, edm_errors = self.validate_edms_exist(edm_names)
+        all_errors.extend(edm_errors)
+
+        # Portfolios must not already exist (check in EDMs that were found)
+        if edm_exposure_ids:
+            _, portfolio_errors = self.validate_portfolios_not_exist(
+                portfolios, edm_exposure_ids
+            )
+            all_errors.extend(portfolio_errors)
 
         return all_errors

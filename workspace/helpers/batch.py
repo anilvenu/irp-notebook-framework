@@ -491,6 +491,57 @@ def create_batch(
         raise BatchError(f"Failed to create batch: {str(e)}")
 
 
+def _validate_batch_submission(
+    batch: Dict[str, Any],
+    batch_id: int,
+    schema: str = 'public'
+) -> List[str]:
+    """
+    Validate batch submission prerequisites and entity existence.
+
+    Validates:
+    - Pre-requisites exist (e.g., server for EDM, EDMs for Portfolio)
+    - Entities to be created don't already exist
+
+    Args:
+        batch: Batch record dictionary
+        batch_id: Batch ID
+        schema: Database schema
+
+    Returns:
+        List of validation error messages (empty if valid)
+    """
+    from helpers.entity_validator import EntityValidator
+    from helpers.constants import DEFAULT_DATABASE_SERVER
+
+    batch_type = batch['batch_type']
+    validator = EntityValidator()
+
+    # Get job configurations for this batch
+    job_configs = get_batch_job_configurations(batch_id, skipped=False, schema=schema)
+
+    if batch_type == BatchType.EDM_CREATION:
+        edm_names = [jc['job_configuration_data'].get('Database') for jc in job_configs]
+        edm_names = [name for name in edm_names if name]
+        return validator.validate_edm_batch(
+            edm_names=edm_names,
+            server_name=DEFAULT_DATABASE_SERVER
+        )
+
+    elif batch_type == BatchType.PORTFOLIO_CREATION:
+        # Get ALL portfolios from configuration (base + sub-portfolios)
+        # Job configs only contain base portfolios, but we want to validate all
+        from helpers.configuration import read_configuration
+        config = read_configuration(batch['configuration_id'], schema=schema)
+        config_data = config.get('configuration_data', {})
+        portfolios = config_data.get('Portfolios', [])
+        return validator.validate_portfolio_batch(portfolios=portfolios)
+
+    # Add validation for other batch types here as needed
+
+    return []
+
+
 def submit_batch(
     batch_id: int,
     irp_client: IRPClient,
@@ -576,6 +627,16 @@ def submit_batch(
             raise BatchError(
                 f"Reference data validation failed. Cannot submit batch.\n"
                 + "\n".join(ref_data_errors[:10])
+            )
+
+    # Validate batch prerequisites and entity existence before first submission
+    # Skip validation on retry (batch already ACTIVE) to allow resubmitting failed jobs
+    if batch['status'] == BatchStatus.INITIATED:
+        validation_errors = _validate_batch_submission(batch, batch_id, schema)
+        if validation_errors:
+            raise BatchError(
+                f"Batch validation failed. Cannot submit batch.\n"
+                + "\n".join(validation_errors)
             )
 
     # Update batch step_id if provided (allows re-associating batch with submission step)

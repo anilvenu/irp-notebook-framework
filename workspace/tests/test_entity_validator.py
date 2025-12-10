@@ -85,6 +85,59 @@ class TestValidateEdmsNotExist:
         assert 'Connection failed' in errors[0]
 
 
+class TestValidateServerExists:
+    """Tests for validate_server_exists method."""
+
+    def test_empty_server_name_returns_error(self):
+        """Empty server name should return error."""
+        validator = EntityValidator()
+
+        errors = validator.validate_server_exists('')
+        assert len(errors) == 1
+        assert 'ENT-SERVER-001' in errors[0]
+
+        errors = validator.validate_server_exists(None)
+        assert len(errors) == 1
+        assert 'ENT-SERVER-001' in errors[0]
+
+    def test_server_exists(self):
+        """When server exists, should return no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_database_servers.return_value = [
+            {'serverName': 'databridge-1', 'serverId': 1}
+        ]
+
+        errors = validator.validate_server_exists('databridge-1')
+
+        assert errors == []
+        validator._edm_manager.search_database_servers.assert_called_once()
+
+    def test_server_not_found(self):
+        """When server doesn't exist, should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_database_servers.return_value = []
+
+        errors = validator.validate_server_exists('nonexistent-server')
+
+        assert len(errors) == 1
+        assert 'ENT-SERVER-001' in errors[0]
+        assert 'nonexistent-server' in errors[0]
+
+    def test_api_error_handled(self):
+        """API errors should be caught and returned as error messages."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_database_servers.side_effect = IRPAPIError("Connection failed")
+
+        errors = validator.validate_server_exists('databridge-1')
+
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+        assert 'Connection failed' in errors[0]
+
+
 class TestValidatePortfoliosNotExist:
     """Tests for validate_portfolios_not_exist method."""
 
@@ -476,3 +529,316 @@ class TestGetExposureIds:
         result = validator._get_exposure_ids(['EDM1'])
 
         assert result == {}
+
+
+class TestValidateEdmBatch:
+    """Tests for validate_edm_batch method."""
+
+    def test_valid_batch_returns_no_errors(self):
+        """Valid EDM batch should return no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        # Server exists
+        validator._edm_manager.search_database_servers.return_value = [
+            {'serverName': 'databridge-1', 'serverId': 1}
+        ]
+        # EDMs don't exist
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        errors = validator.validate_edm_batch(
+            edm_names=['EDM1', 'EDM2'],
+            server_name='databridge-1'
+        )
+
+        assert errors == []
+
+    def test_server_not_found_returns_error(self):
+        """Missing server should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        # Server doesn't exist
+        validator._edm_manager.search_database_servers.return_value = []
+        # EDMs don't exist
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        errors = validator.validate_edm_batch(
+            edm_names=['EDM1'],
+            server_name='nonexistent-server'
+        )
+
+        assert len(errors) == 1
+        assert 'ENT-SERVER-001' in errors[0]
+        assert 'nonexistent-server' in errors[0]
+
+    def test_edms_already_exist_returns_error(self):
+        """Existing EDMs should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        # Server exists
+        validator._edm_manager.search_database_servers.return_value = [
+            {'serverName': 'databridge-1', 'serverId': 1}
+        ]
+        # Some EDMs already exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+
+        errors = validator.validate_edm_batch(
+            edm_names=['EDM1', 'EDM2'],
+            server_name='databridge-1'
+        )
+
+        assert len(errors) == 1
+        assert 'ENT-EDM-001' in errors[0]
+        assert 'EDM1' in errors[0]
+
+    def test_multiple_errors_returned(self):
+        """Both server and EDM errors should be returned."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        # Server doesn't exist
+        validator._edm_manager.search_database_servers.return_value = []
+        # EDMs already exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+
+        errors = validator.validate_edm_batch(
+            edm_names=['EDM1'],
+            server_name='nonexistent-server'
+        )
+
+        assert len(errors) == 2
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-SERVER-001' in error_codes
+        assert 'ENT-EDM-001' in error_codes
+
+
+class TestValidateEdmsExist:
+    """Tests for validate_edms_exist method."""
+
+    def test_empty_list_returns_no_errors(self):
+        """Empty EDM list should return empty results."""
+        validator = EntityValidator()
+        edm_exposure_ids, errors = validator.validate_edms_exist([])
+        assert edm_exposure_ids == {}
+        assert errors == []
+
+    def test_all_edms_exist(self):
+        """When all EDMs exist, should return their exposure IDs and no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123},
+            {'exposureName': 'EDM2', 'exposureId': 456}
+        ]
+
+        edm_exposure_ids, errors = validator.validate_edms_exist(['EDM1', 'EDM2'])
+
+        assert edm_exposure_ids == {'EDM1': 123, 'EDM2': 456}
+        assert errors == []
+
+    def test_some_edms_missing(self):
+        """When some EDMs don't exist, should return error with missing names."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+
+        edm_exposure_ids, errors = validator.validate_edms_exist(['EDM1', 'EDM2'])
+
+        assert edm_exposure_ids == {'EDM1': 123}
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM2' in errors[0]
+
+    def test_all_edms_missing(self):
+        """When no EDMs exist, should return error with all names."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        edm_exposure_ids, errors = validator.validate_edms_exist(['EDM1', 'EDM2'])
+
+        assert edm_exposure_ids == {}
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM1' in errors[0]
+        assert 'EDM2' in errors[0]
+
+    def test_api_error_handled(self):
+        """API errors should be caught and returned as error messages."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.side_effect = IRPAPIError("Connection failed")
+
+        edm_exposure_ids, errors = validator.validate_edms_exist(['EDM1'])
+
+        assert edm_exposure_ids == {}
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+
+    def test_duplicate_edm_names_deduplicated(self):
+        """Duplicate EDM names in input should be deduplicated."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+
+        edm_exposure_ids, errors = validator.validate_edms_exist(['EDM1', 'EDM1', 'EDM1'])
+
+        assert edm_exposure_ids == {'EDM1': 123}
+        assert errors == []
+        # Should only make one API call with deduplicated names
+        validator._edm_manager.search_edms_paginated.assert_called_once()
+
+
+class TestValidatePortfolioBatch:
+    """Tests for validate_portfolio_batch method."""
+
+    def test_empty_portfolios_returns_no_errors(self):
+        """Empty portfolio list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_portfolio_batch([])
+        assert errors == []
+
+    def test_valid_batch_returns_no_errors(self):
+        """Valid portfolio batch should return no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolios don't exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Portfolio1'},
+            {'Database': 'EDM1', 'Portfolio': 'Portfolio2'}
+        ]
+        errors = validator.validate_portfolio_batch(portfolios)
+
+        assert errors == []
+
+    def test_edms_not_found_returns_error(self):
+        """Missing EDMs should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+
+        # EDMs don't exist
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Portfolio1'}
+        ]
+        errors = validator.validate_portfolio_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM1' in errors[0]
+
+    def test_portfolios_already_exist_returns_error(self):
+        """Existing portfolios should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Some portfolios already exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Portfolio1', 'portfolioId': 456}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Portfolio1'},
+            {'Database': 'EDM1', 'Portfolio': 'Portfolio2'}
+        ]
+        errors = validator.validate_portfolio_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-PORT-001' in errors[0]
+        assert 'Portfolio1' in errors[0]
+
+    def test_multiple_errors_returned(self):
+        """Both EDM and portfolio errors should be returned."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # Only EDM1 exists, EDM2 is missing
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolio1 already exists in EDM1
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Portfolio1', 'portfolioId': 456}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Portfolio1'},
+            {'Database': 'EDM2', 'Portfolio': 'Portfolio2'}
+        ]
+        errors = validator.validate_portfolio_batch(portfolios)
+
+        assert len(errors) == 2
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-EDM-002' in error_codes
+        assert 'ENT-PORT-001' in error_codes
+
+    def test_multiple_edms_validated(self):
+        """Portfolios across multiple EDMs should all be validated."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # Both EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123},
+            {'exposureName': 'EDM2', 'exposureId': 456}
+        ]
+        # No portfolios exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Portfolio1'},
+            {'Database': 'EDM2', 'Portfolio': 'Portfolio2'}
+        ]
+        errors = validator.validate_portfolio_batch(portfolios)
+
+        assert errors == []
+        # Should check portfolios in both EDMs
+        assert validator._portfolio_manager.search_portfolios_paginated.call_count == 2
+
+    def test_base_and_sub_portfolios_validated(self):
+        """Both base portfolios and sub-portfolios should be validated."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Sub-portfolio already exists
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'SubPortfolio1', 'portfolioId': 789}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePortfolio', 'Base Portfolio?': 'Y'},
+            {'Database': 'EDM1', 'Portfolio': 'SubPortfolio1', 'Base Portfolio?': 'N'},
+            {'Database': 'EDM1', 'Portfolio': 'SubPortfolio2', 'Base Portfolio?': 'N'}
+        ]
+        errors = validator.validate_portfolio_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-PORT-001' in errors[0]
+        assert 'SubPortfolio1' in errors[0]
