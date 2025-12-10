@@ -503,6 +503,10 @@ def validate_batch(
     - Pre-requisites exist (e.g., server for EDM, EDMs for Portfolio)
     - Entities to be created don't already exist
 
+    Only validates job configurations for jobs that are ready for submission
+    (INITIATED or ERROR status). This allows re-running notebooks after partial
+    success - jobs that already completed successfully are not re-validated.
+
     Args:
         batch_id: Batch ID
         schema: Database schema
@@ -516,8 +520,23 @@ def validate_batch(
     batch_type = batch['batch_type']
     validator = EntityValidator()
 
-    # Get job configurations for this batch
-    job_configs = get_batch_job_configurations(batch_id, skipped=False, schema=schema)
+    # Get jobs that are ready for submission (INITIATED or ERROR, not skipped)
+    # This filters out jobs that already succeeded - we don't need to re-validate those
+    pending_jobs = [
+        j for j in get_batch_jobs(batch_id, skipped=False, schema=schema)
+        if j['status'] in JobStatus.ready_for_submit()
+    ]
+
+    # Get the job_configuration_ids for pending jobs
+    pending_config_ids = {j['job_configuration_id'] for j in pending_jobs}
+
+    # Get job configurations, filtered to only those with pending jobs
+    all_job_configs = get_batch_job_configurations(batch_id, skipped=False, schema=schema)
+    job_configs = [jc for jc in all_job_configs if jc['id'] in pending_config_ids]
+
+    # If no jobs need validation (all already succeeded), return empty
+    if not job_configs:
+        return []
 
     if batch_type == BatchType.EDM_CREATION:
         edm_names = [jc['job_configuration_data'].get('Database') for jc in job_configs]
