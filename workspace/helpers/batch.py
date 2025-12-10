@@ -551,6 +551,12 @@ def _validate_batch_submission(
             working_files_dir=working_files_dir
         )
 
+    elif batch_type == BatchType.EDM_DB_UPGRADE:
+        # EDM DB Upgrade validates: EDMs must exist
+        edm_names = [jc['job_configuration_data'].get('Database') for jc in job_configs]
+        edm_names = [name for name in edm_names if name]
+        return validator.validate_edm_db_upgrade_batch(edm_names=edm_names)
+
     # Add validation for other batch types here as needed
 
     return []

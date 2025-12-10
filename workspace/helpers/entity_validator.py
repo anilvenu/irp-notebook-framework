@@ -804,6 +804,29 @@ class EntityValidator:
 
         return all_errors
 
+    def validate_edm_db_upgrade_batch(
+        self,
+        edm_names: List[str]
+    ) -> List[str]:
+        """
+        Validate EDM DB Upgrade batch submission.
+
+        Pre-requisites (must exist):
+        - EDMs to be upgraded
+
+        Args:
+            edm_names: List of EDM names to be upgraded
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not edm_names:
+            return []
+
+        # Pre-requisite: EDMs must exist
+        _, edm_errors = self.validate_edms_exist(edm_names)
+        return edm_errors
+
     def _validate_csv_files_exist(
         self,
         portfolios: List[Dict[str, str]],

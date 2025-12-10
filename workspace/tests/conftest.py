@@ -344,7 +344,7 @@ def sample_batch(sample_hierarchy, test_schema):
 
 
 @pytest.fixture
-def mock_irp_client():
+def mock_irp_client(mocker):
     """
     Mock IRPClient for testing without actual API calls.
 
@@ -360,6 +360,10 @@ def mock_irp_client():
     Default behaviors:
     - submit_create_edm_job(): Returns incrementing job IDs (1, 2, 3...)
     - get_risk_data_job(): Returns job with FINISHED status
+
+    Also mocks:
+    - _validate_batch_submission: Returns empty list (no validation errors)
+      This prevents entity validation from making real API calls during tests.
 
     You can customize behavior per test using side_effect or return_value:
 
@@ -383,6 +387,9 @@ def mock_irp_client():
         MagicMock: Configured mock IRPClient instance
     """
     from unittest.mock import MagicMock
+
+    # Mock entity validation to prevent real API calls during batch submission tests
+    mocker.patch('helpers.batch._validate_batch_submission', return_value=[])
 
     # Create main mock client
     mock_client = MagicMock()

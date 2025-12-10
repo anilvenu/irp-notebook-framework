@@ -1319,3 +1319,81 @@ class TestValidateMriImportBatch:
         assert 'ENT-PORT-002' in error_codes  # Port2 missing since EDM2 doesn't exist
         assert 'ENT-FILE-001' in error_codes
         assert 'ENT-ACCT-001' in error_codes
+
+
+class TestValidateEdmDbUpgradeBatch:
+    """Tests for validate_edm_db_upgrade_batch method."""
+
+    def test_empty_list_returns_no_errors(self):
+        """Empty EDM list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_edm_db_upgrade_batch([])
+        assert errors == []
+
+    def test_all_edms_exist_returns_no_errors(self):
+        """When all EDMs exist, should return no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123},
+            {'exposureName': 'EDM2', 'exposureId': 456}
+        ]
+
+        errors = validator.validate_edm_db_upgrade_batch(['EDM1', 'EDM2'])
+
+        assert errors == []
+        validator._edm_manager.search_edms_paginated.assert_called_once()
+
+    def test_missing_edm_returns_error(self):
+        """When EDM doesn't exist, should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        errors = validator.validate_edm_db_upgrade_batch(['EDM1'])
+
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM1' in errors[0]
+
+    def test_some_edms_missing_returns_error(self):
+        """When some EDMs don't exist, should report missing ones."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+
+        errors = validator.validate_edm_db_upgrade_batch(['EDM1', 'EDM2', 'EDM3'])
+
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM2' in errors[0]
+        assert 'EDM3' in errors[0]
+        assert 'EDM1' not in errors[0]
+
+    def test_api_error_returns_error(self):
+        """API error should be captured in error list."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.side_effect = IRPAPIError("Connection failed")
+
+        errors = validator.validate_edm_db_upgrade_batch(['EDM1'])
+
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+        assert 'Connection failed' in errors[0]
+
+    def test_deduplicates_edm_names(self):
+        """Should deduplicate EDM names before checking."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+
+        errors = validator.validate_edm_db_upgrade_batch(['EDM1', 'EDM1', 'EDM1'])
+
+        assert errors == []
+        # Should only check once despite duplicates
+        validator._edm_manager.search_edms_paginated.assert_called_once()

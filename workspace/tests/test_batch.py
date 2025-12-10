@@ -1310,6 +1310,8 @@ def test_submit_analysis_batch_reference_data_valid(test_schema, mocker):
 
     # Mock the reference data validation to return no errors
     mocker.patch('helpers.batch.validate_reference_data_with_api', return_value=[])
+    # Mock entity validation to prevent real API calls
+    mocker.patch('helpers.batch._validate_batch_submission', return_value=[])
 
     # Create hierarchy with Analysis batch
     cycle_id = execute_insert(
@@ -1368,6 +1370,8 @@ def test_submit_analysis_batch_reference_data_invalid(test_schema, mocker):
     mocker.patch('helpers.batch.validate_reference_data_with_api', return_value=[
         'Model Profile "InvalidProfile" not found in Moody\'s system'
     ])
+    # Mock entity validation to prevent real API calls
+    mocker.patch('helpers.batch._validate_batch_submission', return_value=[])
 
     # Create hierarchy with Analysis batch
     cycle_id = execute_insert(
@@ -1423,6 +1427,8 @@ def test_submit_non_analysis_batch_skips_reference_validation(test_schema, mocke
 
     # Mock reference data validation - should NOT be called for non-Analysis batch
     mock_validate = mocker.patch('helpers.batch.validate_reference_data_with_api', return_value=[])
+    # Mock entity validation to prevent real API calls
+    mocker.patch('helpers.batch._validate_batch_submission', return_value=[])
 
     # Create hierarchy with EDM Creation batch (non-Analysis)
     cycle_id, stage_id, step_id, config_id = create_test_hierarchy(test_schema, 'test_non_analysis_skip')
