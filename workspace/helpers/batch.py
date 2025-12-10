@@ -491,20 +491,19 @@ def create_batch(
         raise BatchError(f"Failed to create batch: {str(e)}")
 
 
-def _validate_batch_submission(
-    batch: Dict[str, Any],
+def validate_batch(
     batch_id: int,
     schema: str = 'public'
 ) -> List[str]:
     """
     Validate batch submission prerequisites and entity existence.
 
+    Call this before submit_batch() to check for validation errors.
     Validates:
     - Pre-requisites exist (e.g., server for EDM, EDMs for Portfolio)
     - Entities to be created don't already exist
 
     Args:
-        batch: Batch record dictionary
         batch_id: Batch ID
         schema: Database schema
 
@@ -513,6 +512,7 @@ def _validate_batch_submission(
     """
     from helpers.entity_validator import EntityValidator
 
+    batch = read_batch(batch_id, schema=schema)
     batch_type = batch['batch_type']
     validator = EntityValidator()
 
@@ -530,7 +530,6 @@ def _validate_batch_submission(
     elif batch_type == BatchType.PORTFOLIO_CREATION:
         # Get ALL portfolios from configuration (base + sub-portfolios)
         # Job configs only contain base portfolios, but we want to validate all
-        from helpers.configuration import read_configuration
         config = read_configuration(batch['configuration_id'], schema=schema)
         config_data = config.get('configuration_data', {})
         portfolios = config_data.get('Portfolios', [])
@@ -539,11 +538,12 @@ def _validate_batch_submission(
     elif batch_type == BatchType.MRI_IMPORT:
         # MRI Import validates: EDMs exist, Portfolios exist, CSV files exist, Accounts don't exist
         # Extract portfolio data from job configs (Database, Portfolio, accounts_import_file, locations_import_file)
-        from helpers.csv_export import get_working_files_path
+        from helpers.irp_integration.utils import get_cycle_file_directories
         portfolios = [jc['job_configuration_data'] for jc in job_configs]
         try:
-            working_files_dir = str(get_working_files_path())
-        except ValueError:
+            dirs = get_cycle_file_directories()
+            working_files_dir = dirs['data']  # CSV files are in files/data
+        except Exception:
             working_files_dir = ""  # Will fail CSV validation if can't determine path
         return validator.validate_mri_import_batch(
             portfolios=portfolios,
@@ -680,15 +680,8 @@ def submit_batch(
                 + "\n".join(ref_data_errors[:10])
             )
 
-    # Validate batch prerequisites and entity existence before first submission
-    # Skip validation on retry (batch already ACTIVE) to allow resubmitting failed jobs
-    if batch['status'] == BatchStatus.INITIATED:
-        validation_errors = _validate_batch_submission(batch, batch_id, schema)
-        if validation_errors:
-            raise BatchError(
-                f"Batch validation failed. Cannot submit batch.\n"
-                + "\n".join(validation_errors)
-            )
+    # Note: Validation should be called separately via validate_batch() before submit_batch()
+    # This allows notebooks to display validation errors and handle them gracefully
 
     # Update batch step_id if provided (allows re-associating batch with submission step)
     if step_id is not None:
