@@ -2881,3 +2881,261 @@ class TestValidateGroupingRollupBatch:
         errors = validator.validate_grouping_rollup_batch(groupings)
 
         assert errors == []
+
+
+class TestValidateRdmExportBatch:
+    """Tests for validate_rdm_export_batch method."""
+
+    def test_empty_export_jobs_returns_no_errors(self):
+        """Empty export jobs list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_rdm_export_batch([])
+        assert errors == []
+
+    def test_valid_batch_returns_no_errors(self):
+        """Valid RDM export batch should return no errors."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # Groups and analyses exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'Group1'}],      # Group exists
+            [{'analysisName': 'Analysis1'}]     # Analysis exists
+        ]
+        # RDM doesn't exist
+        validator._rdm_manager.search_databases.return_value = []
+
+        export_jobs = [{
+            'rdm_name': 'RM_RDM_Test',
+            'server_name': 'databridge-1',
+            'analysis_names': ['Group1', 'Analysis1'],
+            'analysis_edm_map': {'Analysis1': 'EDM1'},
+            'group_names_set': ['Group1']
+        }]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        assert errors == []
+
+    def test_missing_group_returns_error(self):
+        """Missing group should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # Group doesn't exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [],  # Group doesn't exist
+            []   # (no analyses to check)
+        ]
+        # RDM doesn't exist
+        validator._rdm_manager.search_databases.return_value = []
+
+        export_jobs = [{
+            'rdm_name': 'RM_RDM_Test',
+            'server_name': 'databridge-1',
+            'analysis_names': ['MissingGroup'],
+            'analysis_edm_map': {},
+            'group_names_set': ['MissingGroup']
+        }]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        assert len(errors) == 1
+        assert 'ENT-GROUP-002' in errors[0]
+        assert 'MissingGroup' in errors[0]
+
+    def test_missing_analysis_returns_error(self):
+        """Missing analysis should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # Analysis doesn't exist
+        validator._analysis_manager.search_analyses_paginated.return_value = []
+        # RDM doesn't exist
+        validator._rdm_manager.search_databases.return_value = []
+
+        export_jobs = [{
+            'rdm_name': 'RM_RDM_Test',
+            'server_name': 'databridge-1',
+            'analysis_names': ['MissingAnalysis'],
+            'analysis_edm_map': {'MissingAnalysis': 'EDM1'},
+            'group_names_set': []
+        }]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        assert len(errors) == 1
+        assert 'ENT-ANALYSIS-002' in errors[0]
+
+    def test_existing_rdm_returns_error(self):
+        """Existing RDM should return error."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # Analysis exists
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Analysis1'}
+        ]
+        # RDM already exists
+        validator._rdm_manager.search_databases.return_value = [
+            {'databaseName': 'RM_RDM_Test_123'}
+        ]
+
+        export_jobs = [{
+            'rdm_name': 'RM_RDM_Test',
+            'server_name': 'databridge-1',
+            'analysis_names': ['Analysis1'],
+            'analysis_edm_map': {'Analysis1': 'EDM1'},
+            'group_names_set': []
+        }]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        assert len(errors) == 1
+        assert 'ENT-RDM-001' in errors[0]
+
+    def test_multiple_jobs_aggregated(self):
+        """Items from multiple jobs should be aggregated and validated together."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # All exist
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'Group1'}],  # Groups exist
+            [{'analysisName': 'A1'}, {'analysisName': 'A2'}]  # Analyses exist
+        ]
+        # RDM doesn't exist
+        validator._rdm_manager.search_databases.return_value = []
+
+        # Multiple jobs (like chunked export)
+        export_jobs = [
+            {
+                'rdm_name': 'RM_RDM_Test',
+                'server_name': 'databridge-1',
+                'analysis_names': ['Group1', 'A1'],
+                'analysis_edm_map': {'A1': 'EDM1'},
+                'group_names_set': ['Group1']
+            },
+            {
+                'rdm_name': 'RM_RDM_Test',
+                'server_name': 'databridge-1',
+                'analysis_names': ['A2'],
+                'analysis_edm_map': {'A2': 'EDM1'},
+                'group_names_set': ['Group1']
+            }
+        ]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        assert errors == []
+
+    def test_multiple_errors_returned(self):
+        """Multiple validation failures should all be reported."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # Group missing, analysis missing
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [],  # Group doesn't exist
+            []   # Analysis doesn't exist
+        ]
+        # RDM already exists
+        validator._rdm_manager.search_databases.return_value = [
+            {'databaseName': 'RM_RDM_Existing'}
+        ]
+
+        export_jobs = [{
+            'rdm_name': 'RM_RDM_Existing',
+            'server_name': 'databridge-1',
+            'analysis_names': ['MissingGroup', 'MissingAnalysis'],
+            'analysis_edm_map': {'MissingAnalysis': 'EDM1'},
+            'group_names_set': ['MissingGroup']
+        }]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-GROUP-002' in error_codes
+        assert 'ENT-ANALYSIS-002' in error_codes
+        assert 'ENT-RDM-001' in error_codes
+
+    def test_only_groups_no_analyses(self):
+        """Export with only groups should work."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # Group exists
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Group1'}
+        ]
+        # RDM doesn't exist
+        validator._rdm_manager.search_databases.return_value = []
+
+        export_jobs = [{
+            'rdm_name': 'RM_RDM_Test',
+            'server_name': 'databridge-1',
+            'analysis_names': ['Group1'],
+            'analysis_edm_map': {},
+            'group_names_set': ['Group1']
+        }]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        assert errors == []
+
+    def test_only_analyses_no_groups(self):
+        """Export with only analyses should work."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # Analysis exists
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Analysis1'}
+        ]
+        # RDM doesn't exist
+        validator._rdm_manager.search_databases.return_value = []
+
+        export_jobs = [{
+            'rdm_name': 'RM_RDM_Test',
+            'server_name': 'databridge-1',
+            'analysis_names': ['Analysis1'],
+            'analysis_edm_map': {'Analysis1': 'EDM1'},
+            'group_names_set': []
+        }]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        assert errors == []
+
+    def test_no_rdm_name_skips_rdm_check(self):
+        """Export without RDM name should skip RDM existence check."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # Analysis exists
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Analysis1'}
+        ]
+
+        export_jobs = [{
+            'rdm_name': None,  # No RDM name
+            'server_name': 'databridge-1',
+            'analysis_names': ['Analysis1'],
+            'analysis_edm_map': {'Analysis1': 'EDM1'},
+            'group_names_set': []
+        }]
+
+        errors = validator.validate_rdm_export_batch(export_jobs)
+
+        assert errors == []
+        # RDM manager should not have been called
+        validator._rdm_manager.search_databases.assert_not_called()

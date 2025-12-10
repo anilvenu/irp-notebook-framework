@@ -1368,6 +1368,83 @@ class EntityValidator:
 
         return all_errors
 
+    def validate_rdm_export_batch(
+        self,
+        export_jobs: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Validate RDM Export batch submission.
+
+        Pre-requisites (must exist):
+        - Analyses referenced must exist
+        - Groups referenced must exist
+
+        Entities to be created (must NOT exist):
+        - RDM name must not already exist
+
+        Args:
+            export_jobs: List of export job dicts with 'analysis_names', 'rdm_name',
+                        'server_name', 'analysis_edm_map', and 'group_names_set' keys
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not export_jobs:
+            return []
+
+        all_errors = []
+
+        # Collect all items, analysis_edm_map, and group_names_set from all jobs
+        all_items = []
+        analysis_edm_map = {}
+        group_names_set = set()
+        rdm_name = None
+        server_name = None
+
+        for job in export_jobs:
+            items = job.get('analysis_names', [])
+            all_items.extend(items)
+
+            # Merge analysis_edm_map from each job
+            edm_map = job.get('analysis_edm_map', {})
+            analysis_edm_map.update(edm_map)
+
+            # Merge group_names_set from each job
+            groups = job.get('group_names_set', [])
+            group_names_set.update(groups)
+
+            # Get rdm_name and server_name (same across all jobs)
+            if not rdm_name:
+                rdm_name = job.get('rdm_name')
+            if not server_name:
+                server_name = job.get('server_name', 'databridge-1')
+
+        # Deduplicate items
+        unique_items = list(set(all_items))
+
+        # Separate items into groups vs analyses
+        group_items = [item for item in unique_items if item in group_names_set]
+        analysis_items = [item for item in unique_items if item not in group_names_set]
+
+        # Pre-requisite 1: Groups must exist
+        if group_items:
+            _, group_errors = self.validate_groups_exist(group_items)
+            all_errors.extend(group_errors)
+
+        # Pre-requisite 2: Analyses must exist
+        if analysis_items:
+            _, analysis_errors = self.validate_analyses_exist(
+                analysis_items, analysis_edm_map
+            )
+            all_errors.extend(analysis_errors)
+
+        # RDM must NOT exist
+        if rdm_name:
+            rdm_errors = self.validate_rdm_not_exists(rdm_name, server_name)
+            all_errors.extend(rdm_errors)
+
+        return all_errors
+
     def _validate_csv_files_exist(
         self,
         portfolios: List[Dict[str, str]],

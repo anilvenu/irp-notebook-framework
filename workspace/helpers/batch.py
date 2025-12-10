@@ -584,6 +584,11 @@ def _validate_batch_submission(
         groupings = [jc['job_configuration_data'] for jc in job_configs]
         return validator.validate_grouping_rollup_batch(groupings=groupings)
 
+    elif batch_type == BatchType.EXPORT_TO_RDM:
+        # RDM Export validates: Analyses exist, Groups exist, RDM doesn't exist
+        export_jobs = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_rdm_export_batch(export_jobs=export_jobs)
+
     # Add validation for other batch types here as needed
 
     return []
