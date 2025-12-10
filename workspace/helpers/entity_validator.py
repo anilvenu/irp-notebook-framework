@@ -347,6 +347,57 @@ class EntityValidator:
 
         return has_accounts, errors
 
+    def validate_single_cedant_per_edm(
+        self,
+        edm_exposure_ids: Dict[str, int]
+    ) -> Tuple[Dict[str, Dict[str, Any]], List[str]]:
+        """
+        Validate that each EDM has exactly one cedant (required for treaty creation).
+
+        Args:
+            edm_exposure_ids: Mapping of EDM names to exposure IDs
+
+        Returns:
+            Tuple of (cedant_info mapping, error_messages)
+            cedant_info maps EDM names to {'cedantId': X, 'cedantName': Y} for valid EDMs
+        """
+        if not edm_exposure_ids:
+            return {}, []
+
+        errors = []
+        cedant_info: Dict[str, Dict[str, Any]] = {}
+        no_cedants = []
+        multiple_cedants = []
+
+        for edm_name, exposure_id in edm_exposure_ids.items():
+            try:
+                cedants = self.edm_manager.get_cedants_by_edm(exposure_id)
+
+                if not cedants:
+                    no_cedants.append(edm_name)
+                elif len(cedants) > 1:
+                    multiple_cedants.append(f"{edm_name} ({len(cedants)} cedants)")
+                else:
+                    cedant_info[edm_name] = {
+                        'cedantId': cedants[0].get('cedantId'),
+                        'cedantName': cedants[0].get('cedantName')
+                    }
+
+            except IRPAPIError as e:
+                errors.append(f"ENT-API-001: Failed to check cedants for {edm_name}: {e}")
+
+        if no_cedants:
+            errors.insert(0,
+                f"ENT-CEDANT-001: The following EDMs have no cedants:{_format_entity_list(no_cedants)}"
+            )
+
+        if multiple_cedants:
+            errors.insert(0,
+                f"ENT-CEDANT-002: The following EDMs have multiple cedants (exactly one required for treaty creation):{_format_entity_list(multiple_cedants)}"
+            )
+
+        return cedant_info, errors
+
     def validate_treaties_not_exist(
         self,
         treaties: List[Dict[str, str]],
@@ -826,6 +877,53 @@ class EntityValidator:
         # Pre-requisite: EDMs must exist
         _, edm_errors = self.validate_edms_exist(edm_names)
         return edm_errors
+
+    def validate_treaty_batch(
+        self,
+        treaties: List[Dict[str, str]]
+    ) -> List[str]:
+        """
+        Validate Reinsurance Treaty Creation batch submission.
+
+        Pre-requisites (must exist):
+        - EDMs that treaties will be created in
+        - Exactly one cedant per EDM
+
+        Entities to be created (must NOT exist):
+        - Treaty names within their EDMs
+
+        Args:
+            treaties: List of treaty dicts with 'Database' and 'Treaty Name' keys
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not treaties:
+            return []
+
+        all_errors = []
+
+        # Extract unique EDM names from treaties
+        edm_names = list(set(
+            t.get('Database') for t in treaties if t.get('Database')
+        ))
+
+        # Pre-requisite 1: EDMs must exist
+        edm_exposure_ids, edm_errors = self.validate_edms_exist(edm_names)
+        all_errors.extend(edm_errors)
+
+        if edm_exposure_ids:
+            # Pre-requisite 2: Each EDM must have exactly one cedant
+            _, cedant_errors = self.validate_single_cedant_per_edm(edm_exposure_ids)
+            all_errors.extend(cedant_errors)
+
+            # Treaties must not already exist (check in EDMs that were found)
+            _, treaty_errors = self.validate_treaties_not_exist(
+                treaties, edm_exposure_ids
+            )
+            all_errors.extend(treaty_errors)
+
+        return all_errors
 
     def _validate_csv_files_exist(
         self,

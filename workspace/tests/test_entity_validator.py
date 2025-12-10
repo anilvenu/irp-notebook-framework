@@ -1397,3 +1397,370 @@ class TestValidateEdmDbUpgradeBatch:
         assert errors == []
         # Should only check once despite duplicates
         validator._edm_manager.search_edms_paginated.assert_called_once()
+
+
+class TestValidateSingleCedantPerEdm:
+    """Tests for validate_single_cedant_per_edm method."""
+
+    def test_empty_exposure_ids_returns_no_errors(self):
+        """Empty exposure IDs should return no errors."""
+        validator = EntityValidator()
+        cedant_info, errors = validator.validate_single_cedant_per_edm({})
+        assert cedant_info == {}
+        assert errors == []
+
+    def test_single_cedant_returns_no_errors(self):
+        """EDM with exactly one cedant should pass validation."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.get_cedants_by_edm.return_value = [
+            {'cedantId': 1, 'cedantName': 'Test Cedant'}
+        ]
+
+        cedant_info, errors = validator.validate_single_cedant_per_edm({'EDM1': 123})
+
+        assert errors == []
+        assert 'EDM1' in cedant_info
+        assert cedant_info['EDM1']['cedantId'] == 1
+        assert cedant_info['EDM1']['cedantName'] == 'Test Cedant'
+
+    def test_no_cedants_returns_error(self):
+        """EDM with no cedants should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.get_cedants_by_edm.return_value = []
+
+        cedant_info, errors = validator.validate_single_cedant_per_edm({'EDM1': 123})
+
+        assert len(errors) == 1
+        assert 'ENT-CEDANT-001' in errors[0]
+        assert 'EDM1' in errors[0]
+        assert 'EDM1' not in cedant_info
+
+    def test_multiple_cedants_returns_error(self):
+        """EDM with multiple cedants should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.get_cedants_by_edm.return_value = [
+            {'cedantId': 1, 'cedantName': 'Cedant 1'},
+            {'cedantId': 2, 'cedantName': 'Cedant 2'}
+        ]
+
+        cedant_info, errors = validator.validate_single_cedant_per_edm({'EDM1': 123})
+
+        assert len(errors) == 1
+        assert 'ENT-CEDANT-002' in errors[0]
+        assert 'EDM1' in errors[0]
+        assert '2 cedants' in errors[0]
+        assert 'EDM1' not in cedant_info
+
+    def test_multiple_edms_validated(self):
+        """Multiple EDMs should each be validated."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        # EDM1 has 1 cedant, EDM2 has 1 cedant
+        validator._edm_manager.get_cedants_by_edm.side_effect = [
+            [{'cedantId': 1, 'cedantName': 'Cedant 1'}],
+            [{'cedantId': 2, 'cedantName': 'Cedant 2'}]
+        ]
+
+        cedant_info, errors = validator.validate_single_cedant_per_edm({
+            'EDM1': 123,
+            'EDM2': 456
+        })
+
+        assert errors == []
+        assert len(cedant_info) == 2
+        assert validator._edm_manager.get_cedants_by_edm.call_count == 2
+
+    def test_mixed_cedant_issues_returns_all_errors(self):
+        """EDMs with different cedant issues should all be reported."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        # EDM1 has 0 cedants, EDM2 has 2 cedants, EDM3 has 1 cedant
+        validator._edm_manager.get_cedants_by_edm.side_effect = [
+            [],
+            [{'cedantId': 1, 'cedantName': 'C1'}, {'cedantId': 2, 'cedantName': 'C2'}],
+            [{'cedantId': 3, 'cedantName': 'C3'}]
+        ]
+
+        cedant_info, errors = validator.validate_single_cedant_per_edm({
+            'EDM1': 123,
+            'EDM2': 456,
+            'EDM3': 789
+        })
+
+        assert len(errors) == 2
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-CEDANT-001' in error_codes  # no cedants
+        assert 'ENT-CEDANT-002' in error_codes  # multiple cedants
+        # Only EDM3 should be in cedant_info
+        assert len(cedant_info) == 1
+        assert 'EDM3' in cedant_info
+
+    def test_api_error_returns_error(self):
+        """API error should be captured in error list."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.get_cedants_by_edm.side_effect = IRPAPIError("Connection failed")
+
+        cedant_info, errors = validator.validate_single_cedant_per_edm({'EDM1': 123})
+
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+        assert 'Connection failed' in errors[0]
+
+
+class TestValidateTreatyBatch:
+    """Tests for validate_treaty_batch method."""
+
+    def test_empty_treaties_returns_no_errors(self):
+        """Empty treaty list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_treaty_batch([])
+        assert errors == []
+
+    def test_valid_batch_returns_no_errors(self):
+        """Valid treaty batch should return no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._treaty_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Each EDM has exactly one cedant
+        validator._edm_manager.get_cedants_by_edm.return_value = [
+            {'cedantId': 1, 'cedantName': 'Test Cedant'}
+        ]
+        # Treaties don't exist
+        validator._treaty_manager.search_treaties_paginated.return_value = []
+
+        treaties = [
+            {'Database': 'EDM1', 'Treaty Name': 'Treaty1'},
+            {'Database': 'EDM1', 'Treaty Name': 'Treaty2'}
+        ]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        assert errors == []
+
+    def test_missing_edm_returns_error(self):
+        """Missing EDM should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        treaties = [{'Database': 'EDM1', 'Treaty Name': 'Treaty1'}]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM1' in errors[0]
+
+    def test_treaty_exists_returns_error(self):
+        """Existing treaty should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._treaty_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Each EDM has exactly one cedant
+        validator._edm_manager.get_cedants_by_edm.return_value = [
+            {'cedantId': 1, 'cedantName': 'Test Cedant'}
+        ]
+        # Treaty already exists
+        validator._treaty_manager.search_treaties_paginated.return_value = [
+            {'treatyName': 'Treaty1', 'treatyId': 100}
+        ]
+
+        treaties = [{'Database': 'EDM1', 'Treaty Name': 'Treaty1'}]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        assert len(errors) == 1
+        assert 'ENT-TREATY-001' in errors[0]
+        assert 'Treaty1' in errors[0]
+
+    def test_multiple_edms_validated(self):
+        """Treaties across multiple EDMs should all be validated."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._treaty_manager = Mock()
+
+        # Both EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123},
+            {'exposureName': 'EDM2', 'exposureId': 456}
+        ]
+        # Each EDM has exactly one cedant
+        validator._edm_manager.get_cedants_by_edm.return_value = [
+            {'cedantId': 1, 'cedantName': 'Test Cedant'}
+        ]
+        # No treaties exist
+        validator._treaty_manager.search_treaties_paginated.return_value = []
+
+        treaties = [
+            {'Database': 'EDM1', 'Treaty Name': 'Treaty1'},
+            {'Database': 'EDM2', 'Treaty Name': 'Treaty2'}
+        ]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        assert errors == []
+        # Should query treaties for each EDM
+        assert validator._treaty_manager.search_treaties_paginated.call_count == 2
+
+    def test_missing_edm_skips_treaty_check(self):
+        """If EDM is missing, treaty check should be skipped for that EDM."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._treaty_manager = Mock()
+
+        # Only EDM1 exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # EDM1 has exactly one cedant
+        validator._edm_manager.get_cedants_by_edm.return_value = [
+            {'cedantId': 1, 'cedantName': 'Test Cedant'}
+        ]
+        # No treaties exist
+        validator._treaty_manager.search_treaties_paginated.return_value = []
+
+        treaties = [
+            {'Database': 'EDM1', 'Treaty Name': 'Treaty1'},
+            {'Database': 'EDM2', 'Treaty Name': 'Treaty2'}  # EDM2 doesn't exist
+        ]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        # Should have error for missing EDM2
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM2' in errors[0]
+        # Should only check treaties in EDM1 (the one that exists)
+        assert validator._treaty_manager.search_treaties_paginated.call_count == 1
+
+    def test_multiple_errors_returned(self):
+        """Multiple validation failures should all be reported."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._treaty_manager = Mock()
+
+        # Only EDM1 exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # EDM1 has exactly one cedant
+        validator._edm_manager.get_cedants_by_edm.return_value = [
+            {'cedantId': 1, 'cedantName': 'Test Cedant'}
+        ]
+        # Treaty1 already exists
+        validator._treaty_manager.search_treaties_paginated.return_value = [
+            {'treatyName': 'Treaty1', 'treatyId': 100}
+        ]
+
+        treaties = [
+            {'Database': 'EDM1', 'Treaty Name': 'Treaty1'},  # Exists
+            {'Database': 'EDM2', 'Treaty Name': 'Treaty2'}   # EDM missing
+        ]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        # Should have: EDM2 missing, Treaty1 exists
+        assert len(errors) == 2
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-EDM-002' in error_codes
+        assert 'ENT-TREATY-001' in error_codes
+
+    def test_no_cedant_returns_error(self):
+        """EDM with no cedants should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._treaty_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # EDM has no cedants
+        validator._edm_manager.get_cedants_by_edm.return_value = []
+        # Treaties don't exist
+        validator._treaty_manager.search_treaties_paginated.return_value = []
+
+        treaties = [{'Database': 'EDM1', 'Treaty Name': 'Treaty1'}]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        assert len(errors) == 1
+        assert 'ENT-CEDANT-001' in errors[0]
+        assert 'EDM1' in errors[0]
+
+    def test_multiple_cedants_returns_error(self):
+        """EDM with multiple cedants should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._treaty_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # EDM has multiple cedants
+        validator._edm_manager.get_cedants_by_edm.return_value = [
+            {'cedantId': 1, 'cedantName': 'Cedant 1'},
+            {'cedantId': 2, 'cedantName': 'Cedant 2'}
+        ]
+        # Treaties don't exist
+        validator._treaty_manager.search_treaties_paginated.return_value = []
+
+        treaties = [{'Database': 'EDM1', 'Treaty Name': 'Treaty1'}]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        assert len(errors) == 1
+        assert 'ENT-CEDANT-002' in errors[0]
+        assert 'EDM1' in errors[0]
+        assert '2 cedants' in errors[0]
+
+    def test_cedant_and_treaty_errors_combined(self):
+        """Cedant errors and treaty errors should both be reported."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._treaty_manager = Mock()
+
+        # Both EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123},
+            {'exposureName': 'EDM2', 'exposureId': 456}
+        ]
+        # EDM1 has no cedants, EDM2 has 1 cedant
+        validator._edm_manager.get_cedants_by_edm.side_effect = [
+            [],  # EDM1 - no cedants
+            [{'cedantId': 1, 'cedantName': 'Cedant 1'}]  # EDM2 - valid
+        ]
+        # Treaty2 exists in EDM2
+        def mock_treaty_search(exposure_id, filter):
+            if exposure_id == 456:
+                return [{'treatyName': 'Treaty2', 'treatyId': 200}]
+            return []
+        validator._treaty_manager.search_treaties_paginated.side_effect = mock_treaty_search
+
+        treaties = [
+            {'Database': 'EDM1', 'Treaty Name': 'Treaty1'},
+            {'Database': 'EDM2', 'Treaty Name': 'Treaty2'}
+        ]
+
+        errors = validator.validate_treaty_batch(treaties)
+
+        # Should have: EDM1 no cedants, Treaty2 exists
+        assert len(errors) == 2
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-CEDANT-001' in error_codes
+        assert 'ENT-TREATY-001' in error_codes

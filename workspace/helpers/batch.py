@@ -557,6 +557,11 @@ def _validate_batch_submission(
         edm_names = [name for name in edm_names if name]
         return validator.validate_edm_db_upgrade_batch(edm_names=edm_names)
 
+    elif batch_type == BatchType.CREATE_REINSURANCE_TREATIES:
+        # Treaty Creation validates: EDMs exist, Treaties don't exist
+        treaties = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_treaty_batch(treaties=treaties)
+
     # Add validation for other batch types here as needed
 
     return []

@@ -39,6 +39,9 @@ os.environ['MSSQL_TEST_PASSWORD'] = os.getenv('MSSQL_SA_PASSWORD', 'TestPass123!
 os.environ['MSSQL_DRIVER'] = 'ODBC Driver 18 for SQL Server'
 os.environ['MSSQL_TRUST_CERT'] = 'yes'
 
+# Disable Teams notifications during tests
+os.environ['TEAMS_NOTIFICATION_ENABLED'] = 'false'
+
 # Add workspace directory to Python path for imports
 workspace_path = Path(__file__).parent.parent.resolve()
 workspace_path_str = str(workspace_path)
