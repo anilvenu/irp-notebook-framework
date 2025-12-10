@@ -558,9 +558,14 @@ def _validate_batch_submission(
         return validator.validate_edm_db_upgrade_batch(edm_names=edm_names)
 
     elif batch_type == BatchType.CREATE_REINSURANCE_TREATIES:
-        # Treaty Creation validates: EDMs exist, Treaties don't exist
+        # Treaty Creation validates: EDMs exist, single cedant per EDM, Treaties don't exist
         treaties = [jc['job_configuration_data'] for jc in job_configs]
         return validator.validate_treaty_batch(treaties=treaties)
+
+    elif batch_type == BatchType.GEOHAZ:
+        # GeoHaz validates: EDMs exist, Portfolios exist, Portfolios have locations
+        portfolios = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_geohaz_batch(portfolios=portfolios)
 
     # Add validation for other batch types here as needed
 

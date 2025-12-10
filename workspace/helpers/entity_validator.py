@@ -347,6 +347,59 @@ class EntityValidator:
 
         return has_accounts, errors
 
+    def validate_portfolios_have_locations(
+        self,
+        portfolio_exposure_map: Dict[str, Dict[str, int]]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Check that portfolios have accounts with locations (for GeoHaz validation).
+
+        Args:
+            portfolio_exposure_map: Mapping of "EDM_NAME/PORTFOLIO_NAME" to
+                                   {'exposure_id': X, 'portfolio_id': Y}
+
+        Returns:
+            Tuple of (portfolios_without_locations, error_messages)
+        """
+        if not portfolio_exposure_map:
+            return [], []
+
+        errors = []
+        no_locations = []
+
+        for portfolio_key, ids in portfolio_exposure_map.items():
+            exposure_id = ids.get('exposure_id')
+            portfolio_id = ids.get('portfolio_id')
+
+            if not exposure_id or not portfolio_id:
+                continue
+
+            try:
+                accounts = self.portfolio_manager.search_accounts_by_portfolio(
+                    exposure_id=exposure_id,
+                    portfolio_id=portfolio_id
+                )
+
+                if not accounts or len(accounts) == 0:
+                    no_locations.append(f"{portfolio_key} (no accounts)")
+                else:
+                    # Sum up locations count from all accounts
+                    total_locations = sum(
+                        acc.get('locationsCount', 0) for acc in accounts
+                    )
+                    if total_locations == 0:
+                        no_locations.append(f"{portfolio_key} (0 locations)")
+
+            except IRPAPIError as e:
+                errors.append(f"ENT-API-001: Failed to check locations for {portfolio_key}: {e}")
+
+        if no_locations:
+            errors.insert(0,
+                f"ENT-LOC-001: The following portfolios have no locations (required for GeoHaz):{_format_entity_list(no_locations)}"
+            )
+
+        return no_locations, errors
+
     def validate_single_cedant_per_edm(
         self,
         edm_exposure_ids: Dict[str, int]
@@ -922,6 +975,55 @@ class EntityValidator:
                 treaties, edm_exposure_ids
             )
             all_errors.extend(treaty_errors)
+
+        return all_errors
+
+    def validate_geohaz_batch(
+        self,
+        portfolios: List[Dict[str, str]]
+    ) -> List[str]:
+        """
+        Validate GeoHaz batch submission.
+
+        Pre-requisites (must exist):
+        - EDMs that portfolios belong to
+        - Portfolios within their EDMs
+        - Portfolios must have accounts with locations
+
+        Args:
+            portfolios: List of portfolio dicts with 'Database' and 'Portfolio' keys
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not portfolios:
+            return []
+
+        all_errors = []
+
+        # Extract unique EDM names from portfolios
+        edm_names = list(set(
+            p.get('Database') for p in portfolios if p.get('Database')
+        ))
+
+        # Pre-requisite 1: EDMs must exist
+        edm_exposure_ids, edm_errors = self.validate_edms_exist(edm_names)
+        all_errors.extend(edm_errors)
+
+        # Pre-requisite 2: Portfolios must exist (and get their IDs for location check)
+        portfolio_exposure_map = {}
+        if edm_exposure_ids:
+            portfolio_exposure_map, portfolio_errors = self.validate_portfolios_exist(
+                portfolios, edm_exposure_ids
+            )
+            all_errors.extend(portfolio_errors)
+
+        # Pre-requisite 3: Portfolios must have locations
+        if portfolio_exposure_map:
+            _, location_errors = self.validate_portfolios_have_locations(
+                portfolio_exposure_map
+            )
+            all_errors.extend(location_errors)
 
         return all_errors
 

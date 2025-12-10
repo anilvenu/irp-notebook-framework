@@ -1764,3 +1764,299 @@ class TestValidateTreatyBatch:
         error_codes = [e.split(':')[0] for e in errors]
         assert 'ENT-CEDANT-001' in error_codes
         assert 'ENT-TREATY-001' in error_codes
+
+
+class TestValidatePortfoliosHaveLocations:
+    """Tests for validate_portfolios_have_locations method."""
+
+    def test_empty_map_returns_no_errors(self):
+        """Empty portfolio map should return no errors."""
+        validator = EntityValidator()
+        no_locations, errors = validator.validate_portfolios_have_locations({})
+        assert no_locations == []
+        assert errors == []
+
+    def test_portfolio_with_locations_returns_no_errors(self):
+        """Portfolio with locations should pass validation."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'locationsCount': 10}
+        ]
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456}
+        }
+
+        no_locations, errors = validator.validate_portfolios_have_locations(portfolio_map)
+
+        assert no_locations == []
+        assert errors == []
+
+    def test_portfolio_no_accounts_returns_error(self):
+        """Portfolio with no accounts should return error."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456}
+        }
+
+        no_locations, errors = validator.validate_portfolios_have_locations(portfolio_map)
+
+        assert len(no_locations) == 1
+        assert 'EDM1/Port1 (no accounts)' in no_locations
+        assert len(errors) == 1
+        assert 'ENT-LOC-001' in errors[0]
+
+    def test_portfolio_zero_locations_returns_error(self):
+        """Portfolio with accounts but zero locations should return error."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'locationsCount': 0},
+            {'accountId': 2, 'locationsCount': 0}
+        ]
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456}
+        }
+
+        no_locations, errors = validator.validate_portfolios_have_locations(portfolio_map)
+
+        assert len(no_locations) == 1
+        assert 'EDM1/Port1 (0 locations)' in no_locations
+        assert len(errors) == 1
+        assert 'ENT-LOC-001' in errors[0]
+
+    def test_multiple_accounts_locations_summed(self):
+        """Locations count should be summed across all accounts."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        # Multiple accounts with some locations each
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'locationsCount': 5},
+            {'accountId': 2, 'locationsCount': 3}
+        ]
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456}
+        }
+
+        no_locations, errors = validator.validate_portfolios_have_locations(portfolio_map)
+
+        assert no_locations == []
+        assert errors == []
+
+    def test_multiple_portfolios_validated(self):
+        """Multiple portfolios should each be validated."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        # Port1 has locations, Port2 has none
+        validator._portfolio_manager.search_accounts_by_portfolio.side_effect = [
+            [{'accountId': 1, 'locationsCount': 10}],
+            []
+        ]
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456},
+            'EDM1/Port2': {'exposure_id': 123, 'portfolio_id': 789}
+        }
+
+        no_locations, errors = validator.validate_portfolios_have_locations(portfolio_map)
+
+        assert len(no_locations) == 1
+        assert 'EDM1/Port2 (no accounts)' in no_locations
+        assert validator._portfolio_manager.search_accounts_by_portfolio.call_count == 2
+
+    def test_api_error_returns_error(self):
+        """API error should be captured in error list."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.side_effect = IRPAPIError("Connection failed")
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456}
+        }
+
+        no_locations, errors = validator.validate_portfolios_have_locations(portfolio_map)
+
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+        assert 'Connection failed' in errors[0]
+
+
+class TestValidateGeohazBatch:
+    """Tests for validate_geohaz_batch method."""
+
+    def test_empty_portfolios_returns_no_errors(self):
+        """Empty portfolio list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_geohaz_batch([])
+        assert errors == []
+
+    def test_valid_batch_returns_no_errors(self):
+        """Valid GeoHaz batch should return no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolios exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 456}
+        ]
+        # Portfolios have locations
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'locationsCount': 100}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Port1'}
+        ]
+
+        errors = validator.validate_geohaz_batch(portfolios)
+
+        assert errors == []
+
+    def test_missing_edm_returns_error(self):
+        """Missing EDM should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        portfolios = [{'Database': 'EDM1', 'Portfolio': 'Port1'}]
+
+        errors = validator.validate_geohaz_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM1' in errors[0]
+
+    def test_missing_portfolio_returns_error(self):
+        """Missing portfolio should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolio doesn't exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = []
+
+        portfolios = [{'Database': 'EDM1', 'Portfolio': 'Port1'}]
+
+        errors = validator.validate_geohaz_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-PORT-002' in errors[0]
+        assert 'Port1' in errors[0]
+
+    def test_no_locations_returns_error(self):
+        """Portfolio without locations should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Portfolio exists
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 456}
+        ]
+        # Portfolio has no locations
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        portfolios = [{'Database': 'EDM1', 'Portfolio': 'Port1'}]
+
+        errors = validator.validate_geohaz_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-LOC-001' in errors[0]
+        assert 'Port1' in errors[0]
+
+    def test_multiple_portfolios_validated(self):
+        """Multiple portfolios should all be validated."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # Both EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123},
+            {'exposureName': 'EDM2', 'exposureId': 456}
+        ]
+        # Both portfolios exist
+        validator._portfolio_manager.search_portfolios_paginated.side_effect = [
+            [{'portfolioName': 'Port1', 'portfolioId': 100}],
+            [{'portfolioName': 'Port2', 'portfolioId': 200}]
+        ]
+        # Both have locations
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'locationsCount': 50}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Port1'},
+            {'Database': 'EDM2', 'Portfolio': 'Port2'}
+        ]
+
+        errors = validator.validate_geohaz_batch(portfolios)
+
+        assert errors == []
+
+    def test_multiple_errors_returned(self):
+        """Multiple validation failures should all be reported."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # Only EDM1 exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Port1 exists but has no locations
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'Port1', 'portfolioId': 456}
+        ]
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Port1'},  # No locations
+            {'Database': 'EDM2', 'Portfolio': 'Port2'}   # EDM missing
+        ]
+
+        errors = validator.validate_geohaz_batch(portfolios)
+
+        # Should have: EDM2 missing, Port2 missing (because EDM2 doesn't exist), Port1 no locations
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-EDM-002' in error_codes
+        assert 'ENT-LOC-001' in error_codes
+
+    def test_edm_missing_skips_portfolio_check(self):
+        """If EDM is missing, portfolio and location checks should be skipped for that EDM."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # No EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        portfolios = [{'Database': 'EDM1', 'Portfolio': 'Port1'}]
+
+        errors = validator.validate_geohaz_batch(portfolios)
+
+        # Should only have EDM missing error (no portfolio/location checks)
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        # Portfolio manager should not have been called
+        validator._portfolio_manager.search_portfolios_paginated.assert_not_called()
+        validator._portfolio_manager.search_accounts_by_portfolio.assert_not_called()
