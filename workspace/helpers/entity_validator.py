@@ -400,6 +400,52 @@ class EntityValidator:
 
         return no_locations, errors
 
+    def validate_portfolios_have_accounts(
+        self,
+        portfolio_exposure_map: Dict[str, Dict[str, int]]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Check that portfolios have accounts (for Portfolio Mapping validation).
+
+        Args:
+            portfolio_exposure_map: Mapping of "EDM_NAME/PORTFOLIO_NAME" to
+                                   {'exposure_id': X, 'portfolio_id': Y}
+
+        Returns:
+            Tuple of (portfolios_without_accounts, error_messages)
+        """
+        if not portfolio_exposure_map:
+            return [], []
+
+        errors = []
+        no_accounts = []
+
+        for portfolio_key, ids in portfolio_exposure_map.items():
+            exposure_id = ids.get('exposure_id')
+            portfolio_id = ids.get('portfolio_id')
+
+            if not exposure_id or not portfolio_id:
+                continue
+
+            try:
+                accounts = self.portfolio_manager.search_accounts_by_portfolio(
+                    exposure_id=exposure_id,
+                    portfolio_id=portfolio_id
+                )
+
+                if not accounts or len(accounts) == 0:
+                    no_accounts.append(portfolio_key)
+
+            except IRPAPIError as e:
+                errors.append(f"ENT-API-001: Failed to check accounts for {portfolio_key}: {e}")
+
+        if no_accounts:
+            errors.insert(0,
+                f"ENT-ACCT-002: The following portfolios have no accounts (required for sub-portfolio creation):{_format_entity_list(no_accounts)}"
+            )
+
+        return no_accounts, errors
+
     def validate_single_cedant_per_edm(
         self,
         edm_exposure_ids: Dict[str, int]
@@ -1024,6 +1070,71 @@ class EntityValidator:
                 portfolio_exposure_map
             )
             all_errors.extend(location_errors)
+
+        return all_errors
+
+    def validate_portfolio_mapping_batch(
+        self,
+        portfolios: List[Dict[str, str]]
+    ) -> List[str]:
+        """
+        Validate Portfolio Mapping batch submission.
+
+        Pre-requisites (must exist):
+        - EDMs that portfolios belong to
+        - Base portfolios (Base Portfolio? = Y) must exist within their EDMs
+        - Base portfolios must have accounts (for sub-portfolio creation)
+
+        Entities to be created (must NOT exist):
+        - Sub-portfolios (Base Portfolio? = N) must not already exist
+
+        Args:
+            portfolios: List of portfolio dicts with 'Database', 'Portfolio',
+                       and 'Base Portfolio?' keys
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not portfolios:
+            return []
+
+        all_errors = []
+
+        # Split portfolios into base (exist) vs sub (to be created)
+        base_portfolios = [p for p in portfolios if p.get('Base Portfolio?') == 'Y']
+        sub_portfolios = [p for p in portfolios if p.get('Base Portfolio?') != 'Y']
+
+        # Extract unique EDM names from all portfolios
+        edm_names = list(set(
+            p.get('Database') for p in portfolios if p.get('Database')
+        ))
+
+        # Pre-requisite 1: EDMs must exist
+        edm_exposure_ids, edm_errors = self.validate_edms_exist(edm_names)
+        all_errors.extend(edm_errors)
+
+        if edm_exposure_ids:
+            # Pre-requisite 2: Base portfolios must exist
+            base_portfolio_map = {}
+            if base_portfolios:
+                base_portfolio_map, base_errors = self.validate_portfolios_exist(
+                    base_portfolios, edm_exposure_ids
+                )
+                all_errors.extend(base_errors)
+
+            # Pre-requisite 3: Base portfolios must have accounts
+            if base_portfolio_map:
+                _, account_errors = self.validate_portfolios_have_accounts(
+                    base_portfolio_map
+                )
+                all_errors.extend(account_errors)
+
+            # Sub-portfolios must NOT exist
+            if sub_portfolios:
+                _, sub_errors = self.validate_portfolios_not_exist(
+                    sub_portfolios, edm_exposure_ids
+                )
+                all_errors.extend(sub_errors)
 
         return all_errors
 

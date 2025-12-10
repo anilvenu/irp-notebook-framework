@@ -567,6 +567,12 @@ def _validate_batch_submission(
         portfolios = [jc['job_configuration_data'] for jc in job_configs]
         return validator.validate_geohaz_batch(portfolios=portfolios)
 
+    elif batch_type == BatchType.PORTFOLIO_MAPPING:
+        # Portfolio Mapping validates: EDMs exist, Base portfolios exist with accounts,
+        # Sub-portfolios don't exist
+        portfolios = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_portfolio_mapping_batch(portfolios=portfolios)
+
     # Add validation for other batch types here as needed
 
     return []

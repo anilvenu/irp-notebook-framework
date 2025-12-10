@@ -2060,3 +2060,375 @@ class TestValidateGeohazBatch:
         # Portfolio manager should not have been called
         validator._portfolio_manager.search_portfolios_paginated.assert_not_called()
         validator._portfolio_manager.search_accounts_by_portfolio.assert_not_called()
+
+
+class TestValidatePortfoliosHaveAccounts:
+    """Tests for validate_portfolios_have_accounts method."""
+
+    def test_empty_map_returns_no_errors(self):
+        """Empty portfolio map should return no errors."""
+        validator = EntityValidator()
+        no_accounts, errors = validator.validate_portfolios_have_accounts({})
+        assert no_accounts == []
+        assert errors == []
+
+    def test_portfolios_with_accounts_returns_no_errors(self):
+        """Portfolios with accounts should return no errors."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1, 'accountName': 'Account1'}
+        ]
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456}
+        }
+
+        no_accounts, errors = validator.validate_portfolios_have_accounts(portfolio_map)
+
+        assert no_accounts == []
+        assert errors == []
+
+    def test_portfolio_without_accounts_returns_error(self):
+        """Portfolio without accounts should return error."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456}
+        }
+
+        no_accounts, errors = validator.validate_portfolios_have_accounts(portfolio_map)
+
+        assert no_accounts == ['EDM1/Port1']
+        assert len(errors) == 1
+        assert 'ENT-ACCT-002' in errors[0]
+        assert 'EDM1/Port1' in errors[0]
+
+    def test_multiple_portfolios_checked(self):
+        """Multiple portfolios should all be checked."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.side_effect = [
+            [{'accountId': 1}],  # Port1 has accounts
+            [],                   # Port2 has no accounts
+            [{'accountId': 2}]   # Port3 has accounts
+        ]
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 1},
+            'EDM1/Port2': {'exposure_id': 123, 'portfolio_id': 2},
+            'EDM1/Port3': {'exposure_id': 123, 'portfolio_id': 3}
+        }
+
+        no_accounts, errors = validator.validate_portfolios_have_accounts(portfolio_map)
+
+        assert no_accounts == ['EDM1/Port2']
+        assert len(errors) == 1
+        assert 'ENT-ACCT-002' in errors[0]
+
+    def test_api_error_handled(self):
+        """API errors should be captured as errors."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+        validator._portfolio_manager.search_accounts_by_portfolio.side_effect = IRPAPIError("API failed")
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': 123, 'portfolio_id': 456}
+        }
+
+        no_accounts, errors = validator.validate_portfolios_have_accounts(portfolio_map)
+
+        assert no_accounts == []
+        assert len(errors) == 1
+        assert 'ENT-API-001' in errors[0]
+        assert 'Failed to check accounts' in errors[0]
+
+    def test_missing_ids_skipped(self):
+        """Portfolios with missing exposure_id or portfolio_id should be skipped."""
+        validator = EntityValidator()
+        validator._portfolio_manager = Mock()
+
+        portfolio_map = {
+            'EDM1/Port1': {'exposure_id': None, 'portfolio_id': 456},
+            'EDM1/Port2': {'exposure_id': 123, 'portfolio_id': None}
+        }
+
+        no_accounts, errors = validator.validate_portfolios_have_accounts(portfolio_map)
+
+        assert no_accounts == []
+        assert errors == []
+        validator._portfolio_manager.search_accounts_by_portfolio.assert_not_called()
+
+
+class TestValidatePortfolioMappingBatch:
+    """Tests for validate_portfolio_mapping_batch method."""
+
+    def test_empty_portfolios_returns_no_errors(self):
+        """Empty portfolio list should return no errors."""
+        validator = EntityValidator()
+        errors = validator.validate_portfolio_mapping_batch([])
+        assert errors == []
+
+    def test_valid_batch_returns_no_errors(self):
+        """Valid Portfolio Mapping batch should return no errors."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Base portfolio exists
+        validator._portfolio_manager.search_portfolios_paginated.side_effect = [
+            [{'portfolioName': 'BasePort', 'portfolioId': 456}],  # Base exists
+            []  # Sub doesn't exist
+        ]
+        # Base portfolio has accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'},
+            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        assert errors == []
+
+    def test_missing_edm_returns_error(self):
+        """Missing EDM should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        assert 'EDM1' in errors[0]
+
+    def test_missing_base_portfolio_returns_error(self):
+        """Missing base portfolio should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Base portfolio doesn't exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-PORT-002' in errors[0]
+        assert 'BasePort' in errors[0]
+
+    def test_base_portfolio_no_accounts_returns_error(self):
+        """Base portfolio without accounts should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Base portfolio exists
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'BasePort', 'portfolioId': 456}
+        ]
+        # No accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-ACCT-002' in errors[0]
+        assert 'BasePort' in errors[0]
+
+    def test_existing_sub_portfolio_returns_error(self):
+        """Sub-portfolio that already exists should return error."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Base portfolio exists, sub portfolio also exists
+        validator._portfolio_manager.search_portfolios_paginated.side_effect = [
+            [{'portfolioName': 'BasePort', 'portfolioId': 456}],  # Base exists
+            [{'portfolioName': 'SubPort', 'portfolioId': 789}]    # Sub also exists (bad!)
+        ]
+        # Base has accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'},
+            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        assert len(errors) == 1
+        assert 'ENT-PORT-001' in errors[0]
+        assert 'SubPort' in errors[0]
+
+    def test_multiple_edms_validated(self):
+        """Multiple EDMs should all be validated."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # Both EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123},
+            {'exposureName': 'EDM2', 'exposureId': 456}
+        ]
+        # All base portfolios exist, no sub portfolios exist
+        validator._portfolio_manager.search_portfolios_paginated.side_effect = [
+            [{'portfolioName': 'Base1', 'portfolioId': 100}],
+            [{'portfolioName': 'Base2', 'portfolioId': 200}],
+            [],  # Sub1 doesn't exist
+            []   # Sub2 doesn't exist
+        ]
+        # Base portfolios have accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'Base1', 'Base Portfolio?': 'Y'},
+            {'Database': 'EDM2', 'Portfolio': 'Base2', 'Base Portfolio?': 'Y'},
+            {'Database': 'EDM1', 'Portfolio': 'Sub1', 'Base Portfolio?': 'N'},
+            {'Database': 'EDM2', 'Portfolio': 'Sub2', 'Base Portfolio?': 'N'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        assert errors == []
+
+    def test_only_base_portfolios_no_sub(self):
+        """Batch with only base portfolios (no subs) should validate correctly."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Base portfolio exists
+        validator._portfolio_manager.search_portfolios_paginated.return_value = [
+            {'portfolioName': 'BasePort', 'portfolioId': 456}
+        ]
+        # Has accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = [
+            {'accountId': 1}
+        ]
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        assert errors == []
+
+    def test_only_sub_portfolios_no_base(self):
+        """Batch with only sub portfolios should validate sub doesn't exist."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # EDM exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Sub portfolio doesn't exist
+        validator._portfolio_manager.search_portfolios_paginated.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        assert errors == []
+
+    def test_multiple_errors_returned(self):
+        """Multiple validation failures should all be reported."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # Only EDM1 exists
+        validator._edm_manager.search_edms_paginated.return_value = [
+            {'exposureName': 'EDM1', 'exposureId': 123}
+        ]
+        # Base portfolio exists but has no accounts, sub portfolio already exists
+        validator._portfolio_manager.search_portfolios_paginated.side_effect = [
+            [{'portfolioName': 'BasePort', 'portfolioId': 456}],  # Base exists
+            [{'portfolioName': 'SubPort', 'portfolioId': 789}]    # Sub exists (error)
+        ]
+        # No accounts
+        validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'},
+            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'},
+            {'Database': 'EDM2', 'Portfolio': 'Base2', 'Base Portfolio?': 'Y'}  # EDM missing
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        error_codes = [e.split(':')[0] for e in errors]
+        assert 'ENT-EDM-002' in error_codes      # EDM2 missing
+        assert 'ENT-ACCT-002' in error_codes     # BasePort no accounts
+        assert 'ENT-PORT-001' in error_codes     # SubPort exists
+
+    def test_edm_missing_skips_portfolio_checks(self):
+        """If EDM is missing, portfolio checks should be skipped for that EDM."""
+        validator = EntityValidator()
+        validator._edm_manager = Mock()
+        validator._portfolio_manager = Mock()
+
+        # No EDMs exist
+        validator._edm_manager.search_edms_paginated.return_value = []
+
+        portfolios = [
+            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'},
+            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'}
+        ]
+
+        errors = validator.validate_portfolio_mapping_batch(portfolios)
+
+        # Should only have EDM missing error
+        assert len(errors) == 1
+        assert 'ENT-EDM-002' in errors[0]
+        # Portfolio manager should not have been called
+        validator._portfolio_manager.search_portfolios_paginated.assert_not_called()
+        validator._portfolio_manager.search_accounts_by_portfolio.assert_not_called()
