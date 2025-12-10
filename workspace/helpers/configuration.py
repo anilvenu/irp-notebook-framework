@@ -27,7 +27,8 @@ import numpy as np
 # from helpers.database import execute_query, execute_command, execute_insert, DatabaseError
 from helpers.constants import (
     ConfigurationStatus, CONFIGURATION_TAB_LIST,
-    EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES, BatchType
+    EXCEL_VALIDATION_SCHEMAS, VALIDATION_ERROR_CODES, BatchType,
+    DEFAULT_DATABASE_SERVER
 )
 from helpers.irp_integration import IRPClient
 from helpers.irp_integration.exceptions import IRPAPIError
@@ -548,7 +549,7 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     all_export_names = analysis_names + group_names
 
     rdm_name = metadata.get('Export RDM Name')
-    server_name = 'databridge-1'
+    server_name = DEFAULT_DATABASE_SERVER
 
     # Build lookup maps for API calls
     analysis_edm_map = _build_analysis_edm_map(config)

@@ -40,7 +40,7 @@ from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
-from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus, BatchType
+from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus, BatchType, DEFAULT_DATABASE_SERVER
 from helpers.configuration import (
     read_configuration, update_configuration_status,
     create_job_configurations, BATCH_TYPE_TRANSFORMERS,
@@ -512,7 +512,6 @@ def _validate_batch_submission(
         List of validation error messages (empty if valid)
     """
     from helpers.entity_validator import EntityValidator
-    from helpers.constants import DEFAULT_DATABASE_SERVER
 
     batch_type = batch['batch_type']
     validator = EntityValidator()
@@ -845,7 +844,7 @@ def _submit_rdm_export_batch_with_seed(
     # 3. Get databaseId from created RDM
     seed_config = job_module.get_job_config(seed_job['id'], schema=schema)
     rdm_name = seed_config['job_configuration_data'].get('rdm_name')
-    server_name = seed_config['job_configuration_data'].get('server_name', 'databridge-1')
+    server_name = seed_config['job_configuration_data'].get('server_name', DEFAULT_DATABASE_SERVER)
 
     database_id = irp_client.rdm.get_rdm_database_id(rdm_name, server_name)
 

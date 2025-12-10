@@ -8,6 +8,7 @@ Used during configuration file validation to prevent conflicts with existing dat
 from typing import Dict, Any, List, Tuple, Optional
 from helpers.irp_integration.client import Client
 from helpers.irp_integration.exceptions import IRPAPIError
+from helpers.constants import DEFAULT_DATABASE_SERVER
 
 
 def _format_entity_list(entities: List[str], indent: str = "  - ") -> str:
@@ -767,14 +768,14 @@ class EntityValidator:
     def validate_rdm_not_exists(
         self,
         rdm_name: str,
-        server_name: str = "databridge-1"
+        server_name: str = DEFAULT_DATABASE_SERVER
     ) -> List[str]:
         """
         Check that an RDM with the given name doesn't already exist.
 
         Args:
             rdm_name: Name of the RDM to check
-            server_name: Database server name (default: "databridge-1")
+            server_name: Database server name (default: DEFAULT_DATABASE_SERVER)
 
         Returns:
             List of error messages (empty if RDM doesn't exist)
@@ -1417,7 +1418,7 @@ class EntityValidator:
             if not rdm_name:
                 rdm_name = job.get('rdm_name')
             if not server_name:
-                server_name = job.get('server_name', 'databridge-1')
+                server_name = job.get('server_name', DEFAULT_DATABASE_SERVER)
 
         # Deduplicate items
         unique_items = list(set(all_items))
