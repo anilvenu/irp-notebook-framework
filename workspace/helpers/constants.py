@@ -59,6 +59,12 @@ SYSTEM_USER = os.getenv('SYSTEM_USER', 'notebook_user')
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 
 # ============================================================================
+# MOODY'S RISK MODELER CONFIGURATION
+# ============================================================================
+
+DEFAULT_DATABASE_SERVER = 'databridge-1'
+
+# ============================================================================
 # STATUS ENUMS
 # ============================================================================
 
@@ -660,11 +666,16 @@ VALIDATION_ERROR_CODES = {
 
     # Entity Existence Validation errors (entities already exist in Moody's)
     'ENT-EDM-001': 'EDMs already exist: {names}',
+    'ENT-EDM-002': 'Required EDMs not found: {names}',
     'ENT-PORT-001': 'Portfolios already exist: {names}',
+    'ENT-PORT-002': 'Required portfolios not found: {names}',
+    'ENT-ACCT-001': 'Portfolios already have accounts (must be empty for import): {names}',
     'ENT-TREATY-001': 'Treaties already exist: {names}',
     'ENT-ANALYSIS-001': 'Analyses already exist: {names}',
     'ENT-GROUP-001': 'Groups already exist: {names}',
     'ENT-RDM-001': 'RDM already exists: {name}',
+    'ENT-SERVER-001': 'Database server not found: {name}',
+    'ENT-FILE-001': 'Required files not found: {names}',
     'ENT-API-001': 'Entity validation API error: {error}',
 
     # Business rule errors

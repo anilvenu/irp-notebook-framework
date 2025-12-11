@@ -40,7 +40,7 @@ from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
-from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus, BatchType
+from helpers.constants import BatchStatus, ConfigurationStatus, CycleStatus, JobStatus, BatchType, DEFAULT_DATABASE_SERVER
 from helpers.configuration import (
     read_configuration, update_configuration_status,
     create_job_configurations, BATCH_TYPE_TRANSFORMERS,
@@ -491,6 +491,164 @@ def create_batch(
         raise BatchError(f"Failed to create batch: {str(e)}")
 
 
+def validate_batch(
+    batch_id: int,
+    schema: str = 'public'
+) -> List[str]:
+    """
+    Validate batch submission prerequisites and entity existence.
+
+    Call this before submit_batch() to check for validation errors.
+    Validates:
+    - Pre-requisites exist (e.g., server for EDM, EDMs for Portfolio)
+    - Entities to be created don't already exist
+
+    Only validates job configurations for jobs that are ready for submission
+    (INITIATED or ERROR status). This allows re-running notebooks after partial
+    success - jobs that already completed successfully are not re-validated.
+
+    Args:
+        batch_id: Batch ID
+        schema: Database schema
+
+    Returns:
+        List of validation error messages (empty if valid)
+    """
+    from helpers.entity_validator import EntityValidator
+
+    batch = read_batch(batch_id, schema=schema)
+    batch_type = batch['batch_type']
+    validator = EntityValidator()
+
+    # Get jobs that are ready for submission (INITIATED or ERROR, not skipped)
+    # This filters out jobs that already succeeded - we don't need to re-validate those
+    pending_jobs = [
+        j for j in get_batch_jobs(batch_id, skipped=False, schema=schema)
+        if j['status'] in JobStatus.ready_for_submit()
+    ]
+
+    # Get the job_configuration_ids for pending jobs
+    pending_config_ids = {j['job_configuration_id'] for j in pending_jobs}
+
+    # Get job configurations, filtered to only those with pending jobs
+    all_job_configs = get_batch_job_configurations(batch_id, skipped=False, schema=schema)
+    job_configs = [jc for jc in all_job_configs if jc['id'] in pending_config_ids]
+
+    # If no jobs need validation (all already succeeded), return empty
+    if not job_configs:
+        return []
+
+    if batch_type == BatchType.EDM_CREATION:
+        edm_names = [jc['job_configuration_data'].get('Database') for jc in job_configs]
+        edm_names = [name for name in edm_names if name]
+        return validator.validate_edm_batch(
+            edm_names=edm_names,
+            server_name=DEFAULT_DATABASE_SERVER
+        )
+
+    elif batch_type == BatchType.PORTFOLIO_CREATION:
+        # Get ALL portfolios from configuration (base + sub-portfolios)
+        # Job configs only contain base portfolios, but we want to validate all
+        config = read_configuration(batch['configuration_id'], schema=schema)
+        config_data = config.get('configuration_data', {})
+        portfolios = config_data.get('Portfolios', [])
+        return validator.validate_portfolio_batch(portfolios=portfolios)
+
+    elif batch_type == BatchType.MRI_IMPORT:
+        # MRI Import validates: EDMs exist, Portfolios exist, CSV files exist, Accounts don't exist
+        # Extract portfolio data from job configs (Database, Portfolio, accounts_import_file, locations_import_file)
+        from helpers.irp_integration.utils import get_cycle_file_directories
+        portfolios = [jc['job_configuration_data'] for jc in job_configs]
+        try:
+            dirs = get_cycle_file_directories()
+            working_files_dir = dirs['data']  # CSV files are in files/data
+        except Exception:
+            working_files_dir = ""  # Will fail CSV validation if can't determine path
+        return validator.validate_mri_import_batch(
+            portfolios=portfolios,
+            working_files_dir=working_files_dir
+        )
+
+    elif batch_type == BatchType.EDM_DB_UPGRADE:
+        # EDM DB Upgrade validates: EDMs must exist
+        edm_names = [jc['job_configuration_data'].get('Database') for jc in job_configs]
+        edm_names = [name for name in edm_names if name]
+        return validator.validate_edm_db_upgrade_batch(edm_names=edm_names)
+
+    elif batch_type == BatchType.CREATE_REINSURANCE_TREATIES:
+        # Treaty Creation validates: EDMs exist, single cedant per EDM, Treaties don't exist
+        treaties = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_treaty_batch(treaties=treaties)
+
+    elif batch_type == BatchType.GEOHAZ:
+        # GeoHaz validates: EDMs exist, Portfolios exist, Portfolios have locations
+        portfolios = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_geohaz_batch(portfolios=portfolios)
+
+    elif batch_type == BatchType.PORTFOLIO_MAPPING:
+        # Portfolio Mapping validates: EDMs exist, Base portfolios exist with accounts,
+        # Sub-portfolios don't exist
+        portfolios = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_portfolio_mapping_batch(portfolios=portfolios)
+
+    elif batch_type == BatchType.GROUPING:
+        # Grouping validates: Analyses exist, Group names don't exist
+        groupings = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_grouping_batch(groupings=groupings)
+
+    elif batch_type == BatchType.GROUPING_ROLLUP:
+        # Grouping Rollup validates: Child groups exist, Analyses exist,
+        # Rollup group names don't exist
+        groupings = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_grouping_rollup_batch(groupings=groupings)
+
+    elif batch_type == BatchType.EXPORT_TO_RDM:
+        # RDM Export validates: Analyses exist, Groups exist, RDM doesn't exist
+        export_jobs = [jc['job_configuration_data'] for jc in job_configs]
+        return validator.validate_rdm_export_batch(export_jobs=export_jobs)
+
+    elif batch_type == BatchType.ANALYSIS:
+        # Analysis validates: EDMs exist, Portfolios exist, Treaties exist (if specified),
+        # Reference data exists, Analyses don't exist
+        analyses = [jc['job_configuration_data'] for jc in job_configs]
+        errors, _ = validator.validate_analysis_batch(analyses=analyses)
+        return errors
+
+    # Add validation for other batch types here as needed
+
+    return []
+
+
+def activate_batch(batch_id: int, schema: str = 'public') -> None:
+    """
+    Activate a batch by updating its status to ACTIVE and setting submitted_ts.
+
+    This is used when jobs are submitted directly (bypassing submit_batch),
+    such as in the interactive Analysis notebook flow.
+
+    Also updates the associated configuration status to ACTIVE.
+
+    Args:
+        batch_id: Batch ID to activate
+        schema: Database schema
+
+    Raises:
+        BatchError: If batch not found
+    """
+    batch = read_batch(batch_id, schema=schema)
+
+    # Update batch status to ACTIVE and set submitted_ts
+    query = """
+        UPDATE irp_batch
+        SET status = %s, submitted_ts = NOW()
+        WHERE id = %s
+    """
+    execute_command(query, (BatchStatus.ACTIVE, batch_id), schema=schema)
+
+    # Update configuration status to ACTIVE
+    update_configuration_status(batch['configuration_id'], ConfigurationStatus.ACTIVE, schema=schema)
+
+
 def submit_batch(
     batch_id: int,
     irp_client: IRPClient,
@@ -577,6 +735,9 @@ def submit_batch(
                 f"Reference data validation failed. Cannot submit batch.\n"
                 + "\n".join(ref_data_errors[:10])
             )
+
+    # Note: Validation should be called separately via validate_batch() before submit_batch()
+    # This allows notebooks to display validation errors and handle them gracefully
 
     # Update batch step_id if provided (allows re-associating batch with submission step)
     if step_id is not None:
@@ -732,7 +893,7 @@ def _submit_rdm_export_batch_with_seed(
     # 3. Get databaseId from created RDM
     seed_config = job_module.get_job_config(seed_job['id'], schema=schema)
     rdm_name = seed_config['job_configuration_data'].get('rdm_name')
-    server_name = seed_config['job_configuration_data'].get('server_name', 'databridge-1')
+    server_name = seed_config['job_configuration_data'].get('server_name', DEFAULT_DATABASE_SERVER)
 
     database_id = irp_client.rdm.get_rdm_database_id(rdm_name, server_name)
 
@@ -1160,165 +1321,3 @@ def delete_batch(batch_id: int, schema: str = 'public') -> bool:
 
     except Exception as e:
         raise BatchError(f"Failed to delete batch {batch_id}: {str(e)}")
-
-
-# ============================================================================
-# ANALYSIS BATCH RECONCILIATION
-# ============================================================================
-
-def reconcile_analysis_batch(
-    batch_id: int,
-    irp_client: IRPClient,
-    schema: str = 'public'
-) -> Dict[str, Any]:
-    """
-    Reconcile an analysis batch by comparing job states with Moody's analyses.
-
-    Categorizes jobs based on both Moody's state (source of truth) and job status:
-    - jobs_successful: Analysis exists in Moody's AND job is FINISHED
-    - jobs_failed: No analysis AND job is FAILED/ERROR/CANCELLED
-    - jobs_missing_analysis: No analysis AND job is FINISHED (mismatch)
-    - jobs_pending: Has workflow ID but not terminal (still processing)
-    - jobs_fresh: INITIATED, no workflow ID, no analysis (ready for submission)
-    - jobs_blocked: INITIATED but analysis already exists (need to delete first)
-
-    Args:
-        batch_id: Batch ID to reconcile
-        irp_client: IRPClient instance for Moody's API calls
-        schema: Database schema
-
-    Returns:
-        Dictionary with reconciliation summary:
-        - total_jobs: Total number of non-skipped jobs
-        - jobs_by_status: Dict of status -> count
-        - analyses_in_moodys: Number of analyses found in Moody's
-        - jobs_successful: Jobs with analysis in Moody's and FINISHED status
-        - jobs_failed: Jobs with no analysis and FAILED/ERROR/CANCELLED status
-        - jobs_missing_analysis: Jobs with no analysis but FINISHED status
-        - jobs_pending: Jobs still processing (have workflow ID, not terminal)
-        - jobs_fresh: Jobs ready for submission (INITIATED, no workflow ID, no analysis)
-        - jobs_blocked: Jobs blocked by existing analysis (INITIATED but analysis exists)
-        - existing_analyses: List of existing analysis dicts from Moody's
-
-    Raises:
-        BatchError: If batch not found or not an analysis batch
-    """
-    # Validate and read batch
-    batch = read_batch(batch_id, schema=schema)
-
-    if batch['batch_type'] != BatchType.ANALYSIS:
-        raise BatchError(
-            f"Batch {batch_id} is type '{batch['batch_type']}', not '{BatchType.ANALYSIS}'"
-        )
-
-    # Get terminal statuses
-    terminal_statuses = JobStatus.terminal()
-
-    # Get all non-skipped jobs and their configurations
-    jobs = get_batch_jobs(batch_id, skipped=False, schema=schema)
-    job_configs = get_batch_job_configurations(batch_id, skipped=False, schema=schema)
-
-    # Build a lookup from job_configuration_id -> job_configuration_data
-    config_lookup = {
-        jc['id']: jc['job_configuration_data']
-        for jc in job_configs
-    }
-
-    # Count jobs by status
-    jobs_by_status: Dict[str, int] = {}
-    for job in jobs:
-        status = job['status']
-        jobs_by_status[status] = jobs_by_status.get(status, 0) + 1
-
-    # Get job configs for Moody's lookup (need Analysis Name + Database)
-    job_config_data_list = [jc['job_configuration_data'] for jc in job_configs]
-
-    # Check which analyses exist in Moody's
-    existing_analyses = irp_client.analysis.find_existing_analyses_from_job_configs(
-        job_config_data_list
-    )
-
-    # Build set of (analysis_name, edm_name) that exist in Moody's
-    existing_keys = set()
-    for item in existing_analyses:
-        analysis_name = item['job_config'].get('Analysis Name')
-        edm_name = item['job_config'].get('Database')
-        if analysis_name and edm_name:
-            existing_keys.add((analysis_name, edm_name))
-
-    # Categorize jobs based on Moody's state (source of truth) AND job status:
-    # 1. jobs_successful: Analysis exists in Moody's AND job is FINISHED
-    # 2. jobs_failed: No analysis AND job is in failed terminal state (FAILED, ERROR, CANCELLED)
-    # 3. jobs_missing_analysis: No analysis AND job is FINISHED (mismatch - analysis deleted?)
-    # 4. jobs_pending: Has workflow ID but not terminal (still processing)
-    # 5. jobs_fresh: INITIATED status, no workflow ID, no analysis (ready for first submission)
-    # 6. jobs_blocked: INITIATED but analysis already exists (need to delete before submitting)
-    jobs_successful = []
-    jobs_failed = []
-    jobs_missing_analysis = []
-    jobs_pending = []
-    jobs_fresh = []
-    jobs_blocked = []
-
-    failed_statuses = JobStatus.failed()
-
-    for job in jobs:
-        job_config_data = config_lookup.get(job['job_configuration_id'], {})
-        analysis_name = job_config_data.get('Analysis Name')
-        edm_name = job_config_data.get('Database')
-
-        workflow_id = job.get('moodys_workflow_id')
-        has_workflow_id = workflow_id is not None and workflow_id != ''
-        is_terminal = job['status'] in terminal_statuses
-        has_analysis = (analysis_name, edm_name) in existing_keys
-        is_initiated = job['status'] == JobStatus.INITIATED
-        is_finished = job['status'] == JobStatus.FINISHED
-        is_failed_status = job['status'] in failed_statuses
-
-        job_info = {
-            'job_id': job['id'],
-            'status': job['status'],
-            'analysis_name': analysis_name,
-            'edm_name': edm_name,
-            'job_configuration_id': job['job_configuration_id'],
-            'moodys_workflow_id': workflow_id,
-            'has_analysis': has_analysis
-        }
-
-        if has_analysis and is_finished:
-            # Analysis exists and job FINISHED - truly successful
-            jobs_successful.append(job_info)
-        elif has_analysis and is_initiated:
-            # INITIATED but analysis already exists - blocked, need to delete first
-            jobs_blocked.append(job_info)
-        elif not has_analysis and is_failed_status:
-            # No analysis and job failed/errored/cancelled
-            jobs_failed.append(job_info)
-        elif not has_analysis and is_finished:
-            # Job says FINISHED but analysis is missing (was deleted or something went wrong)
-            jobs_missing_analysis.append(job_info)
-        elif has_workflow_id and not is_terminal:
-            # Has workflow ID but not terminal - still processing
-            jobs_pending.append(job_info)
-        elif is_initiated and not has_workflow_id and not has_analysis:
-            # INITIATED with no workflow ID and no analysis - ready for first submission
-            jobs_fresh.append(job_info)
-        else:
-            # Edge case: treat as pending
-            jobs_pending.append(job_info)
-
-    return {
-        'batch_id': batch_id,
-        'batch_type': batch['batch_type'],
-        'batch_status': batch['status'],
-        'total_jobs': len(jobs),
-        'jobs_by_status': jobs_by_status,
-        'analyses_in_moodys': len(existing_analyses),
-        'jobs_successful': jobs_successful,
-        'jobs_failed': jobs_failed,
-        'jobs_missing_analysis': jobs_missing_analysis,
-        'jobs_pending': jobs_pending,
-        'jobs_fresh': jobs_fresh,
-        'jobs_blocked': jobs_blocked,
-        'existing_analyses': existing_analyses
-    }

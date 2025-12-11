@@ -18,6 +18,13 @@ def _handle_notebook_failure(notebook_path: Path, error: str) -> None:
     """
     Handle notebook execution failure: mark step as failed and send Teams notification.
 
+    This function detects two types of failures:
+    1. Graceful exits: Notebook used SystemExit with a clean message (validation failures)
+    2. Unexpected crashes: Actual errors that need the full technical details
+
+    For graceful exits, we use the step's error_message from the database (set by
+    the notebook before raising SystemExit) instead of the ugly subprocess output.
+
     Args:
         notebook_path: Path to the failed notebook
         error: Error message from the execution failure
@@ -31,15 +38,25 @@ def _handle_notebook_failure(notebook_path: Path, error: str) -> None:
         from helpers.constants import StepStatus
         from helpers.context import WorkContext
 
-        # Mark the step run as FAILED (it was left ACTIVE when notebook crashed)
+        step_error_message = None
+        graceful_exit = False
+
+        # Check if this was a graceful exit (notebook already marked step as FAILED)
         try:
             context = WorkContext(notebook_path=str(notebook_path))
             last_run = get_last_step_run(context.step_id)
-            if last_run and last_run['status'] == 'ACTIVE':
-                update_step_run(last_run['id'], StepStatus.FAILED, error_message=error[:1000])
-                logger.info(f"Marked step run {last_run['id']} as FAILED")
+            if last_run:
+                if last_run['status'] == 'FAILED':
+                    # Notebook already handled the failure - use its error message
+                    graceful_exit = True
+                    step_error_message = last_run.get('error_message')
+                    logger.info(f"Step {last_run['id']} already marked FAILED (graceful exit)")
+                elif last_run['status'] == 'ACTIVE':
+                    # Notebook crashed without handling - mark as failed
+                    update_step_run(last_run['id'], StepStatus.FAILED, error_message=error[:1000])
+                    logger.info(f"Marked step run {last_run['id']} as FAILED")
         except Exception as e:
-            logger.warning(f"Could not mark step as failed: {e}")
+            logger.warning(f"Could not check/mark step as failed: {e}")
 
         teams = TeamsNotificationClient()
 
@@ -60,13 +77,24 @@ def _handle_notebook_failure(notebook_path: Path, error: str) -> None:
             if part.startswith('Step_'):
                 step_name = part.replace('.ipynb', '')
 
-        # Build action buttons and truncate error
+        # Build action buttons
         schema = get_current_schema() if cycle_name != "Unknown" else 'public'
         actions = build_notification_actions(path_str, cycle_name, schema)
-        error_summary = truncate_error(error)
+
+        # Determine the error message to display
+        # For graceful exits (validation failures), use the clean step error message
+        # For unexpected crashes, use the full technical error details
+        if graceful_exit and step_error_message:
+            # Clean, user-friendly message from the notebook
+            error_summary = step_error_message
+            notification_title = f"[{cycle_name}] Validation Failed: {step_name}"
+        else:
+            # Technical error - truncate but include details for debugging
+            error_summary = truncate_error(error)
+            notification_title = f"[{cycle_name}] Notebook Failed: {step_name}"
 
         teams.send_error(
-            title=f"[{cycle_name}] Notebook Failed: {step_name}",
+            title=notification_title,
             message=f"**Cycle:** {cycle_name}\n"
                     f"**Stage:** {stage_name}\n"
                     f"**Step:** {step_name}\n\n"
