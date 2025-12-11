@@ -1561,12 +1561,14 @@ def validate_configuration(config_data: Dict[str, Any]) -> bool:
     return True
 
 
-def _validate_excel_file(excel_config_path: str):
+def _validate_excel_file(excel_config_path: str, skip_entity_validation: bool = False):
     """
     Internal helper to validate Excel configuration file.
 
     Args:
         excel_config_path: Path to Excel configuration file
+        skip_entity_validation: If True, skip Moody's entity/reference data validation
+                               (useful for testing without API access)
 
     Returns:
         tuple: (config_data, validation_results, all_valid, file_mtime)
@@ -1659,14 +1661,16 @@ def _validate_excel_file(excel_config_path: str):
 
             # Validate entities don't already exist in Moody's
             # Only run if no cross-sheet errors (avoid unnecessary API calls)
-            if not cross_errors:
+            # Skip if skip_entity_validation is True (for testing)
+            if not cross_errors and not skip_entity_validation:
                 validator = EntityValidator()
                 entity_errors = validator.validate_config_entities_not_exist(config_data)
                 cross_errors.extend(entity_errors)
 
             # Validate reference data against Moody's API
             # Only run if no prior errors (avoid unnecessary API calls)
-            if not cross_errors:
+            # Skip if skip_entity_validation is True (for testing)
+            if not cross_errors and not skip_entity_validation:
                 analysis_table = config_data.get('Analysis Table', [])
                 api_errors = validate_reference_data_with_api(analysis_table)
                 cross_errors.extend(api_errors)
@@ -1695,7 +1699,8 @@ def _validate_excel_file(excel_config_path: str):
 def load_configuration_file(
     cycle_id: int,
     excel_config_path: str,
-    schema: str = 'public'
+    schema: str = 'public',
+    skip_entity_validation: bool = False
 ) -> int:
     """
     Load configuration from Excel file into the database.
@@ -1707,6 +1712,8 @@ def load_configuration_file(
         cycle_id: Cycle ID to associate with this configuration
         excel_config_path: Path to Excel configuration file
         schema: Database schema to use (default: 'public')
+        skip_entity_validation: If True, skip Moody's entity/reference data validation
+                               (useful for testing without API access)
 
     Returns:
         Configuration ID
@@ -1753,7 +1760,9 @@ def load_configuration_file(
         # No batches exist - safe to replace (will be deleted below)
 
     # Validate Excel file using helper function
-    config_data, validation_results, all_valid, file_mtime = _validate_excel_file(excel_config_path)
+    config_data, validation_results, all_valid, file_mtime = _validate_excel_file(
+        excel_config_path, skip_entity_validation=skip_entity_validation
+    )
 
     # Delete existing configs and insert new configuration
     delete_query = "DELETE FROM irp_configuration WHERE cycle_id = %s"
@@ -1776,7 +1785,11 @@ def load_configuration_file(
     return config_id
 
 
-def validate_configuration_file(excel_config_path: str, cycle_id: Optional[int] = None) -> dict:
+def validate_configuration_file(
+    excel_config_path: str,
+    cycle_id: Optional[int] = None,
+    skip_entity_validation: bool = False
+) -> dict:
     """
     Validate Excel configuration file without loading to database.
 
@@ -1787,6 +1800,8 @@ def validate_configuration_file(excel_config_path: str, cycle_id: Optional[int] 
         excel_config_path: Path to Excel configuration file
         cycle_id: Optional cycle ID to validate against (checks if active).
                   If None, skips cycle validation (useful for pure file validation)
+        skip_entity_validation: If True, skip Moody's entity/reference data validation
+                               (useful for testing without API access)
 
     Returns:
         dict: {
@@ -1812,7 +1827,9 @@ def validate_configuration_file(excel_config_path: str, cycle_id: Optional[int] 
             )
 
     # Validate Excel file using helper function
-    config_data, validation_results, all_valid, file_mtime = _validate_excel_file(excel_config_path)
+    config_data, validation_results, all_valid, file_mtime = _validate_excel_file(
+        excel_config_path, skip_entity_validation=skip_entity_validation
+    )
 
     # Get file info
     config_path = Path(excel_config_path)
