@@ -14,31 +14,6 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-def _extract_graceful_exit_message(error: str) -> Optional[str]:
-    """
-    Extract a clean error message if the notebook exited gracefully via SystemExit.
-
-    When notebooks use 'raise SystemExit("message")', nbconvert still exits with
-    code 1, but the SystemExit message can be extracted from the output.
-
-    Args:
-        error: Raw error string from subprocess
-
-    Returns:
-        Clean error message if graceful exit detected, None otherwise
-    """
-    # Look for SystemExit pattern in the output
-    # The message appears in stderr like: "SystemExit: message here"
-    import re
-
-    # Pattern for SystemExit with message
-    match = re.search(r'SystemExit:\s*(.+?)(?:\n|$)', error)
-    if match:
-        return match.group(1).strip()
-
-    return None
-
-
 def _handle_notebook_failure(notebook_path: Path, error: str) -> None:
     """
     Handle notebook execution failure: mark step as failed and send Teams notification.
