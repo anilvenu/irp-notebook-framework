@@ -726,6 +726,9 @@ class AnalysisResultsValidator:
     ) -> Optional[int]:
         """Look up app_analysis_id by analysis name and EDM name.
 
+        Uses LIKE clauses for flexible matching since EDM names may have
+        slight variations (e.g., 'RM_' vs 'RMS_' prefixes).
+
         Args:
             analysis_name: Name of the analysis
             edm_name: Name of the EDM (exposure database)
@@ -737,11 +740,26 @@ class AnalysisResultsValidator:
             IRPAPIError: If API call fails (not including "not found")
         """
         try:
-            analysis = self.irp_client.analysis.get_analysis_by_name(
-                analysis_name=analysis_name,
-                edm_name=edm_name
-            )
-            return analysis.get('appAnalysisId')
+            # Use LIKE for flexible matching on EDM name
+            filter_str = f'analysisName = "{analysis_name}" AND exposureName LIKE "%{edm_name}%"'
+            analyses = self.irp_client.analysis.search_analyses(filter=filter_str)
+
+            if len(analyses) == 0:
+                # Try with just LIKE on analysis name too in case of minor differences
+                filter_str = f'analysisName LIKE "%{analysis_name}%" AND exposureName LIKE "%{edm_name}%"'
+                analyses = self.irp_client.analysis.search_analyses(filter=filter_str)
+
+            if len(analyses) == 0:
+                return None
+            if len(analyses) > 1:
+                # Multiple matches - try to find exact match on analysis name
+                exact_matches = [a for a in analyses if a.get('analysisName') == analysis_name]
+                if len(exact_matches) == 1:
+                    return exact_matches[0].get('appAnalysisId')
+                # Still multiple - return first match but log warning
+                print(f"  Warning: Multiple analyses found for '{analysis_name}' in EDM like '{edm_name}', using first match")
+
+            return analyses[0].get('appAnalysisId')
         except Exception as e:
             # Check if it's a "not found" error - return None in that case
             error_msg = str(e).lower()
