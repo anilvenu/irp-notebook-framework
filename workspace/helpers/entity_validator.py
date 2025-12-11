@@ -32,6 +32,7 @@ class EntityValidator:
         self._treaty_manager = None
         self._analysis_manager = None
         self._rdm_manager = None
+        self._reference_data_manager = None
 
     @property
     def edm_manager(self):
@@ -72,6 +73,14 @@ class EntityValidator:
             from helpers.irp_integration.rdm import RDMManager
             self._rdm_manager = RDMManager(self.client)
         return self._rdm_manager
+
+    @property
+    def reference_data_manager(self):
+        """Lazy-loaded reference data manager to avoid circular imports."""
+        if self._reference_data_manager is None:
+            from helpers.irp_integration.reference_data import ReferenceDataManager
+            self._reference_data_manager = ReferenceDataManager(self.client)
+        return self._reference_data_manager
 
     def validate_edms_not_exist(self, edm_names: List[str]) -> Tuple[List[str], List[str]]:
         """
@@ -557,6 +566,75 @@ class EntityValidator:
             )
 
         return existing, errors
+
+    def validate_treaties_exist(
+        self,
+        treaties: List[Dict[str, str]],
+        edm_exposure_ids: Dict[str, int]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Check that treaties exist within their EDMs (for pre-requisite validation).
+
+        Args:
+            treaties: List of dicts with 'Database' and treaty name key
+                     (supports both 'Treaty Name' and 'Reinsurance Treaty N' formats)
+            edm_exposure_ids: Mapping of EDM names to exposure IDs
+
+        Returns:
+            Tuple of (missing_treaty_identifiers, error_messages)
+            Identifiers are in format "EDM_NAME/TREATY_NAME"
+        """
+        if not treaties or not edm_exposure_ids:
+            return [], []
+
+        errors = []
+        missing = []
+
+        # Group treaties by EDM for efficient lookup
+        by_edm: Dict[str, List[str]] = {}
+        for t in treaties:
+            edm = t.get('Database')
+            # Support both 'Treaty Name' and direct treaty name value
+            treaty_name = t.get('Treaty Name') or t.get('treaty_name')
+            if edm and treaty_name:
+                by_edm.setdefault(edm, []).append(treaty_name)
+
+        for edm_name, treaty_names in by_edm.items():
+            exposure_id = edm_exposure_ids.get(edm_name)
+            if not exposure_id:
+                # EDM doesn't exist, all treaties in this EDM are missing
+                for name in treaty_names:
+                    missing.append(f"{edm_name}/{name}")
+                continue
+
+            try:
+                # Build IN filter for all treaty names in this EDM
+                unique_names = list(set(treaty_names))
+                quoted = ", ".join(f'"{name}"' for name in unique_names)
+                filter_str = f"treatyName IN ({quoted})"
+
+                found = self.treaty_manager.search_treaties_paginated(
+                    exposure_id=exposure_id,
+                    filter=filter_str
+                )
+
+                # Build set of found treaty names
+                found_names = {t.get('treatyName') for t in found}
+
+                # Find which treaties were not found
+                for name in unique_names:
+                    if name not in found_names:
+                        missing.append(f"{edm_name}/{name}")
+
+            except IRPAPIError as e:
+                errors.append(f"ENT-API-001: Failed to check treaties in {edm_name}: {e}")
+
+        if missing:
+            errors.insert(0,
+                f"ENT-TREATY-002: The following treaties were not found:{_format_entity_list(missing)}"
+            )
+
+        return missing, errors
 
     def validate_analyses_not_exist(
         self,
@@ -1357,6 +1435,89 @@ class EntityValidator:
             all_errors.extend(group_errors)
 
         return all_errors
+
+    def validate_analysis_batch(
+        self,
+        analyses: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Validate Analysis batch submission.
+
+        Pre-requisites (must exist):
+        - EDMs that analyses belong to
+        - Portfolios within their EDMs
+        - Treaties referenced (if any)
+        - Reference data (model profiles, output profiles, event rate schemes)
+
+        Entities to be created (must NOT exist):
+        - Analyses must not already exist
+
+        Args:
+            analyses: List of analysis job dicts with 'Database', 'Portfolio',
+                     'Analysis Name', 'Analysis Profile', 'Output Profile',
+                     'Event Rate', and optional 'Reinsurance Treaty 1-5' keys
+
+        Returns:
+            Tuple of (error_messages, existing_analysis_identifiers)
+            existing_analysis_identifiers are in format "EDM_NAME/ANALYSIS_NAME"
+            This allows callers to use the existing list for interactive recovery.
+        """
+        if not analyses:
+            return [], []
+
+        all_errors = []
+        existing_analyses = []
+
+        # Extract unique EDM names (filter out None values)
+        edm_names = list(set(
+            str(a['Database']) for a in analyses
+            if a.get('Database') is not None
+        ))
+
+        # Pre-requisite 1: EDMs must exist
+        edm_exposure_ids, edm_errors = self.validate_edms_exist(edm_names)
+        all_errors.extend(edm_errors)
+
+        # Pre-requisite 2: Portfolios must exist (only check in EDMs that exist)
+        if edm_exposure_ids:
+            # Build portfolio list for validation
+            portfolios: List[Dict[str, str]] = [
+                {'Database': a['Database'], 'Portfolio': a['Portfolio']}
+                for a in analyses
+                if a.get('Database') and a.get('Portfolio')
+            ]
+            _, portfolio_errors = self.validate_portfolios_exist(portfolios, edm_exposure_ids)
+            all_errors.extend(portfolio_errors)
+
+        # Pre-requisite 3: Treaties must exist (if any are specified)
+        if edm_exposure_ids:
+            # Extract all treaty references from analyses (Reinsurance Treaty 1-5)
+            treaties: List[Dict[str, str]] = []
+            for a in analyses:
+                edm = a.get('Database')
+                if not edm:
+                    continue
+                for i in range(1, 6):
+                    treaty_name = a.get(f'Reinsurance Treaty {i}')
+                    if treaty_name:
+                        treaties.append({'Database': edm, 'treaty_name': treaty_name})
+
+            if treaties:
+                _, treaty_errors = self.validate_treaties_exist(treaties, edm_exposure_ids)
+                all_errors.extend(treaty_errors)
+
+        # Pre-requisite 4: Reference data must exist (model profiles, output profiles, event rates)
+        # Use the shared reference data validation from configuration.py
+        # Pass None to let it create its own IRPClient (avoids type mismatch with Client)
+        from helpers.configuration import validate_reference_data_with_api
+        ref_data_errors = validate_reference_data_with_api(analyses, irp_client=None)
+        all_errors.extend(ref_data_errors)
+
+        # Analyses must NOT exist
+        existing_analyses, analysis_errors = self.validate_analyses_not_exist(analyses)
+        all_errors.extend(analysis_errors)
+
+        return all_errors, existing_analyses
 
     def validate_rdm_export_batch(
         self,

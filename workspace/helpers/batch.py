@@ -607,6 +607,13 @@ def validate_batch(
         export_jobs = [jc['job_configuration_data'] for jc in job_configs]
         return validator.validate_rdm_export_batch(export_jobs=export_jobs)
 
+    elif batch_type == BatchType.ANALYSIS:
+        # Analysis validates: EDMs exist, Portfolios exist, Treaties exist (if specified),
+        # Reference data exists, Analyses don't exist
+        analyses = [jc['job_configuration_data'] for jc in job_configs]
+        errors, _ = validator.validate_analysis_batch(analyses=analyses)
+        return errors
+
     # Add validation for other batch types here as needed
 
     return []
