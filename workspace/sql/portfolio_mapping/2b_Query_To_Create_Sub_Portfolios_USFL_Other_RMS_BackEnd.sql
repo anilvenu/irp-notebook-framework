@@ -125,7 +125,7 @@ where name = 'portacct'
 
 --Manufactured Housing
 insert into dbo.Portinfo (PORTINFOID,PORTNUM,PORTNAME,CREATEDATE,DESCRIPT)
-select max(portinfoid)+1,'USFL_Other_Manufactu','USFL_Other_Manufactu',@Date,'USFL_Other_Manufactu'
+select max(portinfoid)+1,'USFL_Other_Manufact','USFL_Other_Manufact',@Date,'USFL_Other_Manufact'
  from dbo. Portinfo
 
 DECLARE @PortAcctSeedID_7 INT
@@ -287,7 +287,7 @@ LEFT JOIN dbo.Portacct pa ON pi.PORTINFOID = pa.PORTINFOID
 WHERE pi.PORTNAME IN (
     'USFL_Other_Lender_P',
     'USFL_Other_CB',
-    'USFL_Other_Manufactu',
+    'USFL_Other_Manufact',
     'USFL_Other_Renters',
     'USFL_Other_Other',
     'USFL_Other_Clay_21st',
