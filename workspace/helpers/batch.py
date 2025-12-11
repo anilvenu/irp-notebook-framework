@@ -619,6 +619,36 @@ def validate_batch(
     return []
 
 
+def activate_batch(batch_id: int, schema: str = 'public') -> None:
+    """
+    Activate a batch by updating its status to ACTIVE and setting submitted_ts.
+
+    This is used when jobs are submitted directly (bypassing submit_batch),
+    such as in the interactive Analysis notebook flow.
+
+    Also updates the associated configuration status to ACTIVE.
+
+    Args:
+        batch_id: Batch ID to activate
+        schema: Database schema
+
+    Raises:
+        BatchError: If batch not found
+    """
+    batch = read_batch(batch_id, schema=schema)
+
+    # Update batch status to ACTIVE and set submitted_ts
+    query = """
+        UPDATE irp_batch
+        SET status = %s, submitted_ts = NOW()
+        WHERE id = %s
+    """
+    execute_command(query, (BatchStatus.ACTIVE, batch_id), schema=schema)
+
+    # Update configuration status to ACTIVE
+    update_configuration_status(batch['configuration_id'], ConfigurationStatus.ACTIVE, schema=schema)
+
+
 def submit_batch(
     batch_id: int,
     irp_client: IRPClient,
