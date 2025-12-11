@@ -201,6 +201,7 @@ class BatchValidationResult:
     perspectives: List[str] = field(default_factory=lambda: ['GR', 'GU', 'RL'])
     include_plt: Union[bool, str] = 'auto'  # 'auto', True, or False
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    skipped_pairs: List[Dict[str, Any]] = field(default_factory=list)  # Pairs that couldn't be resolved
 
     @property
     def passed(self) -> bool:
@@ -236,6 +237,16 @@ class BatchValidationResult:
     def get_passed_results(self) -> List[AnalysisPairResult]:
         """Get only the passed analysis pair results."""
         return [r for r in self.results if r.passed]
+
+    @property
+    def skipped_count(self) -> int:
+        """Number of analysis pairs that were skipped (couldn't be resolved)."""
+        return len(self.skipped_pairs)
+
+    @property
+    def total_input_count(self) -> int:
+        """Total number of analysis pairs in input (validated + skipped)."""
+        return self.total_count + self.skipped_count
 
 
 # =============================================================================
@@ -550,18 +561,104 @@ def _load_pairs_from_csv(file_path: Path) -> List[Dict[str, Any]]:
 def _load_pairs_from_excel(file_path: Path) -> List[Dict[str, Any]]:
     """Load analysis pairs from an Excel file.
 
-    Skips rows with missing or invalid production/test analysis IDs.
+    Supports two formats:
+    1. Legacy format with columns: production_app_analysis_id, test_app_analysis_id, name (optional)
+    2. New format with columns: Analysis Name, Prod Database, Prod Analysis ID, Test Database, Test Analysis ID
+
+    For the new format, analysis IDs can be empty - they will be looked up by the validator.
+    Skips rows with missing or invalid production/test analysis IDs in legacy format.
     """
     df = pd.read_excel(file_path)
 
-    # Validate required columns
-    required_cols = {'production_app_analysis_id', 'test_app_analysis_id'}
-    if not required_cols.issubset(set(df.columns)):
+    # Check if this is the new format (has 'Analysis Name' column)
+    new_format_cols = {'Analysis Name', 'Prod Database', 'Test Database'}
+    legacy_format_cols = {'production_app_analysis_id', 'test_app_analysis_id'}
+
+    if new_format_cols.issubset(set(df.columns)):
+        return _load_pairs_from_excel_new_format(df)
+    elif legacy_format_cols.issubset(set(df.columns)):
+        return _load_pairs_from_excel_legacy_format(df)
+    else:
         raise ValueError(
-            f"File must have columns: {required_cols}. "
+            f"Excel file must have either:\n"
+            f"  - New format columns: {new_format_cols}\n"
+            f"  - Legacy format columns: {legacy_format_cols}\n"
             f"Found: {list(df.columns)}"
         )
 
+
+def _load_pairs_from_excel_new_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Load analysis pairs from Excel using new format with EDM names.
+
+    New format columns:
+    - Analysis Name (required): Name of the analysis
+    - Prod Database (required): Production EDM name
+    - Prod Analysis ID (optional): Will be looked up if empty
+    - Test Database (required): Test EDM name
+    - Test Analysis ID (optional): Will be looked up if empty
+
+    Returns pairs with lookup info for analyses that need ID resolution.
+    """
+    pairs = []
+    skipped_rows = []
+
+    for row_num, row in df.iterrows():
+        analysis_name = row.get('Analysis Name')
+        prod_edm = row.get('Prod Database')
+        test_edm = row.get('Test Database')
+        prod_id = row.get('Prod Analysis ID')
+        test_id = row.get('Test Analysis ID')
+
+        # Skip rows with missing required fields
+        if pd.isna(analysis_name) or pd.isna(prod_edm) or pd.isna(test_edm):
+            skipped_rows.append(row_num + 2)  # +2 for 1-indexed + header
+            continue
+
+        analysis_name = str(analysis_name).strip()
+        prod_edm = str(prod_edm).strip()
+        test_edm = str(test_edm).strip()
+
+        if not analysis_name or not prod_edm or not test_edm:
+            skipped_rows.append(row_num + 2)
+            continue
+
+        # Handle optional IDs - convert to int if present, None if missing
+        try:
+            prod_id = int(prod_id) if not pd.isna(prod_id) else None
+        except (ValueError, TypeError):
+            prod_id = None
+
+        try:
+            test_id = int(test_id) if not pd.isna(test_id) else None
+        except (ValueError, TypeError):
+            test_id = None
+
+        pairs.append({
+            'name': analysis_name,
+            'analysis_name': analysis_name,
+            'prod_edm_name': prod_edm,
+            'test_edm_name': test_edm,
+            'production_app_analysis_id': prod_id,
+            'test_app_analysis_id': test_id,
+            'needs_lookup': prod_id is None or test_id is None
+        })
+
+    if skipped_rows:
+        print(f"Skipped {len(skipped_rows)} row(s) with missing required fields: {skipped_rows}")
+
+    return pairs
+
+
+def _load_pairs_from_excel_legacy_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Load analysis pairs from Excel using legacy format with direct IDs.
+
+    Legacy format columns:
+    - production_app_analysis_id (required)
+    - test_app_analysis_id (required)
+    - name (optional)
+
+    Skips rows with missing or invalid production/test analysis IDs.
+    """
     pairs = []
     skipped_rows = []
 
@@ -591,7 +688,8 @@ def _load_pairs_from_excel(file_path: Path) -> List[Dict[str, Any]]:
         pairs.append({
             'production_app_analysis_id': prod_id,
             'test_app_analysis_id': test_id,
-            'name': name
+            'name': name,
+            'needs_lookup': False
         })
 
     if skipped_rows:
@@ -620,6 +718,37 @@ class AnalysisResultsValidator:
             irp_client: IRPClient instance. If None, creates a new one.
         """
         self.irp_client = irp_client or IRPClient()
+
+    def lookup_analysis_id(
+        self,
+        analysis_name: str,
+        edm_name: str
+    ) -> Optional[int]:
+        """Look up app_analysis_id by analysis name and EDM name.
+
+        Args:
+            analysis_name: Name of the analysis
+            edm_name: Name of the EDM (exposure database)
+
+        Returns:
+            app_analysis_id if found, None if not found
+
+        Raises:
+            IRPAPIError: If API call fails (not including "not found")
+        """
+        try:
+            analysis = self.irp_client.analysis.get_analysis_by_name(
+                analysis_name=analysis_name,
+                edm_name=edm_name
+            )
+            return analysis.get('appAnalysisId')
+        except Exception as e:
+            # Check if it's a "not found" error - return None in that case
+            error_msg = str(e).lower()
+            if 'not found' in error_msg or 'no analysis' in error_msg:
+                return None
+            # Re-raise other errors
+            raise
 
     def validate(
         self,
@@ -708,6 +837,109 @@ class AnalysisResultsValidator:
 
         return result
 
+    def resolve_analysis_pairs(
+        self,
+        analysis_pairs: List[Dict[str, Any]],
+        progress_callback: callable = None
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Resolve analysis pairs that need ID lookup.
+
+        For pairs with 'needs_lookup' flag, looks up production and test analysis IDs
+        using the analysis name and EDM names. Populates the IDs in the pair dict.
+
+        Args:
+            analysis_pairs: List of analysis pair dicts (may have 'needs_lookup' flag)
+            progress_callback: Optional callback(current, total, name, status) for progress
+
+        Returns:
+            Tuple of (resolved_pairs, skipped_pairs):
+            - resolved_pairs: Pairs with both IDs resolved (ready for validation)
+            - skipped_pairs: Pairs where one or both analyses were not found
+        """
+        resolved_pairs = []
+        skipped_pairs = []
+
+        total = len(analysis_pairs)
+        for i, pair in enumerate(analysis_pairs):
+            name = pair.get('name') or pair.get('analysis_name', 'Unknown')
+
+            # Check if this pair needs lookup
+            if not pair.get('needs_lookup', False):
+                # Already has IDs, just validate they exist
+                if pair.get('production_app_analysis_id') and pair.get('test_app_analysis_id'):
+                    resolved_pairs.append(pair)
+                else:
+                    skipped_pairs.append({
+                        **pair,
+                        'skip_reason': 'Missing analysis IDs'
+                    })
+                continue
+
+            if progress_callback:
+                progress_callback(i + 1, total, name, 'Looking up')
+
+            # Need to look up IDs
+            analysis_name = pair.get('analysis_name')
+            prod_edm = pair.get('prod_edm_name')
+            test_edm = pair.get('test_edm_name')
+
+            if not analysis_name or not prod_edm or not test_edm:
+                skipped_pairs.append({
+                    **pair,
+                    'skip_reason': 'Missing analysis_name, prod_edm_name, or test_edm_name'
+                })
+                continue
+
+            # Look up production analysis ID if needed
+            prod_id = pair.get('production_app_analysis_id')
+            if prod_id is None:
+                try:
+                    prod_id = self.lookup_analysis_id(analysis_name, prod_edm)
+                except Exception as e:
+                    skipped_pairs.append({
+                        **pair,
+                        'skip_reason': f'Error looking up prod analysis: {e}'
+                    })
+                    continue
+
+            if prod_id is None:
+                skipped_pairs.append({
+                    **pair,
+                    'skip_reason': f'Production analysis not found: {analysis_name} in {prod_edm}'
+                })
+                continue
+
+            # Look up test analysis ID if needed
+            test_id = pair.get('test_app_analysis_id')
+            if test_id is None:
+                try:
+                    test_id = self.lookup_analysis_id(analysis_name, test_edm)
+                except Exception as e:
+                    skipped_pairs.append({
+                        **pair,
+                        'skip_reason': f'Error looking up test analysis: {e}'
+                    })
+                    continue
+
+            if test_id is None:
+                skipped_pairs.append({
+                    **pair,
+                    'production_app_analysis_id': prod_id,  # Save the prod ID we found
+                    'skip_reason': f'Test analysis not found: {analysis_name} in {test_edm}'
+                })
+                continue
+
+            # Both IDs resolved successfully
+            resolved_pair = {
+                **pair,
+                'production_app_analysis_id': prod_id,
+                'test_app_analysis_id': test_id,
+                'needs_lookup': False
+            }
+            resolved_pairs.append(resolved_pair)
+
+        return resolved_pairs, skipped_pairs
+
     def validate_batch(
         self,
         analysis_pairs: List[Dict[str, Any]],
@@ -720,9 +952,14 @@ class AnalysisResultsValidator:
 
         Args:
             analysis_pairs: List of dicts with keys:
-                - production_app_analysis_id (required)
-                - test_app_analysis_id (required)
+                - production_app_analysis_id (required, or use needs_lookup)
+                - test_app_analysis_id (required, or use needs_lookup)
                 - name (optional)
+                For new format with lookup:
+                - needs_lookup: True if IDs need to be resolved
+                - analysis_name: Analysis name for lookup
+                - prod_edm_name: Production EDM name
+                - test_edm_name: Test EDM name
             perspectives: List of perspective codes to validate (default: ['GR', 'GU', 'RL'])
             include_plt: Whether to include PLT comparison.
                 - 'auto' (default): Include PLT only for HD analyses (inferred from engineType)
@@ -794,14 +1031,17 @@ class AnalysisResultsValidator:
         perspectives: List[str] = None,
         include_plt: Union[bool, str] = 'auto',
         relative_tolerance: float = 1e-9,
-        progress_callback: callable = None
+        progress_callback: callable = None,
+        output_file: Union[str, Path] = None
     ) -> BatchValidationResult:
         """Validate multiple analysis pairs from a CSV or XLSX file.
 
-        Expected columns:
-        - production_app_analysis_id (required)
-        - test_app_analysis_id (required)
-        - name (optional)
+        Supports two file formats:
+        1. Legacy format with columns: production_app_analysis_id, test_app_analysis_id, name
+        2. New format with columns: Analysis Name, Prod Database, Prod Analysis ID, Test Database, Test Analysis ID
+
+        For the new format, analysis IDs can be empty - they will be looked up automatically
+        using the analysis name and EDM names. Analyses that cannot be found are skipped.
 
         Args:
             file_path: Path to CSV or XLSX file with analysis pairs
@@ -811,19 +1051,109 @@ class AnalysisResultsValidator:
                 - True: Always include PLT
                 - False: Never include PLT
             relative_tolerance: Tolerance for floating-point comparison
-            progress_callback: Optional callback(current, total, name, perspective) for progress
+            progress_callback: Optional callback(current, total, name, status) for progress
+            output_file: Optional path to write updated Excel file with resolved IDs
 
         Returns:
-            BatchValidationResult containing all validation results
+            BatchValidationResult containing all validation results.
+            The result also includes 'skipped_pairs' attribute with pairs that couldn't be resolved.
         """
         pairs = load_analysis_pairs(file_path)
-        return self.validate_batch(
-            analysis_pairs=pairs,
+
+        # Check if any pairs need lookup
+        needs_lookup = any(pair.get('needs_lookup', False) for pair in pairs)
+
+        if needs_lookup:
+            print(f"Resolving analysis IDs for {len(pairs)} analysis pairs...")
+            resolved_pairs, skipped_pairs = self.resolve_analysis_pairs(
+                pairs, progress_callback=progress_callback
+            )
+
+            if skipped_pairs:
+                print(f"\nSkipped {len(skipped_pairs)} analysis pair(s):")
+                for pair in skipped_pairs:
+                    name = pair.get('name') or pair.get('analysis_name', 'Unknown')
+                    reason = pair.get('skip_reason', 'Unknown reason')
+                    print(f"  - {name}: {reason}")
+                print()
+
+            if not resolved_pairs:
+                print("No analysis pairs could be resolved. Nothing to validate.")
+                result = BatchValidationResult(
+                    perspectives=perspectives or ALL_PERSPECTIVES,
+                    include_plt=include_plt
+                )
+                result.skipped_pairs = skipped_pairs
+                return result
+
+            print(f"Found {len(resolved_pairs)} analysis pair(s) to validate.")
+
+            # Optionally write updated file with resolved IDs
+            if output_file:
+                self._write_resolved_pairs_to_excel(
+                    file_path, resolved_pairs, skipped_pairs, output_file
+                )
+        else:
+            resolved_pairs = pairs
+            skipped_pairs = []
+
+        result = self.validate_batch(
+            analysis_pairs=resolved_pairs,
             perspectives=perspectives,
             include_plt=include_plt,
             relative_tolerance=relative_tolerance,
             progress_callback=progress_callback
         )
+
+        # Attach skipped pairs to result for reference
+        result.skipped_pairs = skipped_pairs
+        return result
+
+    def _write_resolved_pairs_to_excel(
+        self,
+        input_file: Union[str, Path],
+        resolved_pairs: List[Dict[str, Any]],
+        skipped_pairs: List[Dict[str, Any]],
+        output_file: Union[str, Path]
+    ) -> None:
+        """Write resolved analysis pairs back to an Excel file.
+
+        Updates the original Excel with resolved analysis IDs and adds a status column.
+        """
+        # Read original file
+        df = pd.read_excel(input_file)
+
+        # Create lookup for resolved and skipped pairs
+        resolved_lookup = {
+            pair.get('analysis_name'): pair for pair in resolved_pairs
+        }
+        skipped_lookup = {
+            pair.get('analysis_name'): pair for pair in skipped_pairs
+        }
+
+        # Update IDs and add status column
+        statuses = []
+        for _, row in df.iterrows():
+            analysis_name = row.get('Analysis Name')
+            if analysis_name in resolved_lookup:
+                pair = resolved_lookup[analysis_name]
+                df.loc[df['Analysis Name'] == analysis_name, 'Prod Analysis ID'] = pair['production_app_analysis_id']
+                df.loc[df['Analysis Name'] == analysis_name, 'Test Analysis ID'] = pair['test_app_analysis_id']
+                statuses.append('Resolved')
+            elif analysis_name in skipped_lookup:
+                pair = skipped_lookup[analysis_name]
+                # Update prod ID if we found it
+                if pair.get('production_app_analysis_id'):
+                    df.loc[df['Analysis Name'] == analysis_name, 'Prod Analysis ID'] = pair['production_app_analysis_id']
+                statuses.append(f"Skipped: {pair.get('skip_reason', 'Unknown')}")
+            else:
+                statuses.append('Unknown')
+
+        df['Lookup Status'] = statuses
+
+        # Write to output file
+        df.to_excel(output_file, index=False)
+        print(f"Updated Excel file written to: {output_file}")
 
     # Keep old method name for backwards compatibility
     def validate_batch_from_csv(
@@ -1235,7 +1565,10 @@ def print_batch_summary(result: BatchValidationResult) -> None:
     print("BATCH VALIDATION SUMMARY")
     print("=" * 70)
     print()
-    print(f"Total Analyses:  {result.total_count}")
+    if result.skipped_count > 0:
+        print(f"Total Input:     {result.total_input_count}")
+        print(f"Skipped:         {result.skipped_count}")
+    print(f"Validated:       {result.total_count}")
     print(f"Passed:          {result.passed_count}")
     print(f"Failed:          {result.failed_count}")
     print(f"Pass Rate:       {result.pass_rate:.1f}%")
@@ -1243,8 +1576,20 @@ def print_batch_summary(result: BatchValidationResult) -> None:
     print(f"Include PLT:     {result.include_plt}")
     print()
 
-    if result.passed:
-        print("All analyses passed validation!")
+    # Show skipped pairs if any
+    if result.skipped_pairs:
+        print(f"Skipped analyses ({result.skipped_count}):")
+        print("-" * 70)
+        for pair in result.skipped_pairs:
+            name = pair.get('name') or pair.get('analysis_name', 'Unknown')
+            reason = pair.get('skip_reason', 'Unknown reason')
+            print(f"  [SKIP]  {name}: {reason}")
+        print()
+
+    if result.passed and result.total_count > 0:
+        print("All validated analyses passed!")
+    elif result.total_count == 0:
+        print("No analyses were validated.")
     else:
         print(f"Failed analyses ({result.failed_count}):")
         print("-" * 70)
