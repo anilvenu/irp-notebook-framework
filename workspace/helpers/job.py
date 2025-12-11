@@ -1936,19 +1936,18 @@ def resubmit_jobs(
 
 def delete_analyses_for_jobs(
     jobs_to_delete: List[Dict[str, Any]],
-    existing_analyses: List[Dict[str, Any]],
     irp_client: IRPClient
 ) -> List[str]:
     """
     Delete analyses in Moody's for jobs that have existing analyses.
 
     This is used during resubmission workflows when analyses need to be
-    deleted before jobs can be resubmitted.
+    deleted before jobs can be resubmitted. The function looks up the
+    analysis ID from Moody's API using the analysis name and EDM name.
 
     Args:
-        jobs_to_delete: List of job dicts with 'analysis_name' and 'edm_name' keys
-        existing_analyses: List of analysis dicts from reconcile_analysis_batch(),
-                          each with 'job_config' and 'analysis' keys
+        jobs_to_delete: List of job info dicts with 'analysis_name' and 'edm'
+                       (or 'edm_name') keys
         irp_client: IRPClient instance for Moody's API calls
 
     Returns:
@@ -1957,8 +1956,7 @@ def delete_analyses_for_jobs(
 
     Example:
         >>> errors = delete_analyses_for_jobs(
-        ...     jobs_to_delete=[{'analysis_name': 'Test', 'edm_name': 'EDM1'}],
-        ...     existing_analyses=recon['existing_analyses'],
+        ...     jobs_to_delete=[{'analysis_name': 'Test', 'edm': 'EDM1'}],
         ...     irp_client=client
         ... )
         >>> if errors:
@@ -1967,21 +1965,28 @@ def delete_analyses_for_jobs(
     errors = []
 
     for job in jobs_to_delete:
-        # Find the matching analysis from existing_analyses
-        matching_analysis = None
-        for item in existing_analyses:
-            if (item['job_config'].get('Analysis Name') == job['analysis_name'] and
-                item['job_config'].get('Database') == job['edm_name']):
-                matching_analysis = item
-                break
+        analysis_name = job.get('analysis_name')
+        edm_name = job.get('edm') or job.get('edm_name')
 
-        if matching_analysis:
-            analysis_id = matching_analysis['analysis']['analysisId']
-            analysis_name = job['analysis_name']
-            try:
-                irp_client.analysis.delete_analysis(analysis_id)
-            except Exception as e:
-                error_msg = f"{analysis_name} (ID: {analysis_id}): {e}"
-                errors.append(error_msg)
+        if not analysis_name or not edm_name:
+            errors.append(f"Invalid job info - missing analysis_name or edm: {job}")
+            continue
+
+        try:
+            # Look up the analysis ID from Moody's API
+            filter_str = f'analysisName = "{analysis_name}" AND exposureName = "{edm_name}"'
+            found = irp_client.analysis.search_analyses_paginated(filter=filter_str)
+
+            if not found:
+                errors.append(f"{analysis_name} ({edm_name}): Analysis not found in Moody's")
+                continue
+
+            # Delete the analysis
+            analysis_id = found[0].get('analysisId')
+            irp_client.analysis.delete_analysis(analysis_id)
+
+        except Exception as e:
+            error_msg = f"{analysis_name} ({edm_name}): {e}"
+            errors.append(error_msg)
 
     return errors
