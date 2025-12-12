@@ -80,19 +80,19 @@ def create_test_cycle(test_schema, cycle_name='test_cycle'):
 @pytest.mark.unit
 def test_validate_metadata_success():
     """Test _validate_key_value with valid Metadata structure"""
-    # Create DataFrame without header (Metadata format) - ALL 11 required keys
+    # Create DataFrame without header (Metadata format) - ALL 12 required keys
     data = {
         0: [
             'Current Date Value', 'EDM Data Version', 'Geocode Version', 'Hazard Version',
             'DLM Model Version', 'Validate DLM Model Versions?', 'Wildfire HD Model Version',
             'SCS HD Model Version', 'Inland Flood HD Model Version', 'Validate HD Model Versions?',
-            'Export RDM Name'
+            'Export RDM Name', 'Cycle Type'
         ],
         1: [
             '202503', '23.0.0', '23.0', '23',
             23, 'Y', 2,
             1, 1.2, 'Y',
-            'RM_RDM_202503_TEST'
+            'RM_RDM_202503_TEST', 'Quarterly'
         ]
     }
     df = pd.DataFrame(data)
@@ -105,6 +105,7 @@ def test_validate_metadata_success():
     assert parsed_data['Current Date Value'] == '202503'
     assert parsed_data['EDM Data Version'] == '23.0.0'
     assert parsed_data['DLM Model Version'] == 23
+    assert parsed_data['Cycle Type'] == 'Quarterly'
 
 
 @pytest.mark.unit
