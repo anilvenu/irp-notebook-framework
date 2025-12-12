@@ -2477,7 +2477,12 @@ class TestValidatePortfolioMappingBatch:
 
 
 class TestValidatePortfolioMappingSqlScripts:
-    """Tests for SQL script validation in portfolio mapping."""
+    """Tests for SQL script validation in portfolio mapping.
+
+    Note: Individual SQL script existence is NOT validated (portfolios without
+    scripts are skipped at execution time). Only cycle type directory existence
+    is validated.
+    """
 
     def test_missing_cycle_type_returns_error(self):
         """Missing Cycle Type in Metadata should return error."""
@@ -2524,10 +2529,8 @@ class TestValidatePortfolioMappingSqlScripts:
         assert "invalidtype" in errors[0]
 
     def test_test_cycle_type_uses_adhoc_directory(self):
-        """Cycle type containing 'test' should use adhoc directory."""
+        """Cycle type containing 'test' should use adhoc directory (no error if dir exists)."""
         validator = EntityValidator()
-        # Use a non-existent import file so SQL script won't be found
-        # This tests that the path includes 'adhoc'
         portfolios = [
             {
                 'Database': 'EDM1',
@@ -2540,16 +2543,12 @@ class TestValidatePortfolioMappingSqlScripts:
 
         errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
 
-        # Should have SQL script not found error with 'adhoc' in the path
-        assert len(errors) == 1
-        assert 'adhoc' in errors[0]
-        assert 'SQL script not found' in errors[0]
+        # No error - adhoc directory exists and missing SQL scripts are not validated
+        assert len(errors) == 0
 
     def test_quarterly_cycle_type_uses_quarterly_directory(self):
-        """Quarterly cycle type should use quarterly directory."""
+        """Quarterly cycle type should use quarterly directory (no error if dir exists)."""
         validator = EntityValidator()
-        # Use a non-existent import file so SQL script won't be found
-        # This tests that the path includes 'quarterly'
         portfolios = [
             {
                 'Database': 'EDM1',
@@ -2562,13 +2561,11 @@ class TestValidatePortfolioMappingSqlScripts:
 
         errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
 
-        # Should have SQL script not found error with 'quarterly' in the path
-        assert len(errors) == 1
-        assert 'quarterly' in errors[0]
-        assert 'SQL script not found' in errors[0]
+        # No error - quarterly directory exists and missing SQL scripts are not validated
+        assert len(errors) == 0
 
-    def test_missing_sql_script_returns_error(self):
-        """Missing SQL script should return error."""
+    def test_missing_sql_script_does_not_return_error(self):
+        """Missing SQL script should NOT return error (skipped at execution time)."""
         validator = EntityValidator()
         portfolios = [
             {
@@ -2582,12 +2579,11 @@ class TestValidatePortfolioMappingSqlScripts:
 
         errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
 
-        assert len(errors) == 1
-        assert "SQL script not found" in errors[0]
-        assert "BasePort" in errors[0]
+        # No error - missing SQL scripts are skipped at execution time
+        assert len(errors) == 0
 
-    def test_missing_import_file_returns_error(self):
-        """Missing Import File should return error."""
+    def test_missing_import_file_does_not_return_error(self):
+        """Missing Import File should NOT return error (handled at execution time)."""
         validator = EntityValidator()
         portfolios = [
             {
@@ -2601,9 +2597,8 @@ class TestValidatePortfolioMappingSqlScripts:
 
         errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
 
-        assert len(errors) == 1
-        assert "Import File" in errors[0]
-        assert "BasePort" in errors[0]
+        # No error - missing import files are handled at execution time
+        assert len(errors) == 0
 
     def test_empty_base_portfolios_returns_no_errors(self):
         """Empty base portfolios list should return no errors."""
