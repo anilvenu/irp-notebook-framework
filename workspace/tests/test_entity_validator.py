@@ -2505,11 +2505,18 @@ class TestValidatePortfolioMappingSqlScripts:
     @patch('helpers.entity_validator.WORKSPACE_PATH')
     def test_invalid_cycle_type_directory_returns_error(self, mock_workspace):
         """Invalid cycle type directory should return error."""
-        # Setup mock path that doesn't exist
-        mock_path = MagicMock()
-        mock_path.__truediv__ = MagicMock(return_value=mock_path)
-        mock_path.exists.return_value = False
-        mock_workspace.__truediv__ = MagicMock(return_value=mock_path)
+        # Setup mock: base directory exists but no matching subdirectory
+        mock_base_path = MagicMock()
+        mock_base_path.exists.return_value = True
+        # Return empty list - no matching directories
+        mock_base_path.iterdir.return_value = []
+
+        # WORKSPACE_PATH / 'sql' / 'portfolio_mapping' returns mock_base_path
+        mock_sql_path = MagicMock()
+        mock_sql_path.__truediv__ = MagicMock(return_value=mock_base_path)
+        mock_workspace_sql = MagicMock()
+        mock_workspace_sql.__truediv__ = MagicMock(return_value=mock_sql_path)
+        mock_workspace.__truediv__ = MagicMock(return_value=mock_workspace_sql)
 
         validator = EntityValidator()
         portfolios = [

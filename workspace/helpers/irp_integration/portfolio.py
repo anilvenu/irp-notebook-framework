@@ -24,36 +24,44 @@ def resolve_cycle_type_directory(cycle_type: str) -> str:
     Resolve the cycle type to a portfolio_mapping subdirectory name.
 
     Logic:
-    - If cycle_type contains 'test' (case-insensitive), default to 'adhoc'
-    - Otherwise, match cycle_type.lower() to directory name (e.g., 'Quarterly' -> 'quarterly')
-    - Raises IRPValidationError if directory doesn't exist
+    - If cycle_type contains 'test' (case-insensitive), look for 'adhoc' directory
+    - Otherwise, look for directory matching cycle_type (case-insensitive)
+    - Raises IRPValidationError if no matching directory exists
 
     Args:
         cycle_type: Cycle type from configuration (e.g., 'Quarterly', 'Annual', 'Test_Q1')
 
     Returns:
-        Directory name (e.g., 'quarterly', 'annual', 'adhoc')
+        Actual directory name as it exists on filesystem (e.g., 'quarterly', 'annual', 'adhoc')
 
     Raises:
-        IRPValidationError: If the resolved directory doesn't exist
+        IRPValidationError: If no matching directory exists
     """
     cycle_type_lower = cycle_type.lower()
 
-    # If cycle type contains 'test', default to adhoc
+    # If cycle type contains 'test', look for adhoc directory
     if 'test' in cycle_type_lower:
-        resolved_dir = 'adhoc'
+        target_dir = 'adhoc'
     else:
-        resolved_dir = cycle_type_lower
+        target_dir = cycle_type_lower
 
-    # Verify the directory exists
-    portfolio_mapping_dir = WORKSPACE_PATH / 'sql' / 'portfolio_mapping' / resolved_dir
-    if not portfolio_mapping_dir.exists() or not portfolio_mapping_dir.is_dir():
+    # Find directory case-insensitively
+    portfolio_mapping_base = WORKSPACE_PATH / 'sql' / 'portfolio_mapping'
+
+    if not portfolio_mapping_base.exists():
         raise IRPValidationError(
-            f"Portfolio mapping directory not found for cycle type '{cycle_type}'. "
-            f"Expected directory: portfolio_mapping/{resolved_dir}"
+            f"Portfolio mapping base directory not found: {portfolio_mapping_base}"
         )
 
-    return resolved_dir
+    # Look for a directory that matches case-insensitively
+    for item in portfolio_mapping_base.iterdir():
+        if item.is_dir() and item.name.lower() == target_dir:
+            return item.name  # Return actual directory name
+
+    raise IRPValidationError(
+        f"Portfolio mapping directory not found for cycle type '{cycle_type}'. "
+        f"Expected directory: portfolio_mapping/{target_dir}"
+    )
 
 class PortfolioManager:
     """Manager for portfolio operations."""
