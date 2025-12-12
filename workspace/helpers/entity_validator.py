@@ -7,9 +7,10 @@ Used during configuration file validation to prevent conflicts with existing dat
 
 from typing import Dict, Any, List, Tuple, Optional
 
-from helpers.constants import DEFAULT_DATABASE_SERVER, WORKSPACE_PATH
+from helpers.constants import DEFAULT_DATABASE_SERVER
 from helpers.irp_integration.client import Client
 from helpers.irp_integration.exceptions import IRPAPIError
+from helpers.irp_integration.portfolio import resolve_cycle_type_directory
 
 
 def _format_entity_list(entities: List[str], indent: str = "  - ") -> str:
@@ -1346,34 +1347,11 @@ class EntityValidator:
             errors.append("Missing 'Cycle Type' in Metadata - required for portfolio mapping")
             return errors
 
-        # Resolve cycle type to target directory name
-        cycle_type_lower = cycle_type.lower()
-        if 'test' in cycle_type_lower:
-            target_dir = 'adhoc'
-        else:
-            target_dir = cycle_type_lower
-
-        # Find directory case-insensitively
-        portfolio_mapping_base = WORKSPACE_PATH / 'sql' / 'portfolio_mapping'
-
-        if not portfolio_mapping_base.exists():
-            errors.append(
-                f"Portfolio mapping base directory not found: {portfolio_mapping_base}"
-            )
-            return errors
-
-        # Look for a directory that matches case-insensitively
-        found_dir = None
-        for item in portfolio_mapping_base.iterdir():
-            if item.is_dir() and item.name.lower() == target_dir:
-                found_dir = item.name
-                break
-
-        if not found_dir:
-            errors.append(
-                f"Portfolio mapping directory not found for cycle type '{cycle_type}'. "
-                f"Expected directory: portfolio_mapping/{target_dir}"
-            )
+        # Validate that cycle type directory exists using shared function
+        try:
+            resolve_cycle_type_directory(cycle_type)
+        except Exception as e:
+            errors.append(str(e))
             return errors
 
         # Note: We intentionally do NOT validate that SQL scripts exist for each portfolio.

@@ -24,7 +24,7 @@ def resolve_cycle_type_directory(cycle_type: str) -> str:
     Resolve the cycle type to a portfolio_mapping subdirectory name.
 
     Logic:
-    - If cycle_type contains 'test' (case-insensitive), look for 'adhoc' directory
+    - If cycle_type contains 'test' (case-insensitive), look for 'test' directory
     - Otherwise, look for directory matching cycle_type (case-insensitive)
     - Raises IRPValidationError if no matching directory exists
 
@@ -32,16 +32,16 @@ def resolve_cycle_type_directory(cycle_type: str) -> str:
         cycle_type: Cycle type from configuration (e.g., 'Quarterly', 'Annual', 'Test_Q1')
 
     Returns:
-        Actual directory name as it exists on filesystem (e.g., 'quarterly', 'annual', 'adhoc')
+        Actual directory name as it exists on filesystem (e.g., 'quarterly', 'annual', 'test')
 
     Raises:
         IRPValidationError: If no matching directory exists
     """
     cycle_type_lower = cycle_type.lower()
 
-    # If cycle type contains 'test', look for adhoc directory
+    # If cycle type contains 'test', use test directory
     if 'test' in cycle_type_lower:
-        target_dir = 'adhoc'
+        target_dir = 'test'
     else:
         target_dir = cycle_type_lower
 

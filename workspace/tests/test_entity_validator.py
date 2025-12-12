@@ -2502,7 +2502,7 @@ class TestValidatePortfolioMappingSqlScripts:
         assert len(errors) == 1
         assert "Cycle Type" in errors[0]
 
-    @patch('helpers.entity_validator.WORKSPACE_PATH')
+    @patch('helpers.irp_integration.portfolio.WORKSPACE_PATH')
     def test_invalid_cycle_type_directory_returns_error(self, mock_workspace):
         """Invalid cycle type directory should return error."""
         # Setup mock: base directory exists but no matching subdirectory
@@ -2535,8 +2535,8 @@ class TestValidatePortfolioMappingSqlScripts:
         assert "directory not found" in errors[0]
         assert "invalidtype" in errors[0]
 
-    def test_test_cycle_type_uses_adhoc_directory(self):
-        """Cycle type containing 'test' should use adhoc directory (no error if dir exists)."""
+    def test_test_cycle_type_uses_test_directory(self):
+        """Cycle type containing 'test' should use test directory (no error if dir exists)."""
         validator = EntityValidator()
         portfolios = [
             {
@@ -2550,7 +2550,8 @@ class TestValidatePortfolioMappingSqlScripts:
 
         errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
 
-        # No error - adhoc directory exists and missing SQL scripts are not validated
+        # No error - test directory exists (Test_Q1_2025 contains 'test')
+        # and missing SQL scripts are not validated
         assert len(errors) == 0
 
     def test_quarterly_cycle_type_uses_quarterly_directory(self):
