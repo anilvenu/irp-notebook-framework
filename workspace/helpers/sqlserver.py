@@ -1193,7 +1193,7 @@ def execute_query_from_file(
         dataframes = []
 
         logger.info(f"Executing query from file: {file_path}")
-        print(f"Executing SQL query: {Path(file_path).name}")
+        print(f"Executing SQL query: {file_path}")
 
         with get_connection(connection, database=database) as conn:
             cursor = conn.cursor()

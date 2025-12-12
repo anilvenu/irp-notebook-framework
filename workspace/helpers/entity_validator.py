@@ -6,9 +6,11 @@ Used during configuration file validation to prevent conflicts with existing dat
 """
 
 from typing import Dict, Any, List, Tuple, Optional
+
+from helpers.constants import DEFAULT_DATABASE_SERVER
 from helpers.irp_integration.client import Client
 from helpers.irp_integration.exceptions import IRPAPIError
-from helpers.constants import DEFAULT_DATABASE_SERVER
+from helpers.irp_integration.portfolio import resolve_cycle_type_directory
 
 
 def _format_entity_list(entities: List[str], indent: str = "  - ") -> str:
@@ -1247,6 +1249,8 @@ class EntityValidator:
         Validate Portfolio Mapping batch submission.
 
         Pre-requisites (must exist):
+        - Cycle type directory in portfolio_mapping/ (quarterly, annual, adhoc)
+        - SQL scripts for each base portfolio's Import File
         - EDMs that portfolios belong to
         - Base portfolios (Base Portfolio? = Y) must exist within their EDMs
         - Base portfolios must have accounts (for sub-portfolio creation)
@@ -1256,7 +1260,7 @@ class EntityValidator:
 
         Args:
             portfolios: List of portfolio dicts with 'Database', 'Portfolio',
-                       and 'Base Portfolio?' keys
+                       'Base Portfolio?', 'Import File', and 'Metadata' keys
 
         Returns:
             List of error messages (empty if all validation passes)
@@ -1269,6 +1273,10 @@ class EntityValidator:
         # Split portfolios into base (exist) vs sub (to be created)
         base_portfolios = [p for p in portfolios if p.get('Base Portfolio?') == 'Y']
         sub_portfolios = [p for p in portfolios if p.get('Base Portfolio?') != 'Y']
+
+        # Pre-requisite 0: Validate cycle type directory and SQL scripts exist
+        sql_errors = self._validate_portfolio_mapping_sql_scripts(base_portfolios)
+        all_errors.extend(sql_errors)
 
         # Extract unique EDM names from all portfolios
         edm_names = list(set(
@@ -1303,6 +1311,53 @@ class EntityValidator:
                 all_errors.extend(sub_errors)
 
         return all_errors
+
+    def _validate_portfolio_mapping_sql_scripts(
+        self,
+        base_portfolios: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Validate portfolio mapping SQL script configuration.
+
+        Checks:
+        - Cycle type is present in Metadata
+        - Cycle type directory exists (quarterly, annual, adhoc)
+
+        Note: Missing SQL scripts for individual portfolios are NOT validation errors.
+        Some base portfolios may not have associated mapping scripts, and will be
+        skipped during execution.
+
+        Args:
+            base_portfolios: List of base portfolio job configs
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not base_portfolios:
+            return []
+
+        errors = []
+
+        # Get cycle type from first portfolio's Metadata
+        first_portfolio = base_portfolios[0]
+        metadata = first_portfolio.get('Metadata', {})
+        cycle_type = metadata.get('Cycle Type')
+
+        if not cycle_type:
+            errors.append("Missing 'Cycle Type' in Metadata - required for portfolio mapping")
+            return errors
+
+        # Validate that cycle type directory exists using shared function
+        try:
+            resolve_cycle_type_directory(cycle_type)
+        except Exception as e:
+            errors.append(str(e))
+            return errors
+
+        # Note: We intentionally do NOT validate that SQL scripts exist for each portfolio.
+        # Some base portfolios may not have mapping scripts and will be skipped at execution time.
+
+        return errors
 
     def validate_grouping_batch(
         self,

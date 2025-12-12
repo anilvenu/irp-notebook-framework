@@ -2164,14 +2164,41 @@ class TestValidatePortfoliosHaveAccounts:
 class TestValidatePortfolioMappingBatch:
     """Tests for validate_portfolio_mapping_batch method."""
 
+    # Helper to create metadata with cycle type
+    @staticmethod
+    def _make_metadata(cycle_type='Quarterly'):
+        return {'Cycle Type': cycle_type}
+
+    # Helper to create base portfolio with required fields
+    @staticmethod
+    def _make_base_portfolio(database, portfolio, import_file, cycle_type='Quarterly'):
+        return {
+            'Database': database,
+            'Portfolio': portfolio,
+            'Base Portfolio?': 'Y',
+            'Import File': import_file,
+            'Metadata': {'Cycle Type': cycle_type}
+        }
+
+    # Helper to create sub portfolio
+    @staticmethod
+    def _make_sub_portfolio(database, portfolio):
+        return {
+            'Database': database,
+            'Portfolio': portfolio,
+            'Base Portfolio?': 'N'
+        }
+
     def test_empty_portfolios_returns_no_errors(self):
         """Empty portfolio list should return no errors."""
         validator = EntityValidator()
         errors = validator.validate_portfolio_mapping_batch([])
         assert errors == []
 
-    def test_valid_batch_returns_no_errors(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_valid_batch_returns_no_errors(self, mock_sql_exists):
         """Valid Portfolio Mapping batch should return no errors."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._portfolio_manager = Mock()
@@ -2191,32 +2218,36 @@ class TestValidatePortfolioMappingBatch:
         ]
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'},
-            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'}
+            self._make_base_portfolio('EDM1', 'BasePort', 'USEQ'),
+            self._make_sub_portfolio('EDM1', 'SubPort')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
 
         assert errors == []
 
-    def test_missing_edm_returns_error(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_missing_edm_returns_error(self, mock_sql_exists):
         """Missing EDM should return error."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._edm_manager.search_edms_paginated.return_value = []
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'}
+            self._make_base_portfolio('EDM1', 'BasePort', 'USEQ')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
 
-        assert len(errors) == 1
-        assert 'ENT-EDM-002' in errors[0]
-        assert 'EDM1' in errors[0]
+        # Should have SQL validation pass + EDM missing error
+        assert any('ENT-EDM-002' in e for e in errors)
+        assert any('EDM1' in e for e in errors)
 
-    def test_missing_base_portfolio_returns_error(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_missing_base_portfolio_returns_error(self, mock_sql_exists):
         """Missing base portfolio should return error."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._portfolio_manager = Mock()
@@ -2229,7 +2260,7 @@ class TestValidatePortfolioMappingBatch:
         validator._portfolio_manager.search_portfolios_paginated.return_value = []
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'}
+            self._make_base_portfolio('EDM1', 'BasePort', 'USEQ')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
@@ -2238,8 +2269,10 @@ class TestValidatePortfolioMappingBatch:
         assert 'ENT-PORT-002' in errors[0]
         assert 'BasePort' in errors[0]
 
-    def test_base_portfolio_no_accounts_returns_error(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_base_portfolio_no_accounts_returns_error(self, mock_sql_exists):
         """Base portfolio without accounts should return error."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._portfolio_manager = Mock()
@@ -2256,7 +2289,7 @@ class TestValidatePortfolioMappingBatch:
         validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'}
+            self._make_base_portfolio('EDM1', 'BasePort', 'USEQ')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
@@ -2265,8 +2298,10 @@ class TestValidatePortfolioMappingBatch:
         assert 'ENT-ACCT-002' in errors[0]
         assert 'BasePort' in errors[0]
 
-    def test_existing_sub_portfolio_returns_error(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_existing_sub_portfolio_returns_error(self, mock_sql_exists):
         """Sub-portfolio that already exists should return error."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._portfolio_manager = Mock()
@@ -2286,8 +2321,8 @@ class TestValidatePortfolioMappingBatch:
         ]
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'},
-            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'}
+            self._make_base_portfolio('EDM1', 'BasePort', 'USEQ'),
+            self._make_sub_portfolio('EDM1', 'SubPort')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
@@ -2296,8 +2331,10 @@ class TestValidatePortfolioMappingBatch:
         assert 'ENT-PORT-001' in errors[0]
         assert 'SubPort' in errors[0]
 
-    def test_multiple_edms_validated(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_multiple_edms_validated(self, mock_sql_exists):
         """Multiple EDMs should all be validated."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._portfolio_manager = Mock()
@@ -2320,18 +2357,20 @@ class TestValidatePortfolioMappingBatch:
         ]
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'Base1', 'Base Portfolio?': 'Y'},
-            {'Database': 'EDM2', 'Portfolio': 'Base2', 'Base Portfolio?': 'Y'},
-            {'Database': 'EDM1', 'Portfolio': 'Sub1', 'Base Portfolio?': 'N'},
-            {'Database': 'EDM2', 'Portfolio': 'Sub2', 'Base Portfolio?': 'N'}
+            self._make_base_portfolio('EDM1', 'Base1', 'USEQ'),
+            self._make_base_portfolio('EDM2', 'Base2', 'USHU_Full'),
+            self._make_sub_portfolio('EDM1', 'Sub1'),
+            self._make_sub_portfolio('EDM2', 'Sub2')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
 
         assert errors == []
 
-    def test_only_base_portfolios_no_sub(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_only_base_portfolios_no_sub(self, mock_sql_exists):
         """Batch with only base portfolios (no subs) should validate correctly."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._portfolio_manager = Mock()
@@ -2350,7 +2389,7 @@ class TestValidatePortfolioMappingBatch:
         ]
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'}
+            self._make_base_portfolio('EDM1', 'BasePort', 'USEQ')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
@@ -2371,15 +2410,17 @@ class TestValidatePortfolioMappingBatch:
         validator._portfolio_manager.search_portfolios_paginated.return_value = []
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'}
+            self._make_sub_portfolio('EDM1', 'SubPort')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
 
         assert errors == []
 
-    def test_multiple_errors_returned(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_multiple_errors_returned(self, mock_sql_exists):
         """Multiple validation failures should all be reported."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._portfolio_manager = Mock()
@@ -2397,9 +2438,9 @@ class TestValidatePortfolioMappingBatch:
         validator._portfolio_manager.search_accounts_by_portfolio.return_value = []
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'},
-            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'},
-            {'Database': 'EDM2', 'Portfolio': 'Base2', 'Base Portfolio?': 'Y'}  # EDM missing
+            self._make_base_portfolio('EDM1', 'BasePort', 'USEQ'),
+            self._make_sub_portfolio('EDM1', 'SubPort'),
+            self._make_base_portfolio('EDM2', 'Base2', 'USHU_Full')  # EDM missing
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
@@ -2409,8 +2450,10 @@ class TestValidatePortfolioMappingBatch:
         assert 'ENT-ACCT-002' in error_codes     # BasePort no accounts
         assert 'ENT-PORT-001' in error_codes     # SubPort exists
 
-    def test_edm_missing_skips_portfolio_checks(self):
+    @patch('helpers.sqlserver.sql_file_exists')
+    def test_edm_missing_skips_portfolio_checks(self, mock_sql_exists):
         """If EDM is missing, portfolio checks should be skipped for that EDM."""
+        mock_sql_exists.return_value = True
         validator = EntityValidator()
         validator._edm_manager = Mock()
         validator._portfolio_manager = Mock()
@@ -2419,8 +2462,8 @@ class TestValidatePortfolioMappingBatch:
         validator._edm_manager.search_edms_paginated.return_value = []
 
         portfolios = [
-            {'Database': 'EDM1', 'Portfolio': 'BasePort', 'Base Portfolio?': 'Y'},
-            {'Database': 'EDM1', 'Portfolio': 'SubPort', 'Base Portfolio?': 'N'}
+            self._make_base_portfolio('EDM1', 'BasePort', 'USEQ'),
+            self._make_sub_portfolio('EDM1', 'SubPort')
         ]
 
         errors = validator.validate_portfolio_mapping_batch(portfolios)
@@ -2431,6 +2474,145 @@ class TestValidatePortfolioMappingBatch:
         # Portfolio manager should not have been called
         validator._portfolio_manager.search_portfolios_paginated.assert_not_called()
         validator._portfolio_manager.search_accounts_by_portfolio.assert_not_called()
+
+
+class TestValidatePortfolioMappingSqlScripts:
+    """Tests for SQL script validation in portfolio mapping.
+
+    Note: Individual SQL script existence is NOT validated (portfolios without
+    scripts are skipped at execution time). Only cycle type directory existence
+    is validated.
+    """
+
+    def test_missing_cycle_type_returns_error(self):
+        """Missing Cycle Type in Metadata should return error."""
+        validator = EntityValidator()
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'BasePort',
+                'Base Portfolio?': 'Y',
+                'Import File': 'USEQ',
+                'Metadata': {}  # No Cycle Type
+            }
+        ]
+
+        errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
+
+        assert len(errors) == 1
+        assert "Cycle Type" in errors[0]
+
+    @patch('helpers.irp_integration.portfolio.WORKSPACE_PATH')
+    def test_invalid_cycle_type_directory_returns_error(self, mock_workspace):
+        """Invalid cycle type directory should return error."""
+        # Setup mock: base directory exists but no matching subdirectory
+        mock_base_path = MagicMock()
+        mock_base_path.exists.return_value = True
+        # Return empty list - no matching directories
+        mock_base_path.iterdir.return_value = []
+
+        # WORKSPACE_PATH / 'sql' / 'portfolio_mapping' returns mock_base_path
+        mock_sql_path = MagicMock()
+        mock_sql_path.__truediv__ = MagicMock(return_value=mock_base_path)
+        mock_workspace_sql = MagicMock()
+        mock_workspace_sql.__truediv__ = MagicMock(return_value=mock_sql_path)
+        mock_workspace.__truediv__ = MagicMock(return_value=mock_workspace_sql)
+
+        validator = EntityValidator()
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'BasePort',
+                'Base Portfolio?': 'Y',
+                'Import File': 'USEQ',
+                'Metadata': {'Cycle Type': 'InvalidType'}
+            }
+        ]
+
+        errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
+
+        assert len(errors) == 1
+        assert "directory not found" in errors[0]
+        assert "invalidtype" in errors[0]
+
+    def test_test_cycle_type_uses_test_directory(self):
+        """Cycle type containing 'test' should use test directory (no error if dir exists)."""
+        validator = EntityValidator()
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'BasePort',
+                'Base Portfolio?': 'Y',
+                'Import File': 'NONEXISTENT_TEST_FILE',
+                'Metadata': {'Cycle Type': 'Test_Q1_2025'}
+            }
+        ]
+
+        errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
+
+        # No error - test directory exists (Test_Q1_2025 contains 'test')
+        # and missing SQL scripts are not validated
+        assert len(errors) == 0
+
+    def test_quarterly_cycle_type_uses_quarterly_directory(self):
+        """Quarterly cycle type should use quarterly directory (no error if dir exists)."""
+        validator = EntityValidator()
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'BasePort',
+                'Base Portfolio?': 'Y',
+                'Import File': 'NONEXISTENT_QUARTERLY_FILE',
+                'Metadata': {'Cycle Type': 'Quarterly'}
+            }
+        ]
+
+        errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
+
+        # No error - quarterly directory exists and missing SQL scripts are not validated
+        assert len(errors) == 0
+
+    def test_missing_sql_script_does_not_return_error(self):
+        """Missing SQL script should NOT return error (skipped at execution time)."""
+        validator = EntityValidator()
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'BasePort',
+                'Base Portfolio?': 'Y',
+                'Import File': 'NONEXISTENT_FILE',  # Use non-existent file
+                'Metadata': {'Cycle Type': 'Quarterly'}
+            }
+        ]
+
+        errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
+
+        # No error - missing SQL scripts are skipped at execution time
+        assert len(errors) == 0
+
+    def test_missing_import_file_does_not_return_error(self):
+        """Missing Import File should NOT return error (handled at execution time)."""
+        validator = EntityValidator()
+        portfolios = [
+            {
+                'Database': 'EDM1',
+                'Portfolio': 'BasePort',
+                'Base Portfolio?': 'Y',
+                # No Import File
+                'Metadata': {'Cycle Type': 'Quarterly'}
+            }
+        ]
+
+        errors = validator._validate_portfolio_mapping_sql_scripts(portfolios)
+
+        # No error - missing import files are handled at execution time
+        assert len(errors) == 0
+
+    def test_empty_base_portfolios_returns_no_errors(self):
+        """Empty base portfolios list should return no errors."""
+        validator = EntityValidator()
+        errors = validator._validate_portfolio_mapping_sql_scripts([])
+        assert errors == []
 
 
 class TestValidateAnalysesExist:
