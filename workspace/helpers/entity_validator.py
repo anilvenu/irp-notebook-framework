@@ -10,7 +10,6 @@ from typing import Dict, Any, List, Tuple, Optional
 from helpers.constants import DEFAULT_DATABASE_SERVER, WORKSPACE_PATH
 from helpers.irp_integration.client import Client
 from helpers.irp_integration.exceptions import IRPAPIError
-from helpers.sqlserver import sql_file_exists
 
 
 def _format_entity_list(entities: List[str], indent: str = "  - ") -> str:
@@ -1317,12 +1316,15 @@ class EntityValidator:
         base_portfolios: List[Dict[str, Any]]
     ) -> List[str]:
         """
-        Validate that SQL scripts exist for portfolio mapping.
+        Validate portfolio mapping SQL script configuration.
 
         Checks:
         - Cycle type is present in Metadata
         - Cycle type directory exists (quarterly, annual, adhoc)
-        - SQL script exists for each base portfolio's Import File
+
+        Note: Missing SQL scripts for individual portfolios are NOT validation errors.
+        Some base portfolios may not have associated mapping scripts, and will be
+        skipped during execution.
 
         Args:
             base_portfolios: List of base portfolio job configs
@@ -1360,22 +1362,8 @@ class EntityValidator:
             )
             return errors
 
-        # Validate SQL script exists for each base portfolio
-        for portfolio in base_portfolios:
-            import_file = portfolio.get('Import File')
-            if not import_file:
-                portfolio_name = portfolio.get('Portfolio', 'Unknown')
-                errors.append(f"Missing 'Import File' for portfolio '{portfolio_name}'")
-                continue
-
-            sql_script_name = f"2b_Query_To_Create_Sub_Portfolios_{import_file}_RMS_BackEnd.sql"
-            sql_script_path = f"portfolio_mapping/{cycle_type_dir}/{sql_script_name}"
-
-            if not sql_file_exists(sql_script_path):
-                portfolio_name = portfolio.get('Portfolio', import_file)
-                errors.append(
-                    f"SQL script not found for portfolio '{portfolio_name}': {sql_script_path}"
-                )
+        # Note: We intentionally do NOT validate that SQL scripts exist for each portfolio.
+        # Some base portfolios may not have mapping scripts and will be skipped at execution time.
 
         return errors
 
