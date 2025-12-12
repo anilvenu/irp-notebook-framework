@@ -4,14 +4,56 @@ Portfolio management operations.
 Handles portfolio creation, retrieval, and geocoding/hazard operations.
 """
 
-import json
 import time
+from datetime import datetime
 from typing import Dict, Any, List, Optional
+from zoneinfo import ZoneInfo
+
+from helpers.constants import WORKSPACE_PATH
+from helpers.sqlserver import execute_query_from_file, sql_file_exists
+
 from .client import Client
 from .constants import CREATE_PORTFOLIO, GET_GEOHAZ_JOB, SEARCH_PORTFOLIOS, GEOHAZ_PORTFOLIO, WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES, SEARCH_ACCOUNTS_BY_PORTFOLIO
-from .exceptions import IRPAPIError, IRPJobError
+from .exceptions import IRPAPIError, IRPJobError, IRPValidationError
 from .validators import validate_list_not_empty, validate_non_empty_string, validate_positive_int
 from .utils import extract_id_from_location_header
+
+
+def resolve_cycle_type_directory(cycle_type: str) -> str:
+    """
+    Resolve the cycle type to a portfolio_mapping subdirectory name.
+
+    Logic:
+    - If cycle_type contains 'test' (case-insensitive), default to 'adhoc'
+    - Otherwise, match cycle_type.lower() to directory name (e.g., 'Quarterly' -> 'quarterly')
+    - Raises IRPValidationError if directory doesn't exist
+
+    Args:
+        cycle_type: Cycle type from configuration (e.g., 'Quarterly', 'Annual', 'Test_Q1')
+
+    Returns:
+        Directory name (e.g., 'quarterly', 'annual', 'adhoc')
+
+    Raises:
+        IRPValidationError: If the resolved directory doesn't exist
+    """
+    cycle_type_lower = cycle_type.lower()
+
+    # If cycle type contains 'test', default to adhoc
+    if 'test' in cycle_type_lower:
+        resolved_dir = 'adhoc'
+    else:
+        resolved_dir = cycle_type_lower
+
+    # Verify the directory exists
+    portfolio_mapping_dir = WORKSPACE_PATH / 'sql' / 'portfolio_mapping' / resolved_dir
+    if not portfolio_mapping_dir.exists() or not portfolio_mapping_dir.is_dir():
+        raise IRPValidationError(
+            f"Portfolio mapping directory not found for cycle type '{cycle_type}'. "
+            f"Expected directory: portfolio_mapping/{resolved_dir}"
+        )
+
+    return resolved_dir
 
 class PortfolioManager:
     """Manager for portfolio operations."""
@@ -519,18 +561,20 @@ class PortfolioManager:
         portfolio_name: str,
         edm_name: str,
         import_file: str,
+        cycle_type: str,
         connection_name: str = 'DATABRIDGE'
     ) -> Dict[str, Any]:
         """
         Execute portfolio mapping SQL script to create sub-portfolios.
 
         This is a synchronous operation that executes SQL scripts stored in
-        workspace/sql/portfolio_mapping/ directory.
+        workspace/sql/portfolio_mapping/{cycle_type}/ directory.
 
         Args:
             portfolio_name: Name of the portfolio to map
             edm_name: Name of the EDM containing the portfolio
             import_file: Import file identifier (used to locate SQL script)
+            cycle_type: Cycle type (e.g., 'Quarterly', 'Annual') - determines SQL directory
             connection_name: SQL Server connection name (default: 'DATABRIDGE')
 
         Returns:
@@ -542,16 +586,16 @@ class PortfolioManager:
                 - parameters: SQL parameters used (if executed)
 
         Raises:
-            IRPValidationError: If inputs are invalid
+            IRPValidationError: If inputs are invalid or cycle_type directory not found
             IRPAPIError: If EDM or portfolio lookup fails, or SQL execution fails
         """
-        from helpers.sqlserver import execute_query_from_file, sql_file_exists
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-
         validate_non_empty_string(portfolio_name, "portfolio_name")
         validate_non_empty_string(edm_name, "edm_name")
         validate_non_empty_string(import_file, "import_file")
+        validate_non_empty_string(cycle_type, "cycle_type")
+
+        # Resolve cycle type directory
+        cycle_type_dir = resolve_cycle_type_directory(cycle_type)
 
         # Look up EDM to get exposure_id and full database name
         edms = self.edm_manager.search_edms(filter=f"exposureName=\"{edm_name}\"")
@@ -572,9 +616,9 @@ class PortfolioManager:
         except (KeyError, IndexError, TypeError) as e:
             raise IRPAPIError(f"Failed to extract portfolio ID for '{portfolio_name}': {e}") from e
 
-        # Build SQL script path
+        # Build SQL script path with cycle type directory
         sql_script_name = f"2b_Query_To_Create_Sub_Portfolios_{import_file}_RMS_BackEnd.sql"
-        sql_script_path = f"portfolio_mapping/{sql_script_name}"
+        sql_script_path = f"portfolio_mapping/{cycle_type_dir}/{sql_script_name}"
 
         # Check if script exists - if not, skip this portfolio
         if not sql_file_exists(sql_script_path):

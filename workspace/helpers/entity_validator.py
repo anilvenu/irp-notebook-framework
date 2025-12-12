@@ -6,9 +6,11 @@ Used during configuration file validation to prevent conflicts with existing dat
 """
 
 from typing import Dict, Any, List, Tuple, Optional
+
+from helpers.constants import DEFAULT_DATABASE_SERVER, WORKSPACE_PATH
 from helpers.irp_integration.client import Client
 from helpers.irp_integration.exceptions import IRPAPIError
-from helpers.constants import DEFAULT_DATABASE_SERVER
+from helpers.sqlserver import sql_file_exists
 
 
 def _format_entity_list(entities: List[str], indent: str = "  - ") -> str:
@@ -1247,6 +1249,8 @@ class EntityValidator:
         Validate Portfolio Mapping batch submission.
 
         Pre-requisites (must exist):
+        - Cycle type directory in portfolio_mapping/ (quarterly, annual, adhoc)
+        - SQL scripts for each base portfolio's Import File
         - EDMs that portfolios belong to
         - Base portfolios (Base Portfolio? = Y) must exist within their EDMs
         - Base portfolios must have accounts (for sub-portfolio creation)
@@ -1256,7 +1260,7 @@ class EntityValidator:
 
         Args:
             portfolios: List of portfolio dicts with 'Database', 'Portfolio',
-                       and 'Base Portfolio?' keys
+                       'Base Portfolio?', 'Import File', and 'Metadata' keys
 
         Returns:
             List of error messages (empty if all validation passes)
@@ -1269,6 +1273,10 @@ class EntityValidator:
         # Split portfolios into base (exist) vs sub (to be created)
         base_portfolios = [p for p in portfolios if p.get('Base Portfolio?') == 'Y']
         sub_portfolios = [p for p in portfolios if p.get('Base Portfolio?') != 'Y']
+
+        # Pre-requisite 0: Validate cycle type directory and SQL scripts exist
+        sql_errors = self._validate_portfolio_mapping_sql_scripts(base_portfolios)
+        all_errors.extend(sql_errors)
 
         # Extract unique EDM names from all portfolios
         edm_names = list(set(
@@ -1303,6 +1311,73 @@ class EntityValidator:
                 all_errors.extend(sub_errors)
 
         return all_errors
+
+    def _validate_portfolio_mapping_sql_scripts(
+        self,
+        base_portfolios: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Validate that SQL scripts exist for portfolio mapping.
+
+        Checks:
+        - Cycle type is present in Metadata
+        - Cycle type directory exists (quarterly, annual, adhoc)
+        - SQL script exists for each base portfolio's Import File
+
+        Args:
+            base_portfolios: List of base portfolio job configs
+
+        Returns:
+            List of error messages (empty if all validation passes)
+        """
+        if not base_portfolios:
+            return []
+
+        errors = []
+
+        # Get cycle type from first portfolio's Metadata
+        first_portfolio = base_portfolios[0]
+        metadata = first_portfolio.get('Metadata', {})
+        cycle_type = metadata.get('Cycle Type')
+
+        if not cycle_type:
+            errors.append("Missing 'Cycle Type' in Metadata - required for portfolio mapping")
+            return errors
+
+        # Resolve cycle type to directory name
+        cycle_type_lower = cycle_type.lower()
+        if 'test' in cycle_type_lower:
+            cycle_type_dir = 'adhoc'
+        else:
+            cycle_type_dir = cycle_type_lower
+
+        # Validate cycle type directory exists
+        portfolio_mapping_dir = WORKSPACE_PATH / 'sql' / 'portfolio_mapping' / cycle_type_dir
+        if not portfolio_mapping_dir.exists() or not portfolio_mapping_dir.is_dir():
+            errors.append(
+                f"Portfolio mapping directory not found for cycle type '{cycle_type}'. "
+                f"Expected directory: portfolio_mapping/{cycle_type_dir}"
+            )
+            return errors
+
+        # Validate SQL script exists for each base portfolio
+        for portfolio in base_portfolios:
+            import_file = portfolio.get('Import File')
+            if not import_file:
+                portfolio_name = portfolio.get('Portfolio', 'Unknown')
+                errors.append(f"Missing 'Import File' for portfolio '{portfolio_name}'")
+                continue
+
+            sql_script_name = f"2b_Query_To_Create_Sub_Portfolios_{import_file}_RMS_BackEnd.sql"
+            sql_script_path = f"portfolio_mapping/{cycle_type_dir}/{sql_script_name}"
+
+            if not sql_file_exists(sql_script_path):
+                portfolio_name = portfolio.get('Portfolio', import_file)
+                errors.append(
+                    f"SQL script not found for portfolio '{portfolio_name}': {sql_script_path}"
+                )
+
+        return errors
 
     def validate_grouping_batch(
         self,

@@ -747,6 +747,8 @@ def _submit_portfolio_mapping_job(
     portfolio_name = job_config.get('Portfolio')
     edm_name = job_config.get('Database')
     import_file = job_config.get('Import File')
+    metadata = job_config.get('Metadata', {})
+    cycle_type = metadata.get('Cycle Type')
 
     if not portfolio_name:
         raise ValueError("Missing required field: Portfolio")
@@ -754,12 +756,15 @@ def _submit_portfolio_mapping_job(
         raise ValueError("Missing required field: Database")
     if not import_file:
         raise ValueError("Missing required field: Import File")
+    if not cycle_type:
+        raise ValueError("Missing required field: Cycle Type in Metadata")
 
     # Execute portfolio mapping via IRP integration layer
     result = client.portfolio.execute_portfolio_mapping(
         portfolio_name=portfolio_name,
         edm_name=edm_name,
         import_file=import_file,
+        cycle_type=cycle_type,
         connection_name='DATABRIDGE'
     )
 

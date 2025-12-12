@@ -360,7 +360,8 @@ METADATA_SCHEMA = {
         'SCS HD Model Version',
         'Inland Flood HD Model Version',
         'Validate HD Model Versions?',
-        'Export RDM Name'
+        'Export RDM Name',
+        'Cycle Type'
     ],
     'value_types': {
         'Current Date Value': 'string',
@@ -373,7 +374,8 @@ METADATA_SCHEMA = {
         'SCS HD Model Version': 'integer',
         'Inland Flood HD Model Version': 'float',
         'Validate HD Model Versions?': 'string',
-        'Export RDM Name': 'string'
+        'Export RDM Name': 'string',
+        'Cycle Type': 'string'
     },
     'value_patterns': {
         'EDM Data Version': r'\d+(\.\d+)?(\.\d+)?',
