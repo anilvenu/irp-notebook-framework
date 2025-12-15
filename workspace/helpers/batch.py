@@ -769,11 +769,27 @@ def submit_batch(
     for job_record in jobs:
         if job_record['status'] in JobStatus.ready_for_submit() and not job_record['skipped']:
             try:
-                job.submit_job(job_record['id'], batch['batch_type'], irp_client, schema=schema)
-                submitted_jobs.append({
-                    'job_id': job_record['id'],
-                    'status': 'SUBMITTED'
-                })
+                # Jobs that failed in Moody's (FAILED status) need to be resubmitted
+                # This creates a new job, skips the original, and submits the new one
+                if job_record['status'] == JobStatus.FAILED:
+                    new_job_id = job.resubmit_job(
+                        job_record['id'],
+                        irp_client,
+                        batch['batch_type'],
+                        schema=schema
+                    )
+                    submitted_jobs.append({
+                        'job_id': new_job_id,
+                        'original_job_id': job_record['id'],
+                        'status': 'RESUBMITTED'
+                    })
+                else:
+                    # INITIATED or ERROR status - submit normally
+                    job.submit_job(job_record['id'], batch['batch_type'], irp_client, schema=schema)
+                    submitted_jobs.append({
+                        'job_id': job_record['id'],
+                        'status': 'SUBMITTED'
+                    })
             except Exception as e:
                 # Log error but continue with other jobs
                 submitted_jobs.append({
