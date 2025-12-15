@@ -905,6 +905,22 @@
         {
             "source": "TOCOMBINEDDCUR",
             "destination": "TOCOMBINEDDCUR"
+        },
+        {
+            "source": "ELEVATION",
+            "destination": "ELEVATION"
+        },
+        {
+            "source": "ELEVMATCH",
+            "destination": "ELEVMATCH"
+        },
+        {
+            "source": "BUILDINGELEVATION",
+            "destination": "BUILDINGELEVATION"
+        },
+        {
+            "source": "BUILDINGELEVATIONMATCH",
+            "destination": "BUILDINGELEVATIONMATCH"
         }
     ],
     "reinsuranceItems": [],
