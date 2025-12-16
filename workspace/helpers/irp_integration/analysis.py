@@ -163,7 +163,7 @@ class AnalysisManager:
         currency: Dict[str, str] = None,
         skip_duplicate_check: bool = False,
         franchise_deductible: bool = False,
-        min_loss_threshold: int = 0,
+        min_loss_threshold: float = 1.0,
         treat_construction_occupancy_as_unknown: bool = True,
         num_max_loss_event: int = 1
     ) -> int:
