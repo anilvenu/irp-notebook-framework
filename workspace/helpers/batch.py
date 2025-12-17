@@ -356,6 +356,44 @@ def update_batch_status(
     return rows > 0
 
 
+def update_batch_step(
+    batch_id: int,
+    step_id: int,
+    schema: str = 'public'
+) -> None:
+    """
+    Update the step_id associated with a batch.
+
+    This is needed for step chaining when a batch is created in one step
+    (e.g., Stage 01/Step 03) but submitted in another step (e.g., Stage 04/Step 01).
+    The step_chain module uses the batch's step_id to determine which step
+    completed and what the next step should be.
+
+    Args:
+        batch_id: Batch ID
+        step_id: New step ID to associate with the batch
+        schema: Database schema
+
+    Raises:
+        BatchError: If batch not found or invalid step_id
+    """
+    if not isinstance(batch_id, int) or batch_id <= 0:
+        raise BatchError(f"Invalid batch_id: {batch_id}. Must be a positive integer.")
+
+    if not isinstance(step_id, int) or step_id <= 0:
+        raise BatchError(f"Invalid step_id: {step_id}. Must be a positive integer.")
+
+    # Verify batch exists
+    read_batch(batch_id, schema=schema)
+
+    query = """
+        UPDATE irp_batch
+        SET step_id = %s, updated_ts = NOW()
+        WHERE id = %s
+    """
+    execute_command(query, (step_id, batch_id), schema=schema)
+
+
 # ============================================================================
 # BATCH CREATION AND SUBMISSION
 # ============================================================================
@@ -741,12 +779,7 @@ def submit_batch(
 
     # Update batch step_id if provided (allows re-associating batch with submission step)
     if step_id is not None:
-        query = """
-            UPDATE irp_batch
-            SET step_id = %s
-            WHERE id = %s
-        """
-        execute_command(query, (step_id, batch_id), schema=schema)
+        update_batch_step(batch_id, step_id, schema=schema)
 
     # Get all jobs for this batch
     jobs = get_batch_jobs(batch_id, schema=schema)
