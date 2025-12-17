@@ -81,13 +81,13 @@ STATS_FIELDS = {
     'exhaustAllReinstatements',
 }
 
-# PLT uses composite key (periodId + eventId) since same event can appear in multiple periods
+# PLT uses composite key (eventId, periodId, eventDate, lossDate) to uniquely identify records
 PLT_FIELDS = {
-    'periodId',      # Key field (composite with eventId)
-    'eventId',       # Key field (composite with periodId)
+    'eventId',       # Key field
+    'periodId',      # Key field
+    'eventDate',     # Key field (event occurrence date)
+    'lossDate',      # Key field (loss date)
     'weight',        # Period weight
-    'eventDate',     # Event occurrence date
-    'lossDate',      # Loss date
     'positionValue', # Loss value
     'peril',         # Peril code
     'region',        # Region code
@@ -1115,23 +1115,108 @@ class AnalysisResultsValidator:
         perspective_code: str,
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
-        rel_tol: float
+        rel_tol: float,
+        sample_size: int = 500
     ) -> ComparisonResult:
-        """Compare PLT endpoint."""
+        """Compare PLT endpoint using sampled comparison.
+
+        Instead of fetching all records (which can be 100k+), this method:
+        1. Fetches a sample of records from the production PLT
+        2. Extracts unique event IDs from that sample
+        3. Fetches records with those event IDs from test using filter
+        4. Compares records by composite key (eventId, periodId)
+
+        Note: Filtering by eventId returns multiple records (one per periodId),
+        so we must match by both eventId and periodId to compare correctly.
+
+        Args:
+            prod_analysis_id: Production analysis ID
+            test_analysis_id: Test analysis ID
+            perspective_code: Perspective code (GR, GU, RL)
+            prod_exposure_resource_id: Production exposure resource ID
+            test_exposure_resource_id: Test exposure resource ID
+            rel_tol: Relative tolerance for float comparison
+            sample_size: Number of records to sample for comparison (default: 500)
+        """
         try:
+            # Step 1: Fetch a sample of records from production
             prod_data = self.irp_client.analysis.get_plt(
-                prod_analysis_id, perspective_code, prod_exposure_resource_id
+                prod_analysis_id,
+                perspective_code,
+                prod_exposure_resource_id,
+                limit=sample_size
             )
-            test_data = self.irp_client.analysis.get_plt(
-                test_analysis_id, perspective_code, test_exposure_resource_id
+
+            if not prod_data:
+                # No records in production PLT - check if test also has none
+                test_data = self.irp_client.analysis.get_plt(
+                    test_analysis_id,
+                    perspective_code,
+                    test_exposure_resource_id
+                )
+                if test_data:
+                    return ComparisonResult(
+                        endpoint='PLT',
+                        passed=False,
+                        total_records_prod=0,
+                        total_records_test=len(test_data),
+                        extra_in_test=[r.get('eventId') for r in test_data]
+                    )
+                return ComparisonResult(
+                    endpoint='PLT',
+                    passed=True,
+                    total_records_prod=0,
+                    total_records_test=0
+                )
+
+            # Step 2: Extract unique event IDs from the production sample
+            sample_event_ids = list(set(
+                r.get('eventId') for r in prod_data if r.get('eventId') is not None
+            ))
+
+            if not sample_event_ids:
+                return ComparisonResult(
+                    endpoint='PLT',
+                    passed=False,
+                    total_records_prod=len(prod_data),
+                    total_records_test=0,
+                    error="No valid eventId values found in production PLT sample"
+                )
+
+            # Step 3: Build composite keys from production sample
+            # PLT records are uniquely identified by (eventId, periodId, eventDate, lossDate)
+            def make_plt_key(r: Dict[str, Any]) -> tuple:
+                return (r.get('eventId'), r.get('periodId'), r.get('eventDate'), r.get('lossDate'))
+
+            prod_keys = set(make_plt_key(r) for r in prod_data)
+
+            # Step 4: Fetch from test using eventId filter
+            event_ids_str = ", ".join(str(eid) for eid in sample_event_ids)
+            event_filter = f"eventId IN ({event_ids_str})"
+
+            test_data_all = self.irp_client.analysis.get_plt(
+                test_analysis_id,
+                perspective_code,
+                test_exposure_resource_id,
+                filter=event_filter
             )
+
+            # Step 5: Filter test data to only include records matching prod's composite keys
+            # This is necessary because we can only filter by eventId in the API
+            test_data = [
+                r for r in test_data_all
+                if make_plt_key(r) in prod_keys
+            ]
+
+            # Step 6: Compare by composite key (eventId, periodId, eventDate, lossDate)
             return compare_datasets_composite_key(
                 prod_data, test_data,
-                key_fields=['periodId', 'eventId'],
+                key_fields=['eventId', 'periodId', 'eventDate', 'lossDate'],
                 endpoint_name='PLT',
                 fields_to_compare=PLT_FIELDS,
                 rel_tol=rel_tol
             )
+
         except Exception as e:
             return ComparisonResult(
                 endpoint='PLT',
