@@ -459,6 +459,121 @@ def compare_by_index(
     )
 
 
+def compare_ep_curves(
+    prod_data: List[Dict[str, Any]],
+    test_data: List[Dict[str, Any]],
+    rel_tol: float = 1e-9,
+    max_point_diffs: int = 5
+) -> ComparisonResult:
+    """Compare EP curves with detailed return period differences.
+
+    EP data structure:
+    [
+        {
+            "epType": "OEP",
+            "value": {
+                "returnPeriods": [1, 2, 5, 10, ...],
+                "positionValues": [100.0, 200.0, 500.0, 1000.0, ...]
+            }
+        },
+        ...
+    ]
+
+    Args:
+        prod_data: Production EP data
+        test_data: Test EP data
+        rel_tol: Relative tolerance for float comparison
+        max_point_diffs: Maximum number of return period differences to show per curve
+
+    Returns:
+        ComparisonResult with detailed differences showing specific return periods
+    """
+    # Build lookup by epType
+    prod_by_type = {r.get('epType'): r for r in prod_data}
+    test_by_type = {r.get('epType'): r for r in test_data}
+
+    prod_types = set(prod_by_type.keys())
+    test_types = set(test_by_type.keys())
+
+    missing_in_test = list(prod_types - test_types)
+    extra_in_test = list(test_types - prod_types)
+    common_types = prod_types & test_types
+
+    all_differences = []
+
+    for ep_type in sorted(t for t in common_types if t is not None):
+        prod_rec = prod_by_type[ep_type]
+        test_rec = test_by_type[ep_type]
+
+        prod_value = prod_rec.get('value', {})
+        test_value = test_rec.get('value', {})
+
+        prod_rps = prod_value.get('returnPeriods', [])
+        prod_vals = prod_value.get('positionValues', [])
+        test_rps = test_value.get('returnPeriods', [])
+        test_vals = test_value.get('positionValues', [])
+
+        # Check if return periods match
+        if prod_rps != test_rps:
+            all_differences.append({
+                'key': ep_type,
+                'differences': [{
+                    'field': 'returnPeriods',
+                    'prod_value': f"{len(prod_rps)} periods: {prod_rps[:5]}{'...' if len(prod_rps) > 5 else ''}",
+                    'test_value': f"{len(test_rps)} periods: {test_rps[:5]}{'...' if len(test_rps) > 5 else ''}"
+                }]
+            })
+            continue
+
+        # Compare values at each return period
+        point_diffs = []
+        for rp, prod_val, test_val in zip(prod_rps, prod_vals, test_vals):
+            if not values_match(prod_val, test_val, rel_tol):
+                point_diffs.append({
+                    'return_period': rp,
+                    'prod_value': prod_val,
+                    'test_value': test_val
+                })
+
+        if point_diffs:
+            # Format differences to show specific return periods
+            diff_details = []
+            shown_diffs = point_diffs[:max_point_diffs]
+            for pd in shown_diffs:
+                diff_details.append({
+                    'field': f"Return Period {pd['return_period']}",
+                    'prod_value': pd['prod_value'],
+                    'test_value': pd['test_value']
+                })
+
+            # Add summary if there are more differences
+            if len(point_diffs) > max_point_diffs:
+                diff_details.append({
+                    'field': '(summary)',
+                    'prod_value': f"{len(point_diffs)} return periods differ",
+                    'test_value': f"showing first {max_point_diffs}"
+                })
+
+            all_differences.append({
+                'key': ep_type,
+                'differences': diff_details
+            })
+
+    passed = (len(missing_in_test) == 0 and
+              len(extra_in_test) == 0 and
+              len(all_differences) == 0)
+
+    return ComparisonResult(
+        endpoint='EP Metrics',
+        passed=passed,
+        total_records_prod=len(prod_data),
+        total_records_test=len(test_data),
+        differences=all_differences,
+        missing_in_test=missing_in_test,
+        extra_in_test=extra_in_test
+    )
+
+
 # =============================================================================
 # File Input Parsing (CSV/XLSX)
 # =============================================================================
@@ -879,7 +994,7 @@ class AnalysisResultsValidator:
         test_exposure_resource_id: int,
         rel_tol: float
     ) -> ComparisonResult:
-        """Compare EP Metrics endpoint."""
+        """Compare EP Metrics endpoint with detailed return period differences."""
         try:
             prod_data = self.irp_client.analysis.get_ep(
                 prod_analysis_id, perspective_code, prod_exposure_resource_id
@@ -887,7 +1002,7 @@ class AnalysisResultsValidator:
             test_data = self.irp_client.analysis.get_ep(
                 test_analysis_id, perspective_code, test_exposure_resource_id
             )
-            return compare_by_index(prod_data, test_data, 'EP Metrics', EP_FIELDS, rel_tol)
+            return compare_ep_curves(prod_data, test_data, rel_tol)
         except Exception as e:
             return ComparisonResult(
                 endpoint='EP Metrics',
