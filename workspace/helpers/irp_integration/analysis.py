@@ -966,7 +966,10 @@ class AnalysisManager:
         self,
         analysis_id: int,
         perspective_code: str,
-        exposure_resource_id: int
+        exposure_resource_id: int,
+        filter: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Retrieve Event Loss Table (ELT) for an analysis.
@@ -975,6 +978,9 @@ class AnalysisManager:
             analysis_id: Analysis ID
             perspective_code: One of 'GR' (Gross), 'GU' (Ground-Up), 'RL' (Reinsurance Layer)
             exposure_resource_id: Exposure resource ID (portfolio ID from analysis)
+            filter: Optional filter string (e.g., "eventId IN (1, 2, 3)" or "eventId = 123")
+            limit: Optional maximum number of records to return
+            offset: Optional number of records to skip (for pagination)
 
         Returns:
             List of ELT records containing eventId, positionValue, stdDevI, stdDevC, etc.
@@ -992,6 +998,13 @@ class AnalysisManager:
             'exposureResourceType': 'PORTFOLIO',
             'exposureResourceId': exposure_resource_id
         }
+
+        if filter is not None:
+            params['filter'] = filter
+        if limit is not None:
+            params['limit'] = limit
+        if offset is not None:
+            params['offset'] = offset
 
         try:
             response = self.client.request(

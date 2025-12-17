@@ -904,17 +904,86 @@ class AnalysisResultsValidator:
         perspective_code: str,
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
-        rel_tol: float
+        rel_tol: float,
+        sample_size: int = 500
     ) -> ComparisonResult:
-        """Compare ELT endpoint."""
+        """Compare ELT endpoint using sampled comparison.
+
+        Instead of fetching all events (which can be 200k+), this method:
+        1. Fetches a sample of events from the production ELT
+        2. Fetches those specific events from test using filter
+        3. Compares only the sampled events
+
+        This handles out-of-order API responses and is efficient for large ELTs.
+
+        Args:
+            prod_analysis_id: Production analysis ID
+            test_analysis_id: Test analysis ID
+            perspective_code: Perspective code (GR, GU, RL)
+            prod_exposure_resource_id: Production exposure resource ID
+            test_exposure_resource_id: Test exposure resource ID
+            rel_tol: Relative tolerance for float comparison
+            sample_size: Number of events to sample for comparison (default: 100)
+        """
         try:
+            # Step 1: Fetch a sample of events from production
             prod_data = self.irp_client.analysis.get_elt(
-                prod_analysis_id, perspective_code, prod_exposure_resource_id
+                prod_analysis_id,
+                perspective_code,
+                prod_exposure_resource_id,
+                limit=sample_size
             )
+
+            if not prod_data:
+                # No events in production ELT - check if test also has none
+                test_data = self.irp_client.analysis.get_elt(
+                    test_analysis_id,
+                    perspective_code,
+                    test_exposure_resource_id,
+                    limit=sample_size
+                )
+                if test_data:
+                    return ComparisonResult(
+                        endpoint='ELT',
+                        passed=False,
+                        total_records_prod=0,
+                        total_records_test=len(test_data),
+                        extra_in_test=[r.get('eventId') for r in test_data]
+                    )
+                return ComparisonResult(
+                    endpoint='ELT',
+                    passed=True,
+                    total_records_prod=0,
+                    total_records_test=0
+                )
+
+            # Step 2: Extract event IDs from the production sample
+            sample_event_ids = [r.get('eventId') for r in prod_data if r.get('eventId') is not None]
+
+            if not sample_event_ids:
+                return ComparisonResult(
+                    endpoint='ELT',
+                    passed=False,
+                    total_records_prod=len(prod_data),
+                    total_records_test=0,
+                    error="No valid eventId values found in production ELT sample"
+                )
+
+            # Step 3: Build filter for specific event IDs and fetch from test
+            event_ids_str = ", ".join(str(eid) for eid in sample_event_ids)
+            event_filter = f"eventId IN ({event_ids_str})"
+
             test_data = self.irp_client.analysis.get_elt(
-                test_analysis_id, perspective_code, test_exposure_resource_id
+                test_analysis_id,
+                perspective_code,
+                test_exposure_resource_id,
+                filter=event_filter,
+                limit=sample_size
             )
+
+            # Step 4: Compare the sampled events by eventId key
             return compare_datasets(prod_data, test_data, 'eventId', 'ELT', ELT_FIELDS, rel_tol)
+
         except Exception as e:
             return ComparisonResult(
                 endpoint='ELT',
