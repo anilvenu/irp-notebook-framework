@@ -81,13 +81,13 @@ STATS_FIELDS = {
     'exhaustAllReinstatements',
 }
 
-# PLT uses composite key (periodId + eventId) since same event can appear in multiple periods
+# PLT uses composite key (eventId, periodId, eventDate, lossDate) to uniquely identify records
 PLT_FIELDS = {
-    'periodId',      # Key field (composite with eventId)
-    'eventId',       # Key field (composite with periodId)
+    'eventId',       # Key field
+    'periodId',      # Key field
+    'eventDate',     # Key field (event occurrence date)
+    'lossDate',      # Key field (loss date)
     'weight',        # Period weight
-    'eventDate',     # Event occurrence date
-    'lossDate',      # Loss date
     'positionValue', # Loss value
     'peril',         # Peril code
     'region',        # Region code
@@ -456,6 +456,121 @@ def compare_by_index(
         differences=all_differences,
         missing_in_test=[],
         extra_in_test=[]
+    )
+
+
+def compare_ep_curves(
+    prod_data: List[Dict[str, Any]],
+    test_data: List[Dict[str, Any]],
+    rel_tol: float = 1e-9,
+    max_point_diffs: int = 5
+) -> ComparisonResult:
+    """Compare EP curves with detailed return period differences.
+
+    EP data structure:
+    [
+        {
+            "epType": "OEP",
+            "value": {
+                "returnPeriods": [1, 2, 5, 10, ...],
+                "positionValues": [100.0, 200.0, 500.0, 1000.0, ...]
+            }
+        },
+        ...
+    ]
+
+    Args:
+        prod_data: Production EP data
+        test_data: Test EP data
+        rel_tol: Relative tolerance for float comparison
+        max_point_diffs: Maximum number of return period differences to show per curve
+
+    Returns:
+        ComparisonResult with detailed differences showing specific return periods
+    """
+    # Build lookup by epType
+    prod_by_type = {r.get('epType'): r for r in prod_data}
+    test_by_type = {r.get('epType'): r for r in test_data}
+
+    prod_types = set(prod_by_type.keys())
+    test_types = set(test_by_type.keys())
+
+    missing_in_test = list(prod_types - test_types)
+    extra_in_test = list(test_types - prod_types)
+    common_types = prod_types & test_types
+
+    all_differences = []
+
+    for ep_type in sorted(t for t in common_types if t is not None):
+        prod_rec = prod_by_type[ep_type]
+        test_rec = test_by_type[ep_type]
+
+        prod_value = prod_rec.get('value', {})
+        test_value = test_rec.get('value', {})
+
+        prod_rps = prod_value.get('returnPeriods', [])
+        prod_vals = prod_value.get('positionValues', [])
+        test_rps = test_value.get('returnPeriods', [])
+        test_vals = test_value.get('positionValues', [])
+
+        # Check if return periods match
+        if prod_rps != test_rps:
+            all_differences.append({
+                'key': ep_type,
+                'differences': [{
+                    'field': 'returnPeriods',
+                    'prod_value': f"{len(prod_rps)} periods: {prod_rps[:5]}{'...' if len(prod_rps) > 5 else ''}",
+                    'test_value': f"{len(test_rps)} periods: {test_rps[:5]}{'...' if len(test_rps) > 5 else ''}"
+                }]
+            })
+            continue
+
+        # Compare values at each return period
+        point_diffs = []
+        for rp, prod_val, test_val in zip(prod_rps, prod_vals, test_vals):
+            if not values_match(prod_val, test_val, rel_tol):
+                point_diffs.append({
+                    'return_period': rp,
+                    'prod_value': prod_val,
+                    'test_value': test_val
+                })
+
+        if point_diffs:
+            # Format differences to show specific return periods
+            diff_details = []
+            shown_diffs = point_diffs[:max_point_diffs]
+            for pd in shown_diffs:
+                diff_details.append({
+                    'field': f"Return Period {pd['return_period']}",
+                    'prod_value': pd['prod_value'],
+                    'test_value': pd['test_value']
+                })
+
+            # Add summary if there are more differences
+            if len(point_diffs) > max_point_diffs:
+                diff_details.append({
+                    'field': '(summary)',
+                    'prod_value': f"{len(point_diffs)} return periods differ",
+                    'test_value': f"showing first {max_point_diffs}"
+                })
+
+            all_differences.append({
+                'key': ep_type,
+                'differences': diff_details
+            })
+
+    passed = (len(missing_in_test) == 0 and
+              len(extra_in_test) == 0 and
+              len(all_differences) == 0)
+
+    return ComparisonResult(
+        endpoint='EP Metrics',
+        passed=passed,
+        total_records_prod=len(prod_data),
+        total_records_test=len(test_data),
+        differences=all_differences,
+        missing_in_test=missing_in_test,
+        extra_in_test=extra_in_test
     )
 
 
@@ -879,7 +994,7 @@ class AnalysisResultsValidator:
         test_exposure_resource_id: int,
         rel_tol: float
     ) -> ComparisonResult:
-        """Compare EP Metrics endpoint."""
+        """Compare EP Metrics endpoint with detailed return period differences."""
         try:
             prod_data = self.irp_client.analysis.get_ep(
                 prod_analysis_id, perspective_code, prod_exposure_resource_id
@@ -887,7 +1002,7 @@ class AnalysisResultsValidator:
             test_data = self.irp_client.analysis.get_ep(
                 test_analysis_id, perspective_code, test_exposure_resource_id
             )
-            return compare_by_index(prod_data, test_data, 'EP Metrics', EP_FIELDS, rel_tol)
+            return compare_ep_curves(prod_data, test_data, rel_tol)
         except Exception as e:
             return ComparisonResult(
                 endpoint='EP Metrics',
@@ -1000,23 +1115,108 @@ class AnalysisResultsValidator:
         perspective_code: str,
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
-        rel_tol: float
+        rel_tol: float,
+        sample_size: int = 500
     ) -> ComparisonResult:
-        """Compare PLT endpoint."""
+        """Compare PLT endpoint using sampled comparison.
+
+        Instead of fetching all records (which can be 100k+), this method:
+        1. Fetches a sample of records from the production PLT
+        2. Extracts unique event IDs from that sample
+        3. Fetches records with those event IDs from test using filter
+        4. Compares records by composite key (eventId, periodId)
+
+        Note: Filtering by eventId returns multiple records (one per periodId),
+        so we must match by both eventId and periodId to compare correctly.
+
+        Args:
+            prod_analysis_id: Production analysis ID
+            test_analysis_id: Test analysis ID
+            perspective_code: Perspective code (GR, GU, RL)
+            prod_exposure_resource_id: Production exposure resource ID
+            test_exposure_resource_id: Test exposure resource ID
+            rel_tol: Relative tolerance for float comparison
+            sample_size: Number of records to sample for comparison (default: 500)
+        """
         try:
+            # Step 1: Fetch a sample of records from production
             prod_data = self.irp_client.analysis.get_plt(
-                prod_analysis_id, perspective_code, prod_exposure_resource_id
+                prod_analysis_id,
+                perspective_code,
+                prod_exposure_resource_id,
+                limit=sample_size
             )
-            test_data = self.irp_client.analysis.get_plt(
-                test_analysis_id, perspective_code, test_exposure_resource_id
+
+            if not prod_data:
+                # No records in production PLT - check if test also has none
+                test_data = self.irp_client.analysis.get_plt(
+                    test_analysis_id,
+                    perspective_code,
+                    test_exposure_resource_id
+                )
+                if test_data:
+                    return ComparisonResult(
+                        endpoint='PLT',
+                        passed=False,
+                        total_records_prod=0,
+                        total_records_test=len(test_data),
+                        extra_in_test=[r.get('eventId') for r in test_data]
+                    )
+                return ComparisonResult(
+                    endpoint='PLT',
+                    passed=True,
+                    total_records_prod=0,
+                    total_records_test=0
+                )
+
+            # Step 2: Extract unique event IDs from the production sample
+            sample_event_ids = list(set(
+                r.get('eventId') for r in prod_data if r.get('eventId') is not None
+            ))
+
+            if not sample_event_ids:
+                return ComparisonResult(
+                    endpoint='PLT',
+                    passed=False,
+                    total_records_prod=len(prod_data),
+                    total_records_test=0,
+                    error="No valid eventId values found in production PLT sample"
+                )
+
+            # Step 3: Build composite keys from production sample
+            # PLT records are uniquely identified by (eventId, periodId, eventDate, lossDate)
+            def make_plt_key(r: Dict[str, Any]) -> tuple:
+                return (r.get('eventId'), r.get('periodId'), r.get('eventDate'), r.get('lossDate'))
+
+            prod_keys = set(make_plt_key(r) for r in prod_data)
+
+            # Step 4: Fetch from test using eventId filter
+            event_ids_str = ", ".join(str(eid) for eid in sample_event_ids)
+            event_filter = f"eventId IN ({event_ids_str})"
+
+            test_data_all = self.irp_client.analysis.get_plt(
+                test_analysis_id,
+                perspective_code,
+                test_exposure_resource_id,
+                filter=event_filter
             )
+
+            # Step 5: Filter test data to only include records matching prod's composite keys
+            # This is necessary because we can only filter by eventId in the API
+            test_data = [
+                r for r in test_data_all
+                if make_plt_key(r) in prod_keys
+            ]
+
+            # Step 6: Compare by composite key (eventId, periodId, eventDate, lossDate)
             return compare_datasets_composite_key(
                 prod_data, test_data,
-                key_fields=['periodId', 'eventId'],
+                key_fields=['eventId', 'periodId', 'eventDate', 'lossDate'],
                 endpoint_name='PLT',
                 fields_to_compare=PLT_FIELDS,
                 rel_tol=rel_tol
             )
+
         except Exception as e:
             return ComparisonResult(
                 endpoint='PLT',
