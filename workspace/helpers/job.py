@@ -912,12 +912,16 @@ def _submit_grouping_job(
     job_id: int,
     job_config: Dict[str, Any],
     client: IRPClient
-) -> Tuple[str, Dict, Dict]:
+) -> Tuple[Optional[str], Dict, Dict]:
     """
     Submit Grouping job to Moody's API.
 
     Extracts grouping configuration from job_config and submits
     the grouping job using the analysis manager.
+
+    Missing analyses/groups are automatically skipped. If all items are
+    missing, the job itself is skipped (returns workflow_id=None with
+    skip_job=True in response).
 
     Args:
         job_id: Job ID
@@ -930,6 +934,8 @@ def _submit_grouping_job(
 
     Returns:
         Tuple of (workflow_id, request_json, response_json)
+        If all analyses are missing, workflow_id is None and response_json
+        contains skip_job=True indicating the job should be skipped.
 
     Raises:
         ValueError: If required fields are missing
@@ -950,21 +956,7 @@ def _submit_grouping_job(
     if not analysis_names:
         raise ValueError("Missing required field: items (analysis names)")
 
-    # Submit grouping job
-    try:
-        moody_job_id = client.analysis.submit_analysis_grouping_job(
-            group_name=group_name,
-            analysis_names=analysis_names,
-            analysis_edm_map=analysis_edm_map,
-            group_names=group_names_set
-        )
-    except Exception as e:
-        raise JobError(f"Failed to submit grouping job: {str(e)}")
-
-    # Build workflow ID
-    workflow_id = str(moody_job_id)
-
-    # Build request/response structures
+    # Build request structure (before API call for logging)
     request_json = {
         'job_id': job_id,
         'batch_type': BatchType.GROUPING,
@@ -978,12 +970,46 @@ def _submit_grouping_job(
         'submitted_at': datetime.now().isoformat()
     }
 
+    # Submit grouping job (with skip_missing=True to handle missing analyses gracefully)
+    try:
+        result = client.analysis.submit_analysis_grouping_job(
+            group_name=group_name,
+            analysis_names=analysis_names,
+            analysis_edm_map=analysis_edm_map,
+            group_names=group_names_set,
+            skip_missing=True
+        )
+    except Exception as e:
+        raise JobError(f"Failed to submit grouping job: {str(e)}")
+
+    # Check if job was skipped (all analyses missing)
+    if result.get('skipped'):
+        response_json = {
+            'workflow_id': None,
+            'skip_job': True,
+            'skip_reason': result.get('skip_reason', 'All analyses/groups were not found'),
+            'skipped_items': result.get('skipped_items', []),
+            'status': 'SKIPPED',
+            'message': f'Grouping job "{group_name}" skipped - no valid analyses found'
+        }
+        return None, request_json, response_json
+
+    # Job was submitted successfully
+    moody_job_id = result['job_id']
+    workflow_id = str(moody_job_id)
+
     response_json = {
         'workflow_id': workflow_id,
         'moody_job_id': moody_job_id,
         'status': 'ACCEPTED',
-        'message': f'Grouping job "{group_name}" submitted successfully with {len(analysis_names)} analyses'
+        'skipped_items': result.get('skipped_items', []),
+        'included_items': result.get('included_items', []),
+        'message': f'Grouping job "{group_name}" submitted successfully with {len(result.get("included_items", []))} analyses'
     }
+
+    # Add note about skipped items if any
+    if result.get('skipped_items'):
+        response_json['message'] += f' ({len(result["skipped_items"])} analyses skipped - not found)'
 
     return workflow_id, request_json, response_json
 
@@ -1612,7 +1638,29 @@ def submit_job(
             irp_client
         )
 
-        # Check if submission succeeded
+        # Check if job should be skipped (e.g., all analyses missing for grouping)
+        if response.get('skip_job'):
+            # Skip this job - mark both job and job configuration as skipped
+            skip_reason = response.get('skip_reason', 'Job skipped during submission')
+            skip_job_configuration(
+                job_config['id'],
+                skipped_reason_txt=skip_reason,
+                schema=schema
+            )
+            skip_job(job_id, schema=schema)
+
+            # Store submission info for audit trail even though job was skipped
+            _register_job_submission(
+                job_id,
+                workflow_id='SKIPPED',
+                submission_request=request,
+                submission_response=response,
+                submitted_ts=datetime.now(),
+                schema=schema
+            )
+            return job_id
+
+        # Check if submission failed (workflow_id is None but not a skip)
         if workflow_id is None:
             # Submission failed - set job to ERROR status
             update_job_status(job_id, JobStatus.ERROR, schema=schema)

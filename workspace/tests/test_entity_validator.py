@@ -2791,8 +2791,8 @@ class TestValidateGroupingBatch:
 
         assert errors == []
 
-    def test_missing_analysis_returns_error(self):
-        """Missing analysis should return error."""
+    def test_missing_analysis_returns_warning(self):
+        """Missing analysis should return warning (not blocking error)."""
         validator = EntityValidator()
         validator._analysis_manager = Mock()
 
@@ -2808,11 +2808,12 @@ class TestValidateGroupingBatch:
             'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_batch(groupings)
+        messages = validator.validate_grouping_batch(groupings)
 
-        assert len(errors) == 1
-        assert 'ENT-ANALYSIS-002' in errors[0]
-        assert 'A2' in errors[0]
+        assert len(messages) == 1
+        assert 'WARN-ANALYSIS-001' in messages[0]  # Warning, not error
+        assert 'A2' in messages[0]
+        assert 'will be skipped' in messages[0]
 
     def test_existing_group_returns_error(self):
         """Existing group name should return error."""
@@ -2865,8 +2866,8 @@ class TestValidateGroupingBatch:
 
         assert errors == []
 
-    def test_multiple_errors_returned(self):
-        """Multiple validation failures should all be reported."""
+    def test_multiple_messages_returned(self):
+        """Multiple validation issues should all be reported (warnings and errors)."""
         validator = EntityValidator()
         validator._analysis_manager = Mock()
 
@@ -2882,11 +2883,11 @@ class TestValidateGroupingBatch:
             'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_batch(groupings)
+        messages = validator.validate_grouping_batch(groupings)
 
-        error_codes = [e.split(':')[0] for e in errors]
-        assert 'ENT-ANALYSIS-002' in error_codes
-        assert 'ENT-GROUP-001' in error_codes
+        message_codes = [m.split(':')[0] for m in messages]
+        assert 'WARN-ANALYSIS-001' in message_codes  # Missing analysis is a warning
+        assert 'ENT-GROUP-001' in message_codes  # Existing group is still an error
 
 
 class TestValidateGroupingRollupBatch:
@@ -2921,8 +2922,8 @@ class TestValidateGroupingRollupBatch:
 
         assert errors == []
 
-    def test_missing_child_group_returns_error(self):
-        """Missing child group should return error."""
+    def test_missing_child_group_returns_warning(self):
+        """Missing child group should return warning (not blocking error)."""
         validator = EntityValidator()
         validator._analysis_manager = Mock()
 
@@ -2939,14 +2940,15 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {}
         }]
 
-        errors = validator.validate_grouping_rollup_batch(groupings)
+        messages = validator.validate_grouping_rollup_batch(groupings)
 
-        assert len(errors) == 1
-        assert 'ENT-GROUP-002' in errors[0]
-        assert 'MissingChildGroup' in errors[0]
+        assert len(messages) == 1
+        assert 'WARN-GROUP-001' in messages[0]  # Warning, not error
+        assert 'MissingChildGroup' in messages[0]
+        assert 'will be skipped' in messages[0]
 
-    def test_missing_analysis_returns_error(self):
-        """Missing analysis in rollup should return error."""
+    def test_missing_analysis_returns_warning(self):
+        """Missing analysis in rollup should return warning (not blocking error)."""
         validator = EntityValidator()
         validator._analysis_manager = Mock()
 
@@ -2963,10 +2965,11 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {'MissingAnalysis': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_rollup_batch(groupings)
+        messages = validator.validate_grouping_rollup_batch(groupings)
 
-        assert len(errors) == 1
-        assert 'ENT-ANALYSIS-002' in errors[0]
+        assert len(messages) == 1
+        assert 'WARN-ANALYSIS-001' in messages[0]  # Warning, not error
+        assert 'will be skipped' in messages[0]
 
     def test_existing_rollup_group_returns_error(self):
         """Existing rollup group name should return error."""
@@ -3015,8 +3018,8 @@ class TestValidateGroupingRollupBatch:
 
         assert errors == []
 
-    def test_multiple_errors_returned(self):
-        """Multiple validation failures should all be reported."""
+    def test_multiple_messages_returned(self):
+        """Multiple validation issues should all be reported (warnings and errors)."""
         validator = EntityValidator()
         validator._analysis_manager = Mock()
 
@@ -3034,12 +3037,12 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {'MissingAnalysis': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_rollup_batch(groupings)
+        messages = validator.validate_grouping_rollup_batch(groupings)
 
-        error_codes = [e.split(':')[0] for e in errors]
-        assert 'ENT-GROUP-002' in error_codes   # Missing child group
-        assert 'ENT-ANALYSIS-002' in error_codes  # Missing analysis
-        assert 'ENT-GROUP-001' in error_codes   # Rollup already exists
+        message_codes = [m.split(':')[0] for m in messages]
+        assert 'WARN-GROUP-001' in message_codes      # Missing child group is warning
+        assert 'WARN-ANALYSIS-001' in message_codes   # Missing analysis is warning
+        assert 'ENT-GROUP-001' in message_codes       # Rollup already exists is error
 
     def test_only_analyses_no_child_groups(self):
         """Rollup with only analyses (no child groups) should work."""
