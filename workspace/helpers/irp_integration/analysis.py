@@ -351,7 +351,8 @@ class AnalysisManager:
         self,
         grouping_data_list: List[Dict[str, Any]],
         analysis_edm_map: Optional[Dict[str, str]] = None,
-        group_names: Optional[set] = None
+        group_names: Optional[set] = None,
+        skip_missing: bool = True
     ) -> List[int]:
         """
         Submit multiple analysis grouping jobs.
@@ -366,9 +367,11 @@ class AnalysisManager:
             group_names: Optional set of known group names. Items in this set are
                 looked up as groups (by name only), all others are looked up as
                 analyses (by name + EDM if mapping provided).
+            skip_missing: If True (default), skip analyses/groups that don't exist.
+                Jobs where all items are missing will be skipped entirely.
 
         Returns:
-            List of job IDs
+            List of job IDs (excludes skipped jobs)
 
         Raises:
             IRPValidationError: If grouping_data_list is empty or invalid
@@ -386,12 +389,17 @@ class AnalysisManager:
                     f"Missing analysis job data: {e}"
                 ) from e
 
-            job_ids.append(self.submit_analysis_grouping_job(
+            result = self.submit_analysis_grouping_job(
                 group_name=group_name,
                 analysis_names=analysis_names,
                 analysis_edm_map=analysis_edm_map,
-                group_names=group_names
-            ))
+                group_names=group_names,
+                skip_missing=skip_missing
+            )
+
+            # Only add job_id if job was not skipped
+            if not result.get('skipped') and result.get('job_id') is not None:
+                job_ids.append(result['job_id'])
 
         return job_ids
 
@@ -410,8 +418,9 @@ class AnalysisManager:
         description: str = "",
         currency: Dict[str, str] = None,
         analysis_edm_map: Optional[Dict[str, str]] = None,
-        group_names: Optional[set] = None
-    ) -> int:
+        group_names: Optional[set] = None,
+        skip_missing: bool = True
+    ) -> Dict[str, Any]:
         """
         Submit analysis grouping job.
 
@@ -433,13 +442,20 @@ class AnalysisManager:
             group_names: Optional set of known group names. Items in this set are
                 looked up as groups (by name only), all others are looked up as
                 analyses (by name + EDM if mapping provided).
+            skip_missing: If True (default), skip analyses/groups that don't exist
+                instead of raising an error. If all items are missing, returns
+                a result with job_id=None and skipped=True.
 
         Returns:
-            Analysis group job ID
+            Dict containing:
+                - job_id: Analysis group job ID (int), or None if skipped
+                - skipped: True if job was skipped (all analyses missing)
+                - skipped_items: List of item names that were not found and skipped
+                - included_items: List of item names that were found and included
 
         Raises:
             IRPValidationError: If inputs are invalid
-            IRPAPIError: If request fails or analysis names not found
+            IRPAPIError: If request fails, or if skip_missing=False and items not found
         """
         validate_non_empty_string(group_name, "group_name")
         validate_list_not_empty(analysis_names, "analysis_names")
@@ -455,14 +471,20 @@ class AnalysisManager:
         if len(analysis_response) > 0:
             raise IRPAPIError(f"Analysis Group with this name already exists: {group_name}")
 
-        # Resolve analysis/group names to URIs
+        # Resolve analysis/group names to URIs, tracking skipped items
         analysis_uris = []
+        skipped_items = []
+        included_items = []
+
         for name in analysis_names:
             # Determine if this is a group name or an analysis name
             if name in group_names:
                 # Group names are globally unique - search by name only
                 analysis_response = self.search_analyses(filter=f"analysisName = \"{name}\"")
                 if len(analysis_response) == 0:
+                    if skip_missing:
+                        skipped_items.append(name)
+                        continue
                     raise IRPAPIError(f"Group with this name does not exist: {name}")
                 if len(analysis_response) > 1:
                     raise IRPAPIError(f"Duplicate groups exist with name: {name}")
@@ -473,6 +495,9 @@ class AnalysisManager:
                     filter_str = f"analysisName = \"{name}\" AND exposureName = \"{edm_name}\""
                     analysis_response = self.search_analyses(filter=filter_str)
                     if len(analysis_response) == 0:
+                        if skip_missing:
+                            skipped_items.append(name)
+                            continue
                         raise IRPAPIError(f"Analysis '{name}' not found for EDM '{edm_name}'")
                     if len(analysis_response) > 1:
                         raise IRPAPIError(f"Multiple analyses found with name '{name}' for EDM '{edm_name}'")
@@ -480,16 +505,30 @@ class AnalysisManager:
                     # Fallback to name-only search (legacy behavior)
                     analysis_response = self.search_analyses(filter=f"analysisName = \"{name}\"")
                     if len(analysis_response) == 0:
+                        if skip_missing:
+                            skipped_items.append(name)
+                            continue
                         raise IRPAPIError(f"Analysis with this name does not exist: {name}")
                     if len(analysis_response) > 1:
                         raise IRPAPIError(f"Duplicate analyses exist with name: {name}.")
 
             try:
                 analysis_uris.append(analysis_response[0]['uri'])
+                included_items.append(name)
             except (KeyError, IndexError, TypeError) as e:
                 raise IRPAPIError(
                     f"Failed to extract URI for '{name}': {e}"
                 ) from e
+
+        # If all analyses were skipped, return a skip result instead of submitting
+        if not analysis_uris:
+            return {
+                'job_id': None,
+                'skipped': True,
+                'skipped_items': skipped_items,
+                'included_items': [],
+                'skip_reason': f"All {len(skipped_items)} analyses/groups were not found"
+            }
 
         if currency is None:
             currency = self.reference_data_manager.get_analysis_currency()
@@ -516,7 +555,12 @@ class AnalysisManager:
         try:
             response = self.client.request('POST', CREATE_ANALYSIS_GROUP, json=data)
             group_id = extract_id_from_location_header(response, "analysis group creation")
-            return int(group_id)
+            return {
+                'job_id': int(group_id),
+                'skipped': False,
+                'skipped_items': skipped_items,
+                'included_items': included_items
+            }
         except Exception as e:
             raise IRPAPIError(f"Failed to submit analysis group job '{group_name}': {e}")
         

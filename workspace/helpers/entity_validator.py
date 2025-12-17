@@ -1366,8 +1366,9 @@ class EntityValidator:
         """
         Validate Grouping batch submission (analysis-only groups).
 
-        Pre-requisites (must exist):
-        - All analyses referenced in items must exist
+        Pre-requisites:
+        - Analyses referenced in items should exist (missing analyses generate
+          warnings, not errors - they will be skipped during submission)
 
         Entities to be created (must NOT exist):
         - Group names must not already exist
@@ -1377,12 +1378,14 @@ class EntityValidator:
                       and 'analysis_edm_map' keys
 
         Returns:
-            List of error messages (empty if all validation passes)
+            List of error/warning messages. Warnings are prefixed with 'WARN-'
+            and indicate missing analyses that will be skipped during submission.
+            Errors (without WARN- prefix) block submission.
         """
         if not groupings:
             return []
 
-        all_errors = []
+        all_messages = []
 
         # Collect all analysis names and the edm map from job configs
         all_analysis_names = []
@@ -1401,21 +1404,25 @@ class EntityValidator:
             edm_map = group.get('analysis_edm_map', {})
             analysis_edm_map.update(edm_map)
 
-        # Pre-requisite: Analyses must exist
+        # Check analyses existence - missing analyses are warnings, not errors
+        # They will be skipped during submission
         if all_analysis_names:
             # Deduplicate
             unique_analyses = list(set(all_analysis_names))
-            _, analysis_errors = self.validate_analyses_exist(
+            missing_analyses, _ = self.validate_analyses_exist(
                 unique_analyses, analysis_edm_map
             )
-            all_errors.extend(analysis_errors)
+            if missing_analyses:
+                all_messages.append(
+                    f"WARN-ANALYSIS-001: The following analyses were not found and will be skipped during grouping:{_format_entity_list(missing_analyses)}"
+                )
 
-        # Groups must NOT exist
+        # Groups must NOT exist - this is still an error
         if group_names_to_create:
             _, group_errors = self.validate_groups_not_exist(group_names_to_create)
-            all_errors.extend(group_errors)
+            all_messages.extend(group_errors)
 
-        return all_errors
+        return all_messages
 
     def validate_grouping_rollup_batch(
         self,
@@ -1424,9 +1431,11 @@ class EntityValidator:
         """
         Validate Grouping Rollup batch submission.
 
-        Pre-requisites (must exist):
-        - Child groups referenced in items must exist
-        - Analyses referenced in items must exist
+        Pre-requisites:
+        - Child groups referenced in items should exist (missing groups generate
+          warnings - they will be skipped during submission)
+        - Analyses referenced in items should exist (missing analyses generate
+          warnings - they will be skipped during submission)
 
         Entities to be created (must NOT exist):
         - Rollup group names must not already exist
@@ -1436,12 +1445,14 @@ class EntityValidator:
                       'analysis_edm_map', and 'group_names' keys
 
         Returns:
-            List of error messages (empty if all validation passes)
+            List of error/warning messages. Warnings are prefixed with 'WARN-'
+            and indicate missing analyses/groups that will be skipped during submission.
+            Errors (without WARN- prefix) block submission.
         """
         if not groupings:
             return []
 
-        all_errors = []
+        all_messages = []
 
         # Collect items, separating groups from analyses
         all_child_groups = []
@@ -1470,26 +1481,32 @@ class EntityValidator:
                 else:
                     all_analysis_names.append(item)
 
-        # Pre-requisite 1: Child groups must exist
+        # Check child groups existence - missing groups are warnings, not errors
         if all_child_groups:
             unique_groups = list(set(all_child_groups))
-            _, group_exist_errors = self.validate_groups_exist(unique_groups)
-            all_errors.extend(group_exist_errors)
+            missing_groups, _ = self.validate_groups_exist(unique_groups)
+            if missing_groups:
+                all_messages.append(
+                    f"WARN-GROUP-001: The following child groups were not found and will be skipped during grouping:{_format_entity_list(missing_groups)}"
+                )
 
-        # Pre-requisite 2: Analyses must exist
+        # Check analyses existence - missing analyses are warnings, not errors
         if all_analysis_names:
             unique_analyses = list(set(all_analysis_names))
-            _, analysis_errors = self.validate_analyses_exist(
+            missing_analyses, _ = self.validate_analyses_exist(
                 unique_analyses, analysis_edm_map
             )
-            all_errors.extend(analysis_errors)
+            if missing_analyses:
+                all_messages.append(
+                    f"WARN-ANALYSIS-001: The following analyses were not found and will be skipped during grouping:{_format_entity_list(missing_analyses)}"
+                )
 
-        # Rollup groups must NOT exist
+        # Rollup groups must NOT exist - this is still an error
         if group_names_to_create:
             _, group_errors = self.validate_groups_not_exist(group_names_to_create)
-            all_errors.extend(group_errors)
+            all_messages.extend(group_errors)
 
-        return all_errors
+        return all_messages
 
     def validate_analysis_batch(
         self,
