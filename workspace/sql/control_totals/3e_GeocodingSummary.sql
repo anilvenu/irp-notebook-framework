@@ -95,7 +95,7 @@ Join '+@DBName+'..accgrp c on c.ACCGRPID = a.ACCGRPID
 Join '+@DBName+'..portacct d on c.ACCGRPID = d.ACCGRPID
 Join '+@DBName+'..portinfo e on e.PORTINFOID = d.PORTINFOID
 JOIN '+@DBName+'..Address f on f.AddressID = a.AddressID
-where portname in (''USFF'',''USEQ'',''CBHU'',''CBEQ'',''USST'',''USOW'',''USWF'',''USHU_Full'',''USHU_Leak'',''USFL_Other'',''USFL_Excess'',''USFL_Commercial'')
+where portname in (''USFF'',''USEQ'',''CBHU'',''CBEQ'',''USST'',''USOW'',''USWF'',''USHU_Full'',''USHU_Leak'',''USFL_Other'',''USFL_Excess'',''USFL_Commercial'', ''USIF_Full'', ''USIF_Other'', ''USIF_Excess'', ''USIF_Commercial'')
 Group by e.PORTNAME, f.GeoResolutionCode
 
 '
