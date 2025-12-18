@@ -12,16 +12,14 @@ import requests
 import json
 import os
 import time
+import pandas as pd
 from .client import Client
 from .constants import (
     CREATE_AWS_BUCKET,
-    CREATE_IMPORT_FOLDER,
-    CREATE_IMPORT_JOB,
     CREATE_MAPPING,
     EXECUTE_IMPORT,
     GET_WORKFLOW_BY_ID,
     GET_WORKFLOWS,
-    WORKFLOW_COMPLETED_STATUSES,
     WORKFLOW_IN_PROGRESS_STATUSES
 )
 from .exceptions import IRPFileError, IRPAPIError, IRPValidationError, IRPJobError
@@ -31,7 +29,7 @@ from .validators import (
     validate_positive_int,
     validate_list_not_empty
 )
-from .utils import decode_base64_field, decode_mri_credentials, decode_presign_params, extract_id_from_location_header, get_location_header, get_workspace_root
+from .utils import decode_mri_credentials, extract_id_from_location_header, get_location_header
 
 
 class MRIImportManager:
@@ -64,6 +62,59 @@ class MRIImportManager:
             self._portfolio_manager = PortfolioManager(self.client)
         return self._portfolio_manager
 
+    @staticmethod
+    def _add_missing_sources(headers: list, items: list) -> bool:
+        """Add missing source entries for CSV headers not in mapping."""
+        # Build set of existing sources (uppercase for case-insensitive comparison)
+        existing_sources_upper = {item['source'].upper() for item in items}
+
+        modified = False
+        for header in headers:
+            header_upper = header.upper()
+
+            if header_upper in existing_sources_upper:
+                continue  # Already has a source entry
+
+            # Add new entry: HEADER_UPPER -> HEADER_UPPER
+            items.append({
+                'source': header_upper,
+                'destination': header_upper
+            })
+            print(f"  Added mapping: {header_upper} -> {header_upper}")
+            modified = True
+
+        return modified
+
+    @staticmethod
+    def _sync_mapping_with_csv_headers(
+        mapping_file_path: str,
+        accounts_file_path: str,
+        locations_file_path: str
+    ) -> None:
+        """
+        Update mapping.json to include any CSV headers not already present as sources.
+        """
+        # Load mapping
+        with open(mapping_file_path, 'r') as f:
+            mapping = json.load(f)
+
+        modified = False
+
+        # Process account CSV
+        account_headers = list(pd.read_csv(accounts_file_path, nrows=0).columns)
+        account_items = mapping.get('accountItems', [])
+        modified |= MRIImportManager._add_missing_sources(account_headers, account_items)
+
+        # Process location CSV
+        location_headers = list(pd.read_csv(locations_file_path, nrows=0).columns)
+        location_items = mapping.get('locationItems', [])
+        modified |= MRIImportManager._add_missing_sources(location_headers, location_items)
+
+        # Save if modified
+        if modified:
+            with open(mapping_file_path, 'w') as f:
+                json.dump(mapping, f, indent=4)
+            print("Updated mapping.json with new source entries")
 
     def create_aws_bucket(self) -> requests.Response:
         """
@@ -539,6 +590,9 @@ class MRIImportManager:
         validate_file_exists(accounts_file_path, "accounts_file_name")
         validate_file_exists(locations_file_path, "locations_file_name")
         validate_file_exists(mapping_file_path, "mapping_file_name")
+
+        # Sync mapping.json with CSV headers (add any missing source entries)
+        self._sync_mapping_with_csv_headers(mapping_file_path, accounts_file_path, locations_file_path)
 
         # Get file sizes
         accounts_size_kb = self.get_file_size_kb(accounts_file_path)
