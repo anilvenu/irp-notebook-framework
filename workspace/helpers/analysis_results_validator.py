@@ -242,8 +242,33 @@ class BatchValidationResult:
 # Comparison Functions
 # =============================================================================
 
-def values_match(a: Any, b: Any, rel_tol: float = 1e-9) -> bool:
-    """Compare two values with tolerance for floats."""
+def values_match(
+    a: Any,
+    b: Any,
+    rel_tol: float = 1e-9,
+    decimal_places: int = None,
+    max_diff: int = 1
+) -> bool:
+    """Compare two values with tolerance for floats.
+
+    Args:
+        a: First value
+        b: Second value
+        rel_tol: Relative tolerance for float comparison. Used when decimal_places is None,
+                 OR when both values are small (abs < 1) even if decimal_places is set.
+        decimal_places: If specified, values are rounded to this many decimal places
+                       before comparing. Only applies to "large" numbers (abs >= 1).
+        max_diff: Maximum allowed difference between rounded values (default: 1).
+                 Only used when decimal_places is specified and values are large.
+
+    Comparison modes:
+        - Large numbers (abs >= 1) with decimal_places=0, max_diff=1:
+          Round to whole numbers, allow difference of up to 1
+          Example: 339338697.49 vs 339338697.50 → rounds to 339338697 vs 339338698 → diff=1 → MATCH
+        - Small numbers (abs < 1): Always use relative tolerance
+          Example: 1.43e-7 vs 1.44e-7 → use rel_tol comparison
+        - decimal_places=None: Use relative tolerance (rel_tol) for all values
+    """
     if a is None and b is None:
         return True
     if a is None or b is None:
@@ -251,15 +276,22 @@ def values_match(a: Any, b: Any, rel_tol: float = 1e-9) -> bool:
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
         if a == 0 and b == 0:
             return True
+        # For small numbers (both < 1), always use relative tolerance
+        if abs(a) < 1 and abs(b) < 1:
+            return math.isclose(a, b, rel_tol=rel_tol)
+        # If decimal_places specified and numbers are large, round and check difference
+        if decimal_places is not None:
+            return abs(round(a, decimal_places) - round(b, decimal_places)) <= max_diff
+        # Otherwise fall back to relative tolerance
         return math.isclose(a, b, rel_tol=rel_tol)
     if isinstance(a, list) and isinstance(b, list):
         if len(a) != len(b):
             return False
-        return all(values_match(x, y, rel_tol) for x, y in zip(a, b))
+        return all(values_match(x, y, rel_tol, decimal_places, max_diff) for x, y in zip(a, b))
     if isinstance(a, dict) and isinstance(b, dict):
         if set(a.keys()) != set(b.keys()):
             return False
-        return all(values_match(a[k], b[k], rel_tol) for k in a.keys())
+        return all(values_match(a[k], b[k], rel_tol, decimal_places, max_diff) for k in a.keys())
     return a == b
 
 
@@ -268,7 +300,8 @@ def compare_records(
     test_record: Dict[str, Any],
     key_fields: set,
     fields_to_compare: set = None,
-    rel_tol: float = 1e-9
+    rel_tol: float = 1e-9,
+    decimal_places: int = None
 ) -> List[Dict[str, Any]]:
     """Compare two records and return list of field differences.
 
@@ -279,6 +312,8 @@ def compare_records(
         fields_to_compare: If provided, only compare these fields.
                           If None, compare all fields except IGNORED_FIELDS.
         rel_tol: Relative tolerance for float comparison
+        decimal_places: If specified, values must match when rounded to this many
+                       decimal places.
     """
     differences = []
 
@@ -294,7 +329,7 @@ def compare_records(
         prod_val = prod_record.get(key)
         test_val = test_record.get(key)
 
-        if not values_match(prod_val, test_val, rel_tol):
+        if not values_match(prod_val, test_val, rel_tol, decimal_places):
             differences.append({
                 'field': key,
                 'prod_value': prod_val,
@@ -310,7 +345,8 @@ def compare_datasets(
     key_field: str,
     endpoint_name: str,
     fields_to_compare: set = None,
-    rel_tol: float = 1e-9
+    rel_tol: float = 1e-9,
+    decimal_places: int = None
 ) -> ComparisonResult:
     """Compare two datasets by matching on key_field."""
     # Build lookup dictionaries
@@ -333,7 +369,8 @@ def compare_datasets(
             test_by_key[key],
             {key_field},
             fields_to_compare,
-            rel_tol
+            rel_tol,
+            decimal_places
         )
         if diffs:
             all_differences.append({
@@ -362,7 +399,8 @@ def compare_datasets_composite_key(
     key_fields: List[str],
     endpoint_name: str,
     fields_to_compare: set = None,
-    rel_tol: float = 1e-9
+    rel_tol: float = 1e-9,
+    decimal_places: int = None
 ) -> ComparisonResult:
     """Compare two datasets using a composite key (multiple fields)."""
     def make_key(record: Dict[str, Any]) -> tuple:
@@ -388,7 +426,8 @@ def compare_datasets_composite_key(
             test_by_key[key],
             set(key_fields),
             fields_to_compare,
-            rel_tol
+            rel_tol,
+            decimal_places
         )
         if diffs:
             # Format composite key for display
@@ -418,7 +457,8 @@ def compare_by_index(
     test_data: List[Dict[str, Any]],
     endpoint_name: str,
     fields_to_compare: set = None,
-    rel_tol: float = 1e-9
+    rel_tol: float = 1e-9,
+    decimal_places: int = None
 ) -> ComparisonResult:
     """Compare data by index position (for stats/EP without unique keys)."""
     if len(prod_data) != len(test_data):
@@ -440,7 +480,8 @@ def compare_by_index(
             test_rec,
             key_fields={'_index_'},
             fields_to_compare=fields_to_compare,
-            rel_tol=rel_tol
+            rel_tol=rel_tol,
+            decimal_places=decimal_places
         )
         if diffs:
             all_differences.append({
@@ -463,6 +504,7 @@ def compare_ep_curves(
     prod_data: List[Dict[str, Any]],
     test_data: List[Dict[str, Any]],
     rel_tol: float = 1e-9,
+    decimal_places: int = None,
     max_point_diffs: int = 5
 ) -> ComparisonResult:
     """Compare EP curves with detailed return period differences.
@@ -483,6 +525,8 @@ def compare_ep_curves(
         prod_data: Production EP data
         test_data: Test EP data
         rel_tol: Relative tolerance for float comparison
+        decimal_places: If specified, values must match when rounded to this many
+                       decimal places.
         max_point_diffs: Maximum number of return period differences to show per curve
 
     Returns:
@@ -528,7 +572,7 @@ def compare_ep_curves(
         # Compare values at each return period
         point_diffs = []
         for rp, prod_val, test_val in zip(prod_rps, prod_vals, test_vals):
-            if not values_match(prod_val, test_val, rel_tol):
+            if not values_match(prod_val, test_val, rel_tol, decimal_places):
                 point_diffs.append({
                     'return_period': rp,
                     'prod_value': prod_val,
@@ -742,7 +786,8 @@ class AnalysisResultsValidator:
         test_app_analysis_id: int,
         perspective_code: str = 'GR',
         include_plt: Union[bool, str] = 'auto',
-        relative_tolerance: float = 1e-9
+        relative_tolerance: float = 1e-9,
+        decimal_places: int = 2
     ) -> ValidationResult:
         """Validate test analysis against production analysis.
 
@@ -755,6 +800,8 @@ class AnalysisResultsValidator:
                 - True: Always include PLT
                 - False: Never include PLT
             relative_tolerance: Tolerance for floating-point comparison
+            decimal_places: Values must match when rounded to this many decimal places
+                           (default: 2, meaning values must match to the hundredths)
 
         Returns:
             ValidationResult containing all comparison results
@@ -793,7 +840,8 @@ class AnalysisResultsValidator:
             prod_analysis_id, test_analysis_id,
             perspective_code,
             prod_exposure_resource_id, test_exposure_resource_id,
-            relative_tolerance
+            relative_tolerance,
+            decimal_places
         ))
 
         # Compare EP Metrics
@@ -801,7 +849,8 @@ class AnalysisResultsValidator:
             prod_analysis_id, test_analysis_id,
             perspective_code,
             prod_exposure_resource_id, test_exposure_resource_id,
-            relative_tolerance
+            relative_tolerance,
+            decimal_places
         ))
 
         # Compare ELT
@@ -809,7 +858,8 @@ class AnalysisResultsValidator:
             prod_analysis_id, test_analysis_id,
             perspective_code,
             prod_exposure_resource_id, test_exposure_resource_id,
-            relative_tolerance
+            relative_tolerance,
+            decimal_places
         ))
 
         # Compare PLT (HD analyses only, or when explicitly requested)
@@ -818,7 +868,8 @@ class AnalysisResultsValidator:
                 prod_analysis_id, test_analysis_id,
                 perspective_code,
                 prod_exposure_resource_id, test_exposure_resource_id,
-                relative_tolerance
+                relative_tolerance,
+                decimal_places
             ))
 
         return result
@@ -829,6 +880,7 @@ class AnalysisResultsValidator:
         perspectives: List[str] = None,
         include_plt: Union[bool, str] = 'auto',
         relative_tolerance: float = 1e-9,
+        decimal_places: int = 2,
         progress_callback: callable = None
     ) -> BatchValidationResult:
         """Validate multiple analysis pairs across all perspectives.
@@ -844,6 +896,8 @@ class AnalysisResultsValidator:
                 - True: Always include PLT
                 - False: Never include PLT
             relative_tolerance: Tolerance for floating-point comparison
+            decimal_places: Values must match when rounded to this many decimal places
+                           (default: 2, meaning values must match to the hundredths)
             progress_callback: Optional callback(current, total, name, perspective) for progress
 
         Returns:
@@ -884,7 +938,8 @@ class AnalysisResultsValidator:
                         test_app_analysis_id=test_id,
                         perspective_code=perspective,
                         include_plt=include_plt,
-                        relative_tolerance=relative_tolerance
+                        relative_tolerance=relative_tolerance,
+                        decimal_places=decimal_places
                     )
                     result.name = name
                     pair_result.perspective_results[perspective] = result
@@ -909,6 +964,7 @@ class AnalysisResultsValidator:
         perspectives: List[str] = None,
         include_plt: Union[bool, str] = 'auto',
         relative_tolerance: float = 1e-9,
+        decimal_places: int = 2,
         progress_callback: callable = None
     ) -> BatchValidationResult:
         """Validate multiple analysis pairs from a CSV or XLSX file.
@@ -926,6 +982,8 @@ class AnalysisResultsValidator:
                 - True: Always include PLT
                 - False: Never include PLT
             relative_tolerance: Tolerance for floating-point comparison
+            decimal_places: Values must match when rounded to this many decimal places
+                           (default: 2, meaning values must match to the hundredths)
             progress_callback: Optional callback(current, total, name, perspective) for progress
 
         Returns:
@@ -937,6 +995,7 @@ class AnalysisResultsValidator:
             perspectives=perspectives,
             include_plt=include_plt,
             relative_tolerance=relative_tolerance,
+            decimal_places=decimal_places,
             progress_callback=progress_callback
         )
 
@@ -947,6 +1006,7 @@ class AnalysisResultsValidator:
         perspectives: List[str] = None,
         include_plt: Union[bool, str] = 'auto',
         relative_tolerance: float = 1e-9,
+        decimal_places: int = 2,
         progress_callback: callable = None
     ) -> BatchValidationResult:
         """Deprecated: Use validate_batch_from_file() instead."""
@@ -955,6 +1015,7 @@ class AnalysisResultsValidator:
             perspectives=perspectives,
             include_plt=include_plt,
             relative_tolerance=relative_tolerance,
+            decimal_places=decimal_places,
             progress_callback=progress_callback
         )
 
@@ -965,7 +1026,8 @@ class AnalysisResultsValidator:
         perspective_code: str,
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
-        rel_tol: float
+        rel_tol: float,
+        decimal_places: int
     ) -> ComparisonResult:
         """Compare Statistics endpoint."""
         try:
@@ -975,7 +1037,7 @@ class AnalysisResultsValidator:
             test_data = self.irp_client.analysis.get_stats(
                 test_analysis_id, perspective_code, test_exposure_resource_id
             )
-            return compare_by_index(prod_data, test_data, 'Statistics', STATS_FIELDS, rel_tol)
+            return compare_by_index(prod_data, test_data, 'Statistics', STATS_FIELDS, rel_tol, decimal_places)
         except Exception as e:
             return ComparisonResult(
                 endpoint='Statistics',
@@ -992,7 +1054,8 @@ class AnalysisResultsValidator:
         perspective_code: str,
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
-        rel_tol: float
+        rel_tol: float,
+        decimal_places: int
     ) -> ComparisonResult:
         """Compare EP Metrics endpoint with detailed return period differences."""
         try:
@@ -1002,7 +1065,7 @@ class AnalysisResultsValidator:
             test_data = self.irp_client.analysis.get_ep(
                 test_analysis_id, perspective_code, test_exposure_resource_id
             )
-            return compare_ep_curves(prod_data, test_data, rel_tol)
+            return compare_ep_curves(prod_data, test_data, rel_tol, decimal_places)
         except Exception as e:
             return ComparisonResult(
                 endpoint='EP Metrics',
@@ -1020,6 +1083,7 @@ class AnalysisResultsValidator:
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
         rel_tol: float,
+        decimal_places: int,
         sample_size: int = 500
     ) -> ComparisonResult:
         """Compare ELT endpoint using sampled comparison.
@@ -1038,6 +1102,7 @@ class AnalysisResultsValidator:
             prod_exposure_resource_id: Production exposure resource ID
             test_exposure_resource_id: Test exposure resource ID
             rel_tol: Relative tolerance for float comparison
+            decimal_places: Values must match when rounded to this many decimal places
             sample_size: Number of events to sample for comparison (default: 100)
         """
         try:
@@ -1097,7 +1162,7 @@ class AnalysisResultsValidator:
             )
 
             # Step 4: Compare the sampled events by eventId key
-            return compare_datasets(prod_data, test_data, 'eventId', 'ELT', ELT_FIELDS, rel_tol)
+            return compare_datasets(prod_data, test_data, 'eventId', 'ELT', ELT_FIELDS, rel_tol, decimal_places)
 
         except Exception as e:
             return ComparisonResult(
@@ -1116,6 +1181,7 @@ class AnalysisResultsValidator:
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
         rel_tol: float,
+        decimal_places: int,
         sample_size: int = 500
     ) -> ComparisonResult:
         """Compare PLT endpoint using sampled comparison.
@@ -1136,6 +1202,7 @@ class AnalysisResultsValidator:
             prod_exposure_resource_id: Production exposure resource ID
             test_exposure_resource_id: Test exposure resource ID
             rel_tol: Relative tolerance for float comparison
+            decimal_places: Values must match when rounded to this many decimal places
             sample_size: Number of records to sample for comparison (default: 500)
         """
         try:
@@ -1214,7 +1281,8 @@ class AnalysisResultsValidator:
                 key_fields=['eventId', 'periodId', 'eventDate', 'lossDate'],
                 endpoint_name='PLT',
                 fields_to_compare=PLT_FIELDS,
-                rel_tol=rel_tol
+                rel_tol=rel_tol,
+                decimal_places=decimal_places
             )
 
         except Exception as e:
