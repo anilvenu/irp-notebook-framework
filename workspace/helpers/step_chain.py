@@ -255,9 +255,12 @@ def should_execute_next_step(
 
     This checks:
     1. Next step exists in chain configuration
-    2. Next step has not already been executed
-    3. Cycle is still ACTIVE
-    4. Batch reached required status
+    2. Cycle is still ACTIVE
+    3. Batch reached required status
+
+    Note: We intentionally do NOT check if the next step was already executed.
+    This allows re-running workflows after entity deletion - submit_batch will
+    check entity existence and only resubmit jobs for missing entities.
 
     Args:
         batch_id: The ID of the completed batch
@@ -269,33 +272,6 @@ def should_execute_next_step(
     next_step_info = get_next_step_info(batch_id, schema=schema)
 
     if next_step_info is None:
-        return False
-
-    # Check if next step has already been executed
-    query = """
-        SELECT COUNT(*) as execution_count
-        FROM irp_cycle c
-        JOIN irp_stage st ON c.id = st.cycle_id
-        JOIN irp_step s ON st.id = s.stage_id
-        JOIN irp_step_run sr ON s.id = sr.step_id
-        WHERE c.cycle_name = %s
-          AND st.stage_num = %s
-          AND s.step_num = %s
-    """
-
-    result = execute_query(
-        query,
-        (next_step_info['cycle_name'], int(next_step_info['stage_num']), int(next_step_info['step_num'])),
-        schema=schema
-    )
-
-    execution_count = result.iloc[0]['execution_count']
-
-    if execution_count > 0:
-        logger.info(
-            f"Next step (Stage {next_step_info['stage_num']}/Step {next_step_info['step_num']}) "
-            f"already executed {execution_count} time(s), skipping auto-execution"
-        )
         return False
 
     logger.info(

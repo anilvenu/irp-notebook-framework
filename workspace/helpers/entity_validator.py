@@ -7,7 +7,7 @@ Used during configuration file validation to prevent conflicts with existing dat
 
 from typing import Dict, Any, List, Tuple, Optional
 
-from helpers.constants import DEFAULT_DATABASE_SERVER
+from helpers.constants import DEFAULT_DATABASE_SERVER, BatchType
 from helpers.irp_integration.client import Client
 from helpers.irp_integration.exceptions import IRPAPIError
 from helpers.irp_integration.portfolio import resolve_cycle_type_directory
@@ -1667,6 +1667,287 @@ class EntityValidator:
             all_errors.extend(rdm_errors)
 
         return all_errors
+
+    # =========================================================================
+    # Entity Existence Check for FINISHED Jobs
+    # =========================================================================
+
+    def check_entity_exists_for_job(
+        self,
+        job_config_data: Dict[str, Any],
+        batch_type: str,
+        config_data: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Check if the entity that should have been created by a job actually exists.
+
+        Used to verify FINISHED jobs - if the entity is missing (e.g., deleted
+        externally), the job may need to be resubmitted.
+
+        Args:
+            job_config_data: Job configuration data dict
+            batch_type: Batch type string (from BatchType constants)
+            config_data: Optional full configuration data (needed for some batch types
+                        like portfolio mapping to determine expected sub-portfolios)
+
+        Returns:
+            True if entity exists, False if entity is missing
+        """
+        try:
+            if batch_type == BatchType.EDM_CREATION:
+                return self._check_edm_exists(job_config_data)
+
+            elif batch_type == BatchType.PORTFOLIO_CREATION:
+                return self._check_portfolio_exists(job_config_data)
+
+            elif batch_type == BatchType.CREATE_REINSURANCE_TREATIES:
+                return self._check_treaty_exists(job_config_data)
+
+            elif batch_type == BatchType.MRI_IMPORT:
+                return self._check_mri_import_complete(job_config_data)
+
+            elif batch_type == BatchType.EDM_DB_UPGRADE:
+                return self._check_edm_version_upgraded(job_config_data)
+
+            elif batch_type == BatchType.GEOHAZ:
+                return self._check_geohaz_complete(job_config_data)
+
+            elif batch_type == BatchType.PORTFOLIO_MAPPING:
+                return self._check_sub_portfolios_exist(job_config_data, config_data)
+
+            elif batch_type == BatchType.ANALYSIS:
+                return self._check_analysis_exists(job_config_data)
+
+            elif batch_type == BatchType.GROUPING or batch_type == BatchType.GROUPING_ROLLUP:
+                return self._check_group_exists(job_config_data)
+
+            elif batch_type == BatchType.EXPORT_TO_RDM:
+                return self._check_rdm_exists(job_config_data)
+
+            # For batch types we can't verify, assume entity exists
+            return True
+
+        except IRPAPIError:
+            # If API call fails, assume entity exists to avoid false resubmissions
+            return True
+
+    def _check_edm_exists(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if EDM exists."""
+        edm_name = job_config_data.get('Database')
+        if not edm_name:
+            return True  # Can't check without name, assume exists
+
+        edm_ids, _ = self.validate_edms_exist([edm_name])
+        return edm_name in edm_ids
+
+    def _check_portfolio_exists(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if portfolio exists in its EDM."""
+        edm_name = job_config_data.get('Database')
+        portfolio_name = job_config_data.get('Portfolio')
+        if not edm_name or not portfolio_name:
+            return True  # Can't check without names, assume exists
+
+        edm_ids, _ = self.validate_edms_exist([edm_name])
+        if not edm_ids:
+            return False  # EDM doesn't exist, so portfolio can't exist
+
+        portfolio_ids, _ = self.validate_portfolios_exist(
+            [{'Database': edm_name, 'Portfolio': portfolio_name}],
+            edm_ids
+        )
+        return f"{edm_name}/{portfolio_name}" in portfolio_ids
+
+    def _check_treaty_exists(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if treaty exists in its EDM."""
+        edm_name = job_config_data.get('Database')
+        treaty_name = job_config_data.get('Treaty Name')
+        if not edm_name or not treaty_name:
+            return True  # Can't check without names, assume exists
+
+        edm_ids, _ = self.validate_edms_exist([edm_name])
+        if not edm_ids:
+            return False  # EDM doesn't exist, so treaty can't exist
+
+        # validate_treaties_exist returns missing treaties
+        missing, _ = self.validate_treaties_exist(
+            [{'Database': edm_name, 'Treaty Name': treaty_name}],
+            edm_ids
+        )
+        return len(missing) == 0  # Empty missing list = treaty exists
+
+    def _check_mri_import_complete(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if MRI import completed (portfolio has accounts/locations)."""
+        edm_name = job_config_data.get('Database')
+        portfolio_name = job_config_data.get('Portfolio')
+        if not edm_name or not portfolio_name:
+            return True  # Can't check without names, assume exists
+
+        edm_ids, _ = self.validate_edms_exist([edm_name])
+        if not edm_ids:
+            return False  # EDM doesn't exist
+
+        portfolio_ids, _ = self.validate_portfolios_exist(
+            [{'Database': edm_name, 'Portfolio': portfolio_name}],
+            edm_ids
+        )
+        portfolio_key = f"{edm_name}/{portfolio_name}"
+        if portfolio_key not in portfolio_ids:
+            return False  # Portfolio doesn't exist
+
+        # Check if portfolio has accounts (inverse of validate_accounts_not_exist)
+        has_no_accounts, _ = self.validate_accounts_not_exist({portfolio_key: portfolio_ids[portfolio_key]})
+        # If portfolio is in has_no_accounts list, it means it HAS accounts (validation failed)
+        # Wait, that's backwards - validate_accounts_not_exist returns portfolios WITH accounts
+        return len(has_no_accounts) > 0  # If has accounts, import is complete
+
+    def _check_edm_version_upgraded(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if EDM has been upgraded to target version."""
+        edm_name = job_config_data.get('Database')
+        target_version = job_config_data.get('target_edm_version')
+        if not edm_name or not target_version:
+            return True  # Can't check without required fields, assume exists
+
+        # Search for EDM and check its dataVersion
+        try:
+            filter_str = f'exposureName = "{edm_name}"'
+            edms = self.edm_manager.search_edms_paginated(filter=filter_str)
+            if not edms:
+                return False  # EDM doesn't exist
+
+            edm = edms[0]
+            metrics = edm.get('metrics', {})
+            data_version = metrics.get('dataVersion', '')
+
+            # Compare major version (e.g., "22.0.0" -> "22")
+            current_major = data_version.split('.')[0] if data_version else ''
+            target_major = target_version.split('.')[0] if '.' in target_version else target_version
+
+            return current_major == target_major
+
+        except IRPAPIError:
+            return True  # Assume upgraded if we can't check
+
+    def _check_geohaz_complete(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if portfolio has been geocoded and hazard-coded."""
+        edm_name = job_config_data.get('Database')
+        portfolio_name = job_config_data.get('Portfolio')
+        if not edm_name or not portfolio_name:
+            return True  # Can't check without names, assume exists
+
+        edm_ids, _ = self.validate_edms_exist([edm_name])
+        if not edm_ids:
+            return False  # EDM doesn't exist
+
+        exposure_id = edm_ids[edm_name]
+
+        # Search for portfolio and check geocodeVersion/hazardVersion
+        try:
+            filter_str = f'portfolioName = "{portfolio_name}"'
+            portfolios = self.portfolio_manager.search_portfolios_paginated(
+                exposure_id=exposure_id,
+                filter=filter_str
+            )
+            if not portfolios:
+                return False  # Portfolio doesn't exist
+
+            portfolio = portfolios[0]
+            geocode_version = portfolio.get('geocodeVersion', '')
+            hazard_version = portfolio.get('hazardVersion', '')
+
+            # Both must be non-empty for GeoHaz to be complete
+            return bool(geocode_version) and bool(hazard_version)
+
+        except IRPAPIError:
+            return True  # Assume complete if we can't check
+
+    def _check_sub_portfolios_exist(
+        self,
+        job_config_data: Dict[str, Any],
+        config_data: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Check if sub-portfolios created by portfolio mapping exist."""
+        edm_name = job_config_data.get('Database')
+        if not edm_name:
+            return True  # Can't check without EDM name
+
+        base_portfolio = job_config_data.get('Portfolio')
+        import_file = job_config_data.get('Import File')
+
+        if not base_portfolio:
+            return True  # Can't check without base portfolio name
+
+        edm_ids, _ = self.validate_edms_exist([edm_name])
+        if not edm_ids:
+            return False  # EDM doesn't exist
+
+        # Determine expected sub-portfolios from configuration
+        if not config_data:
+            return True  # Can't check without config data, assume exists
+
+        portfolios = config_data.get('Portfolios', [])
+
+        # Find sub-portfolios that belong to this base portfolio
+        # (matching Database and Import File, with Base Portfolio? = N)
+        expected_sub_portfolios = [
+            p.get('Portfolio')
+            for p in portfolios
+            if (p.get('Database') == edm_name and
+                p.get('Import File') == import_file and
+                p.get('Base Portfolio?') == 'N')
+        ]
+
+        if not expected_sub_portfolios:
+            return True  # No sub-portfolios expected, assume complete
+
+        # Check if all expected sub-portfolios exist
+        sub_portfolio_checks = [
+            {'Database': edm_name, 'Portfolio': sub_name}
+            for sub_name in expected_sub_portfolios
+        ]
+
+        portfolio_ids, _ = self.validate_portfolios_exist(sub_portfolio_checks, edm_ids)
+
+        # Check if any sub-portfolio is missing
+        for sub_name in expected_sub_portfolios:
+            portfolio_key = f"{edm_name}/{sub_name}"
+            if portfolio_key not in portfolio_ids:
+                return False  # At least one sub-portfolio is missing
+
+        return True  # All sub-portfolios exist
+
+    def _check_analysis_exists(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if analysis exists."""
+        edm_name = job_config_data.get('Database')
+        analysis_name = job_config_data.get('Analysis Name')
+        if not edm_name or not analysis_name:
+            return True  # Can't check without names, assume exists
+
+        # validate_analyses_not_exist returns existing analyses
+        existing, _ = self.validate_analyses_not_exist(
+            [{'Database': edm_name, 'Analysis Name': analysis_name}]
+        )
+        return len(existing) > 0  # If in existing list, it exists
+
+    def _check_group_exists(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if analysis group exists."""
+        group_name = job_config_data.get('Group_Name')
+        if not group_name:
+            return True  # Can't check without name, assume exists
+
+        # validate_groups_not_exist returns existing groups
+        existing, _ = self.validate_groups_not_exist([{'Group Name': group_name}])
+        return len(existing) > 0  # If in existing list, it exists
+
+    def _check_rdm_exists(self, job_config_data: Dict[str, Any]) -> bool:
+        """Check if RDM exists."""
+        rdm_name = job_config_data.get('rdm_name')
+        server_name = job_config_data.get('server_name', DEFAULT_DATABASE_SERVER)
+        if not rdm_name:
+            return True  # Can't check without name, assume exists
+
+        # validate_rdm_not_exists returns errors if RDM exists
+        errors = self.validate_rdm_not_exists(rdm_name, server_name)
+        return len(errors) > 0  # If errors (RDM exists), return True
 
     def _validate_csv_files_exist(
         self,

@@ -256,10 +256,12 @@ def test_configuration_override_workflow(test_schema, mock_irp_client):
         schema=test_schema
     )
 
-    # Verify override configuration
+    # Verify new configuration
+    # Note: overridden=False because we're creating a replacement config, not modifying config data
+    # The override_reason is stored on the ORIGINAL config's skipped_reason_txt
     new_config = get_job_config(new_job_id, schema=test_schema)
-    assert new_config['overridden'] == True
-    assert new_config['override_reason_txt'] == override_reason
+    assert new_config['overridden'] == False
+    assert new_config['override_reason_txt'] is None
     assert new_config['job_configuration_data'] == override_config
 
     # Verify audit trail

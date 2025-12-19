@@ -47,6 +47,7 @@ from helpers.configuration import (
     validate_reference_data_with_api
 )
 from helpers.cycle import get_active_cycle_id
+from helpers.entity_validator import EntityValidator
 
 
 class BatchError(Exception):
@@ -542,7 +543,7 @@ def validate_batch(
     - Entities to be created don't already exist
 
     Only validates job configurations for jobs that are ready for submission
-    (INITIATED or ERROR status). This allows re-running notebooks after partial
+    (INITIATED, FAILED, or ERROR status). This allows re-running notebooks after partial
     success - jobs that already completed successfully are not re-validated.
 
     Args:
@@ -552,8 +553,6 @@ def validate_batch(
     Returns:
         List of validation error messages (empty if valid)
     """
-    from helpers.entity_validator import EntityValidator
-
     batch = read_batch(batch_id, schema=schema)
     batch_type = batch['batch_type']
     validator = EntityValidator()
@@ -799,8 +798,13 @@ def submit_batch(
 
     # Submit eligible jobs
     submitted_jobs = []
+    validator = EntityValidator()
+
     for job_record in jobs:
-        if job_record['status'] in JobStatus.ready_for_submit() and not job_record['skipped']:
+        if job_record['skipped']:
+            continue
+
+        if job_record['status'] in JobStatus.ready_for_submit():
             try:
                 # Jobs that failed in Moody's (FAILED status) need to be resubmitted
                 # This creates a new job, skips the original, and submits the new one
@@ -828,6 +832,47 @@ def submit_batch(
                 submitted_jobs.append({
                     'job_id': job_record['id'],
                     'status': 'FAILED',
+                    'error': str(e)
+                })
+
+        elif job_record['status'] == JobStatus.FINISHED:
+            # For FINISHED jobs, check if the entity still exists
+            # If entity is missing (e.g., deleted externally), resubmit the job
+            try:
+                job_config = job.get_job_config(job_record['id'], schema=schema)
+                job_config_data = job_config.get('job_configuration_data', {})
+
+                # Get configuration data for batch types that need it (e.g., portfolio mapping)
+                config = read_configuration(batch['configuration_id'], schema=schema)
+                config_data = config.get('configuration_data', {})
+
+                entity_exists = validator.check_entity_exists_for_job(
+                    job_config_data,
+                    batch['batch_type'],
+                    config_data=config_data
+                )
+
+                if not entity_exists:
+                    # Entity is missing - resubmit the job
+                    new_job_id = job.resubmit_job(
+                        job_record['id'],
+                        irp_client,
+                        batch['batch_type'],
+                        job_configuration_data=job_config_data,
+                        override_reason="Entity missing - resubmitted automatically",
+                        schema=schema
+                    )
+                    submitted_jobs.append({
+                        'job_id': new_job_id,
+                        'original_job_id': job_record['id'],
+                        'status': 'RESUBMITTED',
+                        'reason': 'entity_missing'
+                    })
+            except Exception as e:
+                # Log error but continue with other jobs
+                submitted_jobs.append({
+                    'job_id': job_record['id'],
+                    'status': 'CHECK_FAILED',
                     'error': str(e)
                 })
 

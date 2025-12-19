@@ -346,10 +346,14 @@ class TestShouldExecuteNextStep:
         assert result is True
 
     @patch('helpers.step_chain._build_notebook_path')
-    def test_should_not_execute_when_next_step_already_run(
+    def test_should_execute_even_when_next_step_already_run(
         self, mock_build_path, test_schema, test_batch, test_cycle
     ):
-        """Test returns False when next step has already been executed."""
+        """Test returns True even when next step has already been executed.
+
+        This allows re-running workflows after entity deletion - submit_batch
+        will check entity existence and only resubmit jobs for missing entities.
+        """
         mock_build_path.return_value = Path('/fake/path/notebook.ipynb')
 
         # Mark batch as completed
@@ -387,8 +391,12 @@ class TestShouldExecuteNextStep:
             schema=test_schema
         )
 
+        # Note: should_execute_next_step now returns True even if the next step
+        # was already executed. This allows re-running workflows after entity
+        # deletion - submit_batch will check entity existence and only resubmit
+        # jobs for missing entities.
         result = should_execute_next_step(test_batch['id'], schema=test_schema)
-        assert result is False
+        assert result is True
 
     def test_should_not_execute_when_no_next_step(self, test_schema, test_batch):
         """Test returns False when get_next_step_info returns None."""

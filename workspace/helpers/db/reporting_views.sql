@@ -220,8 +220,8 @@ SELECT
             END
         -- Rule 1: If all configurations are SKIPPED reporting status, then SKIPPED
         WHEN bs.total_configs > 0 AND bs.skipped_configs = bs.total_configs THEN 'SKIPPED'
-        -- Rule 2: If all configurations are FULFILLED, then COMPLETED
-        WHEN bs.total_configs > 0 AND bs.fulfilled_configs = bs.total_configs THEN 'COMPLETED'
+        -- Rule 2: If all non-skipped configurations are FULFILLED, then COMPLETED
+        WHEN bs.non_skipped_configs > 0 AND bs.fulfilled_configs = bs.non_skipped_configs THEN 'COMPLETED'
         -- Rule 3: If all jobs are in UNSUBMITTED reporting status, then UNSUBMITTED
         WHEN bs.all_jobs_unsubmitted AND bs.total_jobs > 0 THEN 'UNSUBMITTED'
         -- Rule 4: If at least one job is in ERROR reporting status, then ERROR
