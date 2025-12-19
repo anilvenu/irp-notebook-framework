@@ -553,8 +553,6 @@ def validate_batch(
     Returns:
         List of validation error messages (empty if valid)
     """
-    from helpers.entity_validator import EntityValidator
-
     batch = read_batch(batch_id, schema=schema)
     batch_type = batch['batch_type']
     validator = EntityValidator()
