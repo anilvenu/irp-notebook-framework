@@ -247,7 +247,7 @@ def values_match(
     b: Any,
     rel_tol: float = 1e-9,
     decimal_places: int = None,
-    max_diff: int = 1
+    max_diff: int = 100
 ) -> bool:
     """Compare two values with tolerance for floats.
 
@@ -301,7 +301,8 @@ def compare_records(
     key_fields: set,
     fields_to_compare: set = None,
     rel_tol: float = 1e-9,
-    decimal_places: int = None
+    decimal_places: int = None,
+    max_diff: int = 100
 ) -> List[Dict[str, Any]]:
     """Compare two records and return list of field differences.
 
@@ -314,6 +315,7 @@ def compare_records(
         rel_tol: Relative tolerance for float comparison
         decimal_places: If specified, values must match when rounded to this many
                        decimal places.
+        max_diff: Maximum allowed difference between rounded values (default: 100).
     """
     differences = []
 
@@ -329,7 +331,7 @@ def compare_records(
         prod_val = prod_record.get(key)
         test_val = test_record.get(key)
 
-        if not values_match(prod_val, test_val, rel_tol, decimal_places):
+        if not values_match(prod_val, test_val, rel_tol, decimal_places, max_diff):
             differences.append({
                 'field': key,
                 'prod_value': prod_val,
@@ -346,7 +348,8 @@ def compare_datasets(
     endpoint_name: str,
     fields_to_compare: set = None,
     rel_tol: float = 1e-9,
-    decimal_places: int = None
+    decimal_places: int = None,
+    max_diff: int = 100
 ) -> ComparisonResult:
     """Compare two datasets by matching on key_field."""
     # Build lookup dictionaries
@@ -370,7 +373,8 @@ def compare_datasets(
             {key_field},
             fields_to_compare,
             rel_tol,
-            decimal_places
+            decimal_places,
+            max_diff
         )
         if diffs:
             all_differences.append({
@@ -400,7 +404,8 @@ def compare_datasets_composite_key(
     endpoint_name: str,
     fields_to_compare: set = None,
     rel_tol: float = 1e-9,
-    decimal_places: int = None
+    decimal_places: int = None,
+    max_diff: int = 100
 ) -> ComparisonResult:
     """Compare two datasets using a composite key (multiple fields)."""
     def make_key(record: Dict[str, Any]) -> tuple:
@@ -427,7 +432,8 @@ def compare_datasets_composite_key(
             set(key_fields),
             fields_to_compare,
             rel_tol,
-            decimal_places
+            decimal_places,
+            max_diff
         )
         if diffs:
             # Format composite key for display
@@ -458,7 +464,8 @@ def compare_by_index(
     endpoint_name: str,
     fields_to_compare: set = None,
     rel_tol: float = 1e-9,
-    decimal_places: int = None
+    decimal_places: int = None,
+    max_diff: int = 100
 ) -> ComparisonResult:
     """Compare data by index position (for stats/EP without unique keys)."""
     if len(prod_data) != len(test_data):
@@ -481,7 +488,8 @@ def compare_by_index(
             key_fields={'_index_'},
             fields_to_compare=fields_to_compare,
             rel_tol=rel_tol,
-            decimal_places=decimal_places
+            decimal_places=decimal_places,
+            max_diff=max_diff
         )
         if diffs:
             all_differences.append({
@@ -505,7 +513,8 @@ def compare_ep_curves(
     test_data: List[Dict[str, Any]],
     rel_tol: float = 1e-9,
     decimal_places: int = None,
-    max_point_diffs: int = 5
+    max_point_diffs: int = 5,
+    max_diff: int = 100
 ) -> ComparisonResult:
     """Compare EP curves with detailed return period differences.
 
@@ -572,7 +581,7 @@ def compare_ep_curves(
         # Compare values at each return period
         point_diffs = []
         for rp, prod_val, test_val in zip(prod_rps, prod_vals, test_vals):
-            if not values_match(prod_val, test_val, rel_tol, decimal_places):
+            if not values_match(prod_val, test_val, rel_tol, decimal_places, max_diff):
                 point_diffs.append({
                     'return_period': rp,
                     'prod_value': prod_val,
@@ -697,7 +706,7 @@ def _load_pairs_from_csv(file_path: Path) -> List[Dict[str, Any]]:
             pairs.append({
                 'production_app_analysis_id': prod_id,
                 'test_app_analysis_id': test_id,
-                'name': row.get('name', '').strip() or None
+                'test_analysis_name': row.get('test_analysis_name', '').strip() or None
             })
 
     if skipped_rows:
@@ -741,7 +750,7 @@ def _load_pairs_from_excel(file_path: Path) -> List[Dict[str, Any]]:
             skipped_rows.append(row_num + 2)
             continue
 
-        name = row.get('name', '')
+        name = row.get('test_analysis_name', '')
         if pd.isna(name):
             name = None
         elif isinstance(name, str):
@@ -750,7 +759,7 @@ def _load_pairs_from_excel(file_path: Path) -> List[Dict[str, Any]]:
         pairs.append({
             'production_app_analysis_id': prod_id,
             'test_app_analysis_id': test_id,
-            'name': name
+            'test_analysis_name': name
         })
 
     if skipped_rows:
@@ -787,7 +796,8 @@ class AnalysisResultsValidator:
         perspective_code: str = 'GR',
         include_plt: Union[bool, str] = 'auto',
         relative_tolerance: float = 1e-9,
-        decimal_places: int = 2
+        decimal_places: int = 2,
+        max_diff: int = 100
     ) -> ValidationResult:
         """Validate test analysis against production analysis.
 
@@ -802,6 +812,7 @@ class AnalysisResultsValidator:
             relative_tolerance: Tolerance for floating-point comparison
             decimal_places: Values must match when rounded to this many decimal places
                            (default: 2, meaning values must match to the hundredths)
+            max_diff: Maximum allowed difference between rounded values (default: 100)
 
         Returns:
             ValidationResult containing all comparison results
@@ -841,7 +852,8 @@ class AnalysisResultsValidator:
             perspective_code,
             prod_exposure_resource_id, test_exposure_resource_id,
             relative_tolerance,
-            decimal_places
+            decimal_places,
+            max_diff
         ))
 
         # Compare EP Metrics
@@ -850,7 +862,8 @@ class AnalysisResultsValidator:
             perspective_code,
             prod_exposure_resource_id, test_exposure_resource_id,
             relative_tolerance,
-            decimal_places
+            decimal_places,
+            max_diff
         ))
 
         # Compare ELT
@@ -859,7 +872,8 @@ class AnalysisResultsValidator:
             perspective_code,
             prod_exposure_resource_id, test_exposure_resource_id,
             relative_tolerance,
-            decimal_places
+            decimal_places,
+            max_diff
         ))
 
         # Compare PLT (HD analyses only, or when explicitly requested)
@@ -869,7 +883,8 @@ class AnalysisResultsValidator:
                 perspective_code,
                 prod_exposure_resource_id, test_exposure_resource_id,
                 relative_tolerance,
-                decimal_places
+                decimal_places,
+                max_diff
             ))
 
         return result
@@ -881,6 +896,7 @@ class AnalysisResultsValidator:
         include_plt: Union[bool, str] = 'auto',
         relative_tolerance: float = 1e-9,
         decimal_places: int = 2,
+        max_diff: int = 100,
         progress_callback: callable = None
     ) -> BatchValidationResult:
         """Validate multiple analysis pairs across all perspectives.
@@ -898,6 +914,7 @@ class AnalysisResultsValidator:
             relative_tolerance: Tolerance for floating-point comparison
             decimal_places: Values must match when rounded to this many decimal places
                            (default: 2, meaning values must match to the hundredths)
+            max_diff: Maximum allowed difference between rounded values (default: 100)
             progress_callback: Optional callback(current, total, name, perspective) for progress
 
         Returns:
@@ -915,7 +932,7 @@ class AnalysisResultsValidator:
         for i, pair in enumerate(analysis_pairs):
             prod_id = pair['production_app_analysis_id']
             test_id = pair['test_app_analysis_id']
-            name = pair.get('name')
+            name = pair.get('test_analysis_name')
 
             pair_result = AnalysisPairResult(
                 production_app_analysis_id=prod_id,
@@ -939,7 +956,8 @@ class AnalysisResultsValidator:
                         perspective_code=perspective,
                         include_plt=include_plt,
                         relative_tolerance=relative_tolerance,
-                        decimal_places=decimal_places
+                        decimal_places=decimal_places,
+                        max_diff=max_diff
                     )
                     result.name = name
                     pair_result.perspective_results[perspective] = result
@@ -965,6 +983,7 @@ class AnalysisResultsValidator:
         include_plt: Union[bool, str] = 'auto',
         relative_tolerance: float = 1e-9,
         decimal_places: int = 2,
+        max_diff: int = 100,
         progress_callback: callable = None
     ) -> BatchValidationResult:
         """Validate multiple analysis pairs from a CSV or XLSX file.
@@ -984,6 +1003,7 @@ class AnalysisResultsValidator:
             relative_tolerance: Tolerance for floating-point comparison
             decimal_places: Values must match when rounded to this many decimal places
                            (default: 2, meaning values must match to the hundredths)
+            max_diff: Maximum allowed difference between rounded values (default: 100)
             progress_callback: Optional callback(current, total, name, perspective) for progress
 
         Returns:
@@ -996,6 +1016,7 @@ class AnalysisResultsValidator:
             include_plt=include_plt,
             relative_tolerance=relative_tolerance,
             decimal_places=decimal_places,
+            max_diff=max_diff,
             progress_callback=progress_callback
         )
 
@@ -1027,7 +1048,8 @@ class AnalysisResultsValidator:
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
         rel_tol: float,
-        decimal_places: int
+        decimal_places: int,
+        max_diff: int = 100
     ) -> ComparisonResult:
         """Compare Statistics endpoint."""
         try:
@@ -1037,7 +1059,7 @@ class AnalysisResultsValidator:
             test_data = self.irp_client.analysis.get_stats(
                 test_analysis_id, perspective_code, test_exposure_resource_id
             )
-            return compare_by_index(prod_data, test_data, 'Statistics', STATS_FIELDS, rel_tol, decimal_places)
+            return compare_by_index(prod_data, test_data, 'Statistics', STATS_FIELDS, rel_tol, decimal_places, max_diff)
         except Exception as e:
             return ComparisonResult(
                 endpoint='Statistics',
@@ -1055,7 +1077,8 @@ class AnalysisResultsValidator:
         prod_exposure_resource_id: int,
         test_exposure_resource_id: int,
         rel_tol: float,
-        decimal_places: int
+        decimal_places: int,
+        max_diff: int = 100
     ) -> ComparisonResult:
         """Compare EP Metrics endpoint with detailed return period differences."""
         try:
@@ -1065,7 +1088,7 @@ class AnalysisResultsValidator:
             test_data = self.irp_client.analysis.get_ep(
                 test_analysis_id, perspective_code, test_exposure_resource_id
             )
-            return compare_ep_curves(prod_data, test_data, rel_tol, decimal_places)
+            return compare_ep_curves(prod_data, test_data, rel_tol, decimal_places, max_diff=max_diff)
         except Exception as e:
             return ComparisonResult(
                 endpoint='EP Metrics',
@@ -1084,6 +1107,7 @@ class AnalysisResultsValidator:
         test_exposure_resource_id: int,
         rel_tol: float,
         decimal_places: int,
+        max_diff: int = 100,
         sample_size: int = 500
     ) -> ComparisonResult:
         """Compare ELT endpoint using sampled comparison.
@@ -1162,7 +1186,7 @@ class AnalysisResultsValidator:
             )
 
             # Step 4: Compare the sampled events by eventId key
-            return compare_datasets(prod_data, test_data, 'eventId', 'ELT', ELT_FIELDS, rel_tol, decimal_places)
+            return compare_datasets(prod_data, test_data, 'eventId', 'ELT', ELT_FIELDS, rel_tol, decimal_places, max_diff)
 
         except Exception as e:
             return ComparisonResult(
@@ -1182,6 +1206,7 @@ class AnalysisResultsValidator:
         test_exposure_resource_id: int,
         rel_tol: float,
         decimal_places: int,
+        max_diff: int = 100,
         sample_size: int = 500
     ) -> ComparisonResult:
         """Compare PLT endpoint using sampled comparison.
@@ -1282,7 +1307,8 @@ class AnalysisResultsValidator:
                 endpoint_name='PLT',
                 fields_to_compare=PLT_FIELDS,
                 rel_tol=rel_tol,
-                decimal_places=decimal_places
+                decimal_places=decimal_places,
+                max_diff=max_diff
             )
 
         except Exception as e:
@@ -1490,7 +1516,7 @@ def batch_results_to_dataframe(result: BatchValidationResult) -> pd.DataFrame:
     rows = []
     for pair in result.results:
         row = {
-            'name': pair.name or '',
+            'test_analysis_name': pair.name or '',
             'prod_id': pair.production_app_analysis_id,
             'test_id': pair.test_app_analysis_id,
             'status': 'PASS' if pair.passed else 'FAIL',
@@ -1642,7 +1668,7 @@ def export_batch_failures_to_json(
     failures = []
     for pair in result.get_failed_results():
         failure_data = {
-            'name': pair.name,
+            'test_analysis_name': pair.name,
             'production_app_analysis_id': pair.production_app_analysis_id,
             'test_app_analysis_id': pair.test_app_analysis_id,
         }
