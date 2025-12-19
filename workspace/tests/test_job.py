@@ -445,11 +445,13 @@ def test_resubmit_job_with_override(test_schema, mock_irp_client):
     new_job = read_job(new_job_id, schema=test_schema)
     assert new_job['job_configuration_id'] != original_config_id
 
-    # Verify new config has override data
+    # Verify new config has replacement data
+    # Note: overridden=False because we're creating a replacement config, not modifying config data
+    # The override_reason is stored on the ORIGINAL config's skipped_reason_txt
     new_config = get_job_config(new_job_id, schema=test_schema)
     assert new_config['job_configuration_data'] == override_config
-    assert new_config['overridden'] == True
-    assert new_config['override_reason_txt'] == override_reason
+    assert new_config['overridden'] == False
+    assert new_config['override_reason_txt'] is None
 
     # Verify parent-child relationship
     assert new_job['parent_job_id'] == original_job_id
@@ -1007,10 +1009,12 @@ def test_resubmit_job_with_override_config_relationships(test_schema, mock_irp_c
     new_config_id = new_job['job_configuration_id']
 
     # Verify NEW configuration has parent_job_configuration_id set
+    # Note: overridden=False because we're creating a replacement config, not modifying config data
+    # The override_reason is stored on the ORIGINAL config's skipped_reason_txt
     new_config = get_job_config(new_job_id, schema=test_schema)
     assert new_config['parent_job_configuration_id'] == original_config_id
-    assert new_config['overridden'] == True
-    assert new_config['override_reason_txt'] == override_reason
+    assert new_config['overridden'] == False
+    assert new_config['override_reason_txt'] is None
 
     # Verify ORIGINAL configuration is marked as skipped
     df = execute_query(
