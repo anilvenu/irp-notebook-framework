@@ -835,8 +835,8 @@ def submit_batch(
                     'error': str(e)
                 })
 
-        elif job_record['status'] == JobStatus.FINISHED:
-            # For FINISHED jobs, check if the entity still exists
+        elif job_record['status'] in (JobStatus.FINISHED, JobStatus.CANCELLED):
+            # For FINISHED/CANCELLED jobs, check if the entity still exists
             # If entity is missing (e.g., deleted externally), resubmit the job
             try:
                 job_config = job.get_job_config(job_record['id'], schema=schema)
