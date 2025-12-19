@@ -1653,8 +1653,8 @@ def submit_job(
             _register_job_submission(
                 job_id,
                 workflow_id='SKIPPED',
-                submission_request=request,
-                submission_response=response,
+                request=request,
+                response=response,
                 submitted_ts=datetime.now(),
                 schema=schema
             )
@@ -1864,7 +1864,9 @@ def resubmit_job(
     with transaction_context(schema=schema):
         # Create new job
         if job_configuration_data:
-            # Override case: Create new job configuration with parent reference
+            # Create new job configuration with same data, skip the original
+            # Note: overridden=False because we're not changing the config data,
+            # just creating a replacement config (e.g., entity was deleted)
             original_config_id = job['job_configuration_id']
 
             # Create NEW job configuration with parent reference
@@ -1873,13 +1875,13 @@ def resubmit_job(
                 configuration_id=configuration_id,
                 job_configuration_data=job_configuration_data,
                 skipped=False,
-                overridden=True,
-                override_reason_txt=override_reason,
+                overridden=False,
+                override_reason_txt=None,
                 parent_job_configuration_id=original_config_id,
                 schema=schema
             )
 
-            # Skip ORIGINAL job configuration (before creating new job)
+            # Skip ORIGINAL job configuration
             skip_job_configuration(
                 job_configuration_id=original_config_id,
                 skipped_reason_txt=override_reason,
