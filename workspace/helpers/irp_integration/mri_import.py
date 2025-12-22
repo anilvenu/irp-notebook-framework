@@ -63,6 +63,25 @@ class MRIImportManager:
         return self._portfolio_manager
 
     @staticmethod
+    def _find_missing_sources(headers: list, items: list) -> List[str]:
+        """Find CSV headers that are not present as sources in mapping items.
+
+        Args:
+            headers: List of CSV column headers
+            items: List of mapping items (dicts with 'source' and 'destination' keys)
+
+        Returns:
+            List of header names (uppercase) that are missing from mapping
+        """
+        existing_sources_upper = {item['source'].upper() for item in items}
+        missing = []
+        for header in headers:
+            header_upper = header.upper()
+            if header_upper not in existing_sources_upper:
+                missing.append(header_upper)
+        return missing
+
+    @staticmethod
     def _add_missing_sources(headers: list, items: list) -> bool:
         """Add missing source entries for CSV headers not in mapping."""
         # Build set of existing sources (uppercase for case-insensitive comparison)
@@ -115,6 +134,76 @@ class MRIImportManager:
             with open(mapping_file_path, 'w') as f:
                 json.dump(mapping, f, indent=4)
             print("Updated mapping.json with new source entries")
+
+    @staticmethod
+    def check_missing_mapping_attributes(
+        mapping_file_path: str,
+        accounts_file_path: str,
+        locations_file_path: str
+    ) -> Dict[str, Any]:
+        """
+        Check for CSV headers that are missing from the mapping file (without modifying).
+
+        This is a read-only operation that reports which CSV columns do not have
+        corresponding source entries in the mapping file.
+
+        Args:
+            mapping_file_path: Path to the mapping.json file
+            accounts_file_path: Path to the accounts CSV file
+            locations_file_path: Path to the locations CSV file
+
+        Returns:
+            Dict containing:
+                - accounts_file: Name of accounts file
+                - locations_file: Name of locations file
+                - mapping_file: Name of mapping file
+                - account_headers: List of all account CSV headers
+                - location_headers: List of all location CSV headers
+                - missing_account_attributes: List of account headers missing from mapping
+                - missing_location_attributes: List of location headers missing from mapping
+                - has_missing: Boolean indicating if any attributes are missing
+
+        Raises:
+            IRPFileError: If any file cannot be read
+        """
+        validate_file_exists(mapping_file_path, "mapping_file_path")
+        validate_file_exists(accounts_file_path, "accounts_file_path")
+        validate_file_exists(locations_file_path, "locations_file_path")
+
+        try:
+            with open(mapping_file_path, 'r') as f:
+                mapping = json.load(f)
+        except json.JSONDecodeError as e:
+            raise IRPFileError(f"Invalid JSON in mapping file '{mapping_file_path}': {e}")
+        except Exception as e:
+            raise IRPFileError(f"Failed to read mapping file '{mapping_file_path}': {e}")
+
+        try:
+            account_headers = list(pd.read_csv(accounts_file_path, nrows=0).columns)
+        except Exception as e:
+            raise IRPFileError(f"Failed to read accounts file '{accounts_file_path}': {e}")
+
+        try:
+            location_headers = list(pd.read_csv(locations_file_path, nrows=0).columns)
+        except Exception as e:
+            raise IRPFileError(f"Failed to read locations file '{locations_file_path}': {e}")
+
+        account_items = mapping.get('accountItems', [])
+        location_items = mapping.get('locationItems', [])
+
+        missing_account = MRIImportManager._find_missing_sources(account_headers, account_items)
+        missing_location = MRIImportManager._find_missing_sources(location_headers, location_items)
+
+        return {
+            'accounts_file': os.path.basename(accounts_file_path),
+            'locations_file': os.path.basename(locations_file_path),
+            'mapping_file': os.path.basename(mapping_file_path),
+            'account_headers': [h.upper() for h in account_headers],
+            'location_headers': [h.upper() for h in location_headers],
+            'missing_account_attributes': missing_account,
+            'missing_location_attributes': missing_location,
+            'has_missing': len(missing_account) > 0 or len(missing_location) > 0
+        }
 
     def create_aws_bucket(self) -> requests.Response:
         """
