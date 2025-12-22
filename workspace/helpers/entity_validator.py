@@ -669,19 +669,24 @@ class EntityValidator:
             if edm and analysis_name:
                 by_edm.setdefault(edm, []).append(analysis_name)
 
+        # Batch the lookups to avoid "Request Header Fields Too Large" errors
+        BATCH_SIZE = 25
+
         for edm_name, analysis_names in by_edm.items():
+            analysis_names_set = set(analysis_names)
             try:
-                # Build filter for analyses in this EDM
-                # Need to combine analysisName IN (...) with exposureName filter
-                quoted = ", ".join(f'"{name}"' for name in analysis_names)
-                filter_str = f'analysisName IN ({quoted}) AND exposureName = "{edm_name}"'
+                # Process in batches
+                for i in range(0, len(analysis_names), BATCH_SIZE):
+                    batch = analysis_names[i:i + BATCH_SIZE]
+                    quoted = ", ".join(f'"{name}"' for name in batch)
+                    filter_str = f'analysisName IN ({quoted}) AND exposureName = "{edm_name}"'
 
-                found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
+                    found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
 
-                for a in found:
-                    name = a.get('analysisName')
-                    if name in analysis_names:
-                        existing.append(f"{edm_name}/{name}")
+                    for a in found:
+                        name = a.get('analysisName')
+                        if name in analysis_names_set:
+                            existing.append(f"{edm_name}/{name}")
 
             except IRPAPIError as e:
                 errors.append(f"ENT-API-001: Failed to check analyses in {edm_name}: {e}")
