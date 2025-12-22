@@ -669,19 +669,24 @@ class EntityValidator:
             if edm and analysis_name:
                 by_edm.setdefault(edm, []).append(analysis_name)
 
+        # Batch the lookups to avoid "Request Header Fields Too Large" errors
+        BATCH_SIZE = 25
+
         for edm_name, analysis_names in by_edm.items():
+            analysis_names_set = set(analysis_names)
             try:
-                # Build filter for analyses in this EDM
-                # Need to combine analysisName IN (...) with exposureName filter
-                quoted = ", ".join(f'"{name}"' for name in analysis_names)
-                filter_str = f'analysisName IN ({quoted}) AND exposureName = "{edm_name}"'
+                # Process in batches
+                for i in range(0, len(analysis_names), BATCH_SIZE):
+                    batch = analysis_names[i:i + BATCH_SIZE]
+                    quoted = ", ".join(f'"{name}"' for name in batch)
+                    filter_str = f'analysisName IN ({quoted}) AND exposureName = "{edm_name}"'
 
-                found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
+                    found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
 
-                for a in found:
-                    name = a.get('analysisName')
-                    if name in analysis_names:
-                        existing.append(f"{edm_name}/{name}")
+                    for a in found:
+                        name = a.get('analysisName')
+                        if name in analysis_names_set:
+                            existing.append(f"{edm_name}/{name}")
 
             except IRPAPIError as e:
                 errors.append(f"ENT-API-001: Failed to check analyses in {edm_name}: {e}")
@@ -722,17 +727,23 @@ class EntityValidator:
         if not group_names:
             return [], []
 
+        # Batch the lookups to avoid "Request Header Fields Too Large" errors
+        # when there are many group names (URL query string has size limits)
+        BATCH_SIZE = 25
+        group_names_set = set(group_names)
+
         try:
-            # Build IN filter for all group names
-            quoted = ", ".join(f'"{name}"' for name in group_names)
-            filter_str = f"analysisName IN ({quoted})"
+            for i in range(0, len(group_names), BATCH_SIZE):
+                batch = group_names[i:i + BATCH_SIZE]
+                quoted = ", ".join(f'"{name}"' for name in batch)
+                filter_str = f"analysisName IN ({quoted})"
 
-            found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
+                found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
 
-            for g in found:
-                name = g.get('analysisName')
-                if name in group_names:
-                    existing.append(name)
+                for g in found:
+                    name = g.get('analysisName')
+                    if name in group_names_set:
+                        existing.append(name)
 
         except IRPAPIError as e:
             errors.append(f"ENT-API-001: Failed to check group existence: {e}")
@@ -776,14 +787,21 @@ class EntityValidator:
                 # No EDM mapping - can't look up
                 missing.append(f"?/{analysis_name} (no EDM mapping)")
 
+        # Batch the lookups to avoid "Request Header Fields Too Large" errors
+        BATCH_SIZE = 25
+
         for edm_name, names in by_edm.items():
             try:
-                # Build filter for analyses in this EDM
-                quoted = ", ".join(f'"{name}"' for name in names)
-                filter_str = f'analysisName IN ({quoted}) AND exposureName = "{edm_name}"'
+                found_names = set()
 
-                found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
-                found_names = {a.get('analysisName') for a in found}
+                # Process in batches
+                for i in range(0, len(names), BATCH_SIZE):
+                    batch = names[i:i + BATCH_SIZE]
+                    quoted = ", ".join(f'"{name}"' for name in batch)
+                    filter_str = f'analysisName IN ({quoted}) AND exposureName = "{edm_name}"'
+
+                    found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
+                    found_names.update(a.get('analysisName') for a in found)
 
                 for name in names:
                     if name not in found_names:
@@ -820,13 +838,19 @@ class EntityValidator:
         errors = []
         missing = []
 
-        try:
-            # Build IN filter for all group names
-            quoted = ", ".join(f'"{name}"' for name in group_names)
-            filter_str = f"analysisName IN ({quoted})"
+        # Batch the lookups to avoid "Request Header Fields Too Large" errors
+        BATCH_SIZE = 25
 
-            found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
-            found_names = {g.get('analysisName') for g in found}
+        try:
+            found_names = set()
+
+            for i in range(0, len(group_names), BATCH_SIZE):
+                batch = group_names[i:i + BATCH_SIZE]
+                quoted = ", ".join(f'"{name}"' for name in batch)
+                filter_str = f"analysisName IN ({quoted})"
+
+                found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
+                found_names.update(g.get('analysisName') for g in found)
 
             for name in group_names:
                 if name not in found_names:
