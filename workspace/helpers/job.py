@@ -1665,6 +1665,16 @@ def submit_job(
             # Submission failed - set job to ERROR status
             update_job_status(job_id, JobStatus.ERROR, schema=schema)
 
+            # Store submission info for audit trail even though job failed
+            _register_job_submission(
+                job_id,
+                workflow_id='ERROR',
+                request=request,
+                response=response,
+                submitted_ts=datetime.now(),
+                schema=schema
+            )
+
             # Get error message and raise to caller
             error_msg = response.get('error', 'Unknown submission error')
             raise JobError(f"Job submission failed: {error_msg}")
