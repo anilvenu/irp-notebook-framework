@@ -1658,7 +1658,9 @@ def submit_job(
                 submitted_ts=datetime.now(),
                 schema=schema
             )
-            return job_id
+
+            # Raise exception so caller knows job was skipped
+            raise JobError(f"Job skipped: {skip_reason}")
 
         # Check if submission failed (workflow_id is None but not a skip)
         if workflow_id is None:
