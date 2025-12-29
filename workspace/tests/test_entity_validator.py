@@ -2767,8 +2767,9 @@ class TestValidateGroupingBatch:
     def test_empty_groupings_returns_no_errors(self):
         """Empty grouping list should return no errors."""
         validator = EntityValidator()
-        errors = validator.validate_grouping_batch([])
-        assert errors == []
+        messages, existing_groups = validator.validate_grouping_batch([])
+        assert messages == []
+        assert existing_groups == []
 
     def test_valid_batch_returns_no_errors(self):
         """Valid grouping batch should return no errors."""
@@ -2787,9 +2788,10 @@ class TestValidateGroupingBatch:
             'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_batch(groupings)
 
-        assert errors == []
+        assert messages == []
+        assert existing_groups == []
 
     def test_missing_analysis_returns_warning(self):
         """Missing analysis should return warning (not blocking error)."""
@@ -2808,12 +2810,13 @@ class TestValidateGroupingBatch:
             'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
         }]
 
-        messages = validator.validate_grouping_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_batch(groupings)
 
         assert len(messages) == 1
         assert 'WARN-ANALYSIS-001' in messages[0]  # Warning, not error
         assert 'A2' in messages[0]
         assert 'will be skipped' in messages[0]
+        assert existing_groups == []
 
     def test_existing_group_returns_error(self):
         """Existing group name should return error."""
@@ -2832,11 +2835,12 @@ class TestValidateGroupingBatch:
             'analysis_edm_map': {'A1': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_batch(groupings)
 
-        assert len(errors) == 1
-        assert 'ENT-GROUP-001' in errors[0]
-        assert 'ExistingGroup' in errors[0]
+        assert len(messages) == 1
+        assert 'ENT-GROUP-001' in messages[0]
+        assert 'ExistingGroup' in messages[0]
+        assert existing_groups == ['ExistingGroup']
 
     def test_multiple_groups_validated(self):
         """Multiple groups should all be validated."""
@@ -2862,9 +2866,10 @@ class TestValidateGroupingBatch:
             }
         ]
 
-        errors = validator.validate_grouping_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_batch(groupings)
 
-        assert errors == []
+        assert messages == []
+        assert existing_groups == []
 
     def test_multiple_messages_returned(self):
         """Multiple validation issues should all be reported (warnings and errors)."""
@@ -2883,11 +2888,12 @@ class TestValidateGroupingBatch:
             'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
         }]
 
-        messages = validator.validate_grouping_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_batch(groupings)
 
         message_codes = [m.split(':')[0] for m in messages]
         assert 'WARN-ANALYSIS-001' in message_codes  # Missing analysis is a warning
         assert 'ENT-GROUP-001' in message_codes  # Existing group is still an error
+        assert existing_groups == ['ExistingGroup']
 
 
 class TestValidateGroupingRollupBatch:
@@ -2896,8 +2902,9 @@ class TestValidateGroupingRollupBatch:
     def test_empty_groupings_returns_no_errors(self):
         """Empty grouping list should return no errors."""
         validator = EntityValidator()
-        errors = validator.validate_grouping_rollup_batch([])
-        assert errors == []
+        messages, existing_groups = validator.validate_grouping_rollup_batch([])
+        assert messages == []
+        assert existing_groups == []
 
     def test_valid_batch_returns_no_errors(self):
         """Valid rollup batch should return no errors."""
@@ -2918,9 +2925,10 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {'Analysis1': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_rollup_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_rollup_batch(groupings)
 
-        assert errors == []
+        assert messages == []
+        assert existing_groups == []
 
     def test_missing_child_group_returns_warning(self):
         """Missing child group should return warning (not blocking error)."""
@@ -2940,12 +2948,13 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {}
         }]
 
-        messages = validator.validate_grouping_rollup_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_rollup_batch(groupings)
 
         assert len(messages) == 1
         assert 'WARN-GROUP-001' in messages[0]  # Warning, not error
         assert 'MissingChildGroup' in messages[0]
         assert 'will be skipped' in messages[0]
+        assert existing_groups == []
 
     def test_missing_analysis_returns_warning(self):
         """Missing analysis in rollup should return warning (not blocking error)."""
@@ -2965,11 +2974,12 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {'MissingAnalysis': 'EDM1'}
         }]
 
-        messages = validator.validate_grouping_rollup_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_rollup_batch(groupings)
 
         assert len(messages) == 1
         assert 'WARN-ANALYSIS-001' in messages[0]  # Warning, not error
         assert 'will be skipped' in messages[0]
+        assert existing_groups == []
 
     def test_existing_rollup_group_returns_error(self):
         """Existing rollup group name should return error."""
@@ -2989,11 +2999,12 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {}
         }]
 
-        errors = validator.validate_grouping_rollup_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_rollup_batch(groupings)
 
-        assert len(errors) == 1
-        assert 'ENT-GROUP-001' in errors[0]
-        assert 'ExistingRollup' in errors[0]
+        assert len(messages) == 1
+        assert 'ENT-GROUP-001' in messages[0]
+        assert 'ExistingRollup' in messages[0]
+        assert existing_groups == ['ExistingRollup']
 
     def test_mixed_items_validated(self):
         """Rollup with both groups and analyses should validate all."""
@@ -3014,9 +3025,10 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {'Analysis1': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_rollup_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_rollup_batch(groupings)
 
-        assert errors == []
+        assert messages == []
+        assert existing_groups == []
 
     def test_multiple_messages_returned(self):
         """Multiple validation issues should all be reported (warnings and errors)."""
@@ -3037,12 +3049,13 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {'MissingAnalysis': 'EDM1'}
         }]
 
-        messages = validator.validate_grouping_rollup_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_rollup_batch(groupings)
 
         message_codes = [m.split(':')[0] for m in messages]
         assert 'WARN-GROUP-001' in message_codes      # Missing child group is warning
         assert 'WARN-ANALYSIS-001' in message_codes   # Missing analysis is warning
         assert 'ENT-GROUP-001' in message_codes       # Rollup already exists is error
+        assert existing_groups == ['ExistingRollup']
 
     def test_only_analyses_no_child_groups(self):
         """Rollup with only analyses (no child groups) should work."""
@@ -3062,9 +3075,10 @@ class TestValidateGroupingRollupBatch:
             'analysis_edm_map': {'A1': 'EDM1', 'A2': 'EDM1'}
         }]
 
-        errors = validator.validate_grouping_rollup_batch(groupings)
+        messages, existing_groups = validator.validate_grouping_rollup_batch(groupings)
 
-        assert errors == []
+        assert messages == []
+        assert existing_groups == []
 
 
 class TestValidateRdmExportBatch:
