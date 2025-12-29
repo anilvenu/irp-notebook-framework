@@ -1641,6 +1641,7 @@ def submit_job(
         # Check if job should be skipped (e.g., all analyses missing for grouping)
         if response.get('skip_job'):
             # Skip this job - mark both job and job configuration as skipped
+            # Job remains in INITIATED status since we never actually submitted to Moody's
             skip_reason = response.get('skip_reason', 'Job skipped during submission')
             skip_job_configuration(
                 job_config['id'],
@@ -1649,16 +1650,8 @@ def submit_job(
             )
             skip_job(job_id, schema=schema)
 
-            # Store submission info for audit trail even though job was skipped
-            _register_job_submission(
-                job_id,
-                workflow_id='SKIPPED',
-                request=request,
-                response=response,
-                submitted_ts=datetime.now(),
-                schema=schema
-            )
-            return job_id
+            # Raise exception so caller knows job was skipped
+            raise JobError(f"Job skipped: {skip_reason}")
 
         # Check if submission failed (workflow_id is None but not a skip)
         if workflow_id is None:
@@ -2052,6 +2045,66 @@ def delete_analyses_for_jobs(
 
         except Exception as e:
             error_msg = f"{analysis_name} ({edm_name}): {e}"
+            errors.append(error_msg)
+
+    return errors
+
+
+def delete_groups_for_jobs(
+    jobs_to_delete: List[Dict[str, Any]],
+    irp_client: IRPClient
+) -> List[str]:
+    """
+    Delete groups in Moody's for jobs that have existing groups.
+
+    This is used during resubmission workflows when groups need to be
+    deleted before jobs can be resubmitted. The function looks up the
+    group (analysis) ID from Moody's API using the group name.
+
+    Note: In Moody's, groups are stored as analyses, so we use the
+    analysis API to search and delete them.
+
+    Args:
+        jobs_to_delete: List of job info dicts with 'group_name' key
+        irp_client: IRPClient instance for Moody's API calls
+
+    Returns:
+        List of error messages for any deletions that failed.
+        Empty list if all deletions succeeded.
+
+    Example:
+        >>> errors = delete_groups_for_jobs(
+        ...     jobs_to_delete=[{'group_name': 'My Group'}],
+        ...     irp_client=client
+        ... )
+        >>> if errors:
+        ...     print(f"{len(errors)} deletion(s) failed")
+    """
+    errors = []
+
+    for job in jobs_to_delete:
+        group_name = job.get('group_name')
+
+        if not group_name:
+            errors.append(f"Invalid job info - missing group_name: {job}")
+            continue
+
+        try:
+            # Look up the group (analysis) ID from Moody's API
+            # Groups are global (not scoped to an EDM), so we just search by name
+            filter_str = f'analysisName = "{group_name}"'
+            found = irp_client.analysis.search_analyses_paginated(filter=filter_str)
+
+            if not found:
+                errors.append(f"{group_name}: Group not found in Moody's")
+                continue
+
+            # Delete the group (which is an analysis under the hood)
+            analysis_id = found[0].get('analysisId')
+            irp_client.analysis.delete_analysis(analysis_id)
+
+        except Exception as e:
+            error_msg = f"{group_name}: {e}"
             errors.append(error_msg)
 
     return errors
