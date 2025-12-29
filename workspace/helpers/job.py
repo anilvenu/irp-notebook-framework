@@ -2055,3 +2055,63 @@ def delete_analyses_for_jobs(
             errors.append(error_msg)
 
     return errors
+
+
+def delete_groups_for_jobs(
+    jobs_to_delete: List[Dict[str, Any]],
+    irp_client: IRPClient
+) -> List[str]:
+    """
+    Delete groups in Moody's for jobs that have existing groups.
+
+    This is used during resubmission workflows when groups need to be
+    deleted before jobs can be resubmitted. The function looks up the
+    group (analysis) ID from Moody's API using the group name.
+
+    Note: In Moody's, groups are stored as analyses, so we use the
+    analysis API to search and delete them.
+
+    Args:
+        jobs_to_delete: List of job info dicts with 'group_name' key
+        irp_client: IRPClient instance for Moody's API calls
+
+    Returns:
+        List of error messages for any deletions that failed.
+        Empty list if all deletions succeeded.
+
+    Example:
+        >>> errors = delete_groups_for_jobs(
+        ...     jobs_to_delete=[{'group_name': 'My Group'}],
+        ...     irp_client=client
+        ... )
+        >>> if errors:
+        ...     print(f"{len(errors)} deletion(s) failed")
+    """
+    errors = []
+
+    for job in jobs_to_delete:
+        group_name = job.get('group_name')
+
+        if not group_name:
+            errors.append(f"Invalid job info - missing group_name: {job}")
+            continue
+
+        try:
+            # Look up the group (analysis) ID from Moody's API
+            # Groups are global (not scoped to an EDM), so we just search by name
+            filter_str = f'analysisName = "{group_name}"'
+            found = irp_client.analysis.search_analyses_paginated(filter=filter_str)
+
+            if not found:
+                errors.append(f"{group_name}: Group not found in Moody's")
+                continue
+
+            # Delete the group (which is an analysis under the hood)
+            analysis_id = found[0].get('analysisId')
+            irp_client.analysis.delete_analysis(analysis_id)
+
+        except Exception as e:
+            error_msg = f"{group_name}: {e}"
+            errors.append(error_msg)
+
+    return errors
