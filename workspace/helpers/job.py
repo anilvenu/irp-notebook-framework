@@ -1641,6 +1641,7 @@ def submit_job(
         # Check if job should be skipped (e.g., all analyses missing for grouping)
         if response.get('skip_job'):
             # Skip this job - mark both job and job configuration as skipped
+            # Job remains in INITIATED status since we never actually submitted to Moody's
             skip_reason = response.get('skip_reason', 'Job skipped during submission')
             skip_job_configuration(
                 job_config['id'],
@@ -1648,16 +1649,6 @@ def submit_job(
                 schema=schema
             )
             skip_job(job_id, schema=schema)
-
-            # Store submission info for audit trail even though job was skipped
-            _register_job_submission(
-                job_id,
-                workflow_id='SKIPPED',
-                request=request,
-                response=response,
-                submitted_ts=datetime.now(),
-                schema=schema
-            )
 
             # Raise exception so caller knows job was skipped
             raise JobError(f"Job skipped: {skip_reason}")
