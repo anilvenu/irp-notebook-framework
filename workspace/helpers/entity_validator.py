@@ -1455,7 +1455,7 @@ class EntityValidator:
     def validate_grouping_rollup_batch(
         self,
         groupings: List[Dict[str, Any]]
-    ) -> List[str]:
+    ) -> Tuple[List[str], List[str]]:
         """
         Validate Grouping Rollup batch submission.
 
@@ -1473,14 +1473,18 @@ class EntityValidator:
                       'analysis_edm_map', and 'group_names' keys
 
         Returns:
-            List of error/warning messages. Warnings are prefixed with 'WARN-'
-            and indicate missing analyses/groups that will be skipped during submission.
+            Tuple of (error_messages, existing_rollup_group_names)
+            existing_rollup_group_names are rollup group names that already exist in Moody's.
+            This allows callers to auto-delete them before submission.
+            Warnings are prefixed with 'WARN-' and indicate missing analyses/groups
+            that will be skipped during submission.
             Errors (without WARN- prefix) block submission.
         """
         if not groupings:
-            return []
+            return [], []
 
         all_messages = []
+        existing_rollup_groups = []
 
         # Collect items, separating groups from analyses
         all_child_groups = []
@@ -1531,10 +1535,10 @@ class EntityValidator:
 
         # Rollup groups must NOT exist - this is still an error
         if group_names_to_create:
-            _, group_errors = self.validate_groups_not_exist(group_names_to_create)
+            existing_rollup_groups, group_errors = self.validate_groups_not_exist(group_names_to_create)
             all_messages.extend(group_errors)
 
-        return all_messages
+        return all_messages, existing_rollup_groups
 
     def validate_analysis_batch(
         self,
