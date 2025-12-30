@@ -138,6 +138,51 @@ class ComparisonResult:
     extra_in_test: List[Any] = field(default_factory=list)
     error: Optional[str] = None
 
+    def get_largest_difference(self) -> Optional[Dict[str, Any]]:
+        """Find the largest absolute value difference across all differences.
+
+        Only considers numeric differences (int/float values).
+
+        Returns:
+            Dict with keys: 'key', 'field', 'prod_value', 'test_value',
+            'absolute_diff', 'percent_diff' (None if prod is 0), or None if no numeric diffs.
+        """
+        if not self.differences:
+            return None
+
+        largest = None
+        max_abs_diff = -1.0
+
+        for diff_record in self.differences:
+            key = diff_record.get('key')
+            for field_diff in diff_record.get('differences', []):
+                prod_val = field_diff.get('prod_value')
+                test_val = field_diff.get('test_value')
+
+                # Only process numeric values
+                if not isinstance(prod_val, (int, float)) or not isinstance(test_val, (int, float)):
+                    continue
+
+                abs_diff = abs(float(prod_val) - float(test_val))
+                if abs_diff > max_abs_diff:
+                    max_abs_diff = abs_diff
+                    # Calculate percentage difference from production
+                    if prod_val != 0:
+                        pct_diff = ((test_val - prod_val) / abs(prod_val)) * 100
+                    else:
+                        pct_diff = None
+
+                    largest = {
+                        'key': key,
+                        'field': field_diff.get('field', 'unknown'),
+                        'prod_value': float(prod_val),
+                        'test_value': float(test_val),
+                        'absolute_diff': abs_diff,
+                        'percent_diff': pct_diff
+                    }
+
+        return largest
+
 
 @dataclass
 class ValidationResult:
@@ -1569,14 +1614,31 @@ def batch_results_to_dataframe(result: BatchValidationResult) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _format_large_number(value: float) -> str:
+    """Format a large number with K/M/B suffixes for readability."""
+    abs_val = abs(value)
+    if abs_val >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.1f}B"
+    elif abs_val >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    elif abs_val >= 1_000:
+        return f"{value / 1_000:.1f}K"
+    else:
+        return f"{value:.1f}"
+
+
 def _endpoint_status(result: Optional[ComparisonResult]) -> str:
-    """Get status string for an endpoint result."""
+    """Get status string for an endpoint result.
+
+    For failed endpoints, includes the largest difference value and percentage.
+    """
     if result is None:
         return 'N/A'
     if result.error:
         return 'ERROR'
     if result.passed:
         return 'PASS'
+
     # Build failure summary
     issues = []
     if result.differences:
@@ -1585,7 +1647,22 @@ def _endpoint_status(result: Optional[ComparisonResult]) -> str:
         issues.append(f"{len(result.missing_in_test)} miss")
     if result.extra_in_test:
         issues.append(f"{len(result.extra_in_test)} extra")
-    return f"FAIL ({', '.join(issues)})" if issues else 'FAIL'
+
+    status = f"FAIL ({', '.join(issues)})" if issues else 'FAIL'
+
+    # Add largest difference info if available
+    largest = result.get_largest_difference()
+    if largest:
+        abs_diff = largest['absolute_diff']
+        pct_diff = largest['percent_diff']
+
+        status += f"\nLargest: {_format_large_number(abs_diff)}"
+        if pct_diff is not None:
+            status += f"\nPct Diff: {pct_diff:+.1f}%"
+        else:
+            status += "\nPct Diff: N/A"
+
+    return status
 
 
 def print_batch_summary(result: BatchValidationResult) -> None:
