@@ -1034,7 +1034,6 @@ class AnalysisManager:
             IRPAPIError: If request fails
         """
         validate_positive_int(analysis_id, "analysis_id")
-        validate_positive_int(exposure_resource_id, "exposure_resource_id")
         self._validate_perspective_code(perspective_code)
 
         params = {
@@ -1082,7 +1081,6 @@ class AnalysisManager:
             IRPAPIError: If request fails
         """
         validate_positive_int(analysis_id, "analysis_id")
-        validate_positive_int(exposure_resource_id, "exposure_resource_id")
         self._validate_perspective_code(perspective_code)
 
         params = {
@@ -1123,7 +1121,6 @@ class AnalysisManager:
             IRPAPIError: If request fails
         """
         validate_positive_int(analysis_id, "analysis_id")
-        validate_positive_int(exposure_resource_id, "exposure_resource_id")
         self._validate_perspective_code(perspective_code)
 
         params = {
@@ -1172,7 +1169,6 @@ class AnalysisManager:
             IRPAPIError: If request fails
         """
         validate_positive_int(analysis_id, "analysis_id")
-        validate_positive_int(exposure_resource_id, "exposure_resource_id")
         self._validate_perspective_code(perspective_code)
 
         params = {
