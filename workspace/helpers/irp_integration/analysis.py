@@ -14,7 +14,7 @@ from .constants import (
     SEARCH_ANALYSIS_JOBS, SEARCH_ANALYSIS_RESULTS,
     WORKFLOW_COMPLETED_STATUSES, WORKFLOW_IN_PROGRESS_STATUSES,
     GET_ANALYSIS_ELT, GET_ANALYSIS_EP, GET_ANALYSIS_STATS, GET_ANALYSIS_PLT,
-    PERSPECTIVE_CODES
+    GET_ANALYSIS_REGIONS, PERSPECTIVE_CODES
 )
 from .exceptions import IRPAPIError, IRPJobError, IRPReferenceDataError, IRPValidationError
 from .validators import validate_non_empty_string, validate_positive_int, validate_list_not_empty
@@ -403,12 +403,265 @@ class AnalysisManager:
 
         return job_ids
 
+    def build_region_peril_simulation_set(
+        self,
+        analysis_ids: List[int]
+    ) -> List[Dict[str, Any]]:
+        """
+        Build regionPerilSimulationSet from analysis/group IDs for grouping requests.
+
+        This method fetches regions for each analysis/group and builds the required
+        regionPerilSimulationSet structure. This is required for mixed ELT/PLT grouping
+        (combining DLM and HD analyses/groups).
+
+        For ELT framework (DLM):
+            - eventRateSchemeId comes from regions response (rateSchemeId)
+            - simulationSetId is looked up from SimulationSet table using eventRateSchemeId
+
+        For PLT framework (HD):
+            - eventRateSchemeId = 0 (always zero for PLT in grouping requests)
+            - simulationSetId = petId from regions response
+
+        For Compound Perils (subPeril contains "+"):
+            - If ALL analyses have compound perils -> return empty array
+            - If SOME analyses have compound perils -> all analyses contribute normally
+            - The API handles event correlation internally when array is empty
+            - Examples: "Surge + Wind", "Tornado + Hail + Wind"
+
+        Args:
+            analysis_ids: List of analysis or group IDs to include
+
+        Returns:
+            List of region/peril simulation set entries, each containing:
+                - engineVersion: Engine version (e.g., "RL23", "HDv2.0")
+                - eventRateSchemeId: Event rate scheme ID (0 for PLT)
+                - modelRegionCode: Model region code (subRegion from regions)
+                - modelVersion: Model version (looked up from SoftwareModelVersionMap)
+                - perilCode: Peril code (e.g., "EQ", "WS", "FL")
+                - regionCode: Region code (e.g., "NA", "US")
+                - simulationPeriods: Number of simulation periods
+                - simulationSetId: Simulation set ID
+
+            Returns empty list if ALL analyses have compound perils.
+
+        Raises:
+            IRPAPIError: If any API calls fail
+        """
+        validate_list_not_empty(analysis_ids, "analysis_ids")
+
+        # Fetch analysis info and regions for each analysis
+        # Track: frameworks present, eventRateSchemeIds per peril/region
+        analysis_info_cache = {}
+        all_regions = []
+        has_plt = False
+        event_rate_schemes_by_peril_region = {}  # (perilCode, regionCode) -> set of eventRateSchemeIds
+
+        for analysis_id in analysis_ids:
+            try:
+                # Get analysis info from search
+                analysis_info = self.search_analyses(filter=f"analysisId={analysis_id}")
+                if not analysis_info:
+                    continue
+
+                info = analysis_info[0]
+                analysis_info_cache[analysis_id] = info
+                peril_code = info.get('perilCode', '')
+                region_code = info.get('regionCode', '')
+                framework = info.get('analysisFramework', 'ELT')
+
+                # Track if any PLT analyses exist
+                if framework == 'PLT':
+                    has_plt = True
+
+                # Get eventRateSchemeId from full analysis details (additionalProperties)
+                # Structure differs for grouped vs non-grouped analyses:
+                # - Non-grouped: key='eventRateSchemeId', properties[0].id has the value
+                # - Grouped (isGroup=true): key='eventRateSchemes', properties[0].value.eventRateSchemeId
+                event_rate_scheme_id = None
+                try:
+                    full_analysis = self.get_analysis_by_id(analysis_id)
+                    additional_props = full_analysis.get('additionalProperties', [])
+                    is_group = full_analysis.get('isGroup', False)
+
+                    for prop in additional_props:
+                        if is_group and prop.get('key') == 'eventRateSchemes':
+                            # Grouped analysis: eventRateSchemeId is in value object
+                            properties = prop.get('properties', [])
+                            if properties:
+                                value = properties[0].get('value', {})
+                                if isinstance(value, dict):
+                                    event_rate_scheme_id = value.get('eventRateSchemeId')
+                            break
+                        elif not is_group and prop.get('key') == 'eventRateSchemeId':
+                            # Non-grouped analysis: eventRateSchemeId is in properties[0].id
+                            properties = prop.get('properties', [])
+                            if properties:
+                                event_rate_scheme_id = properties[0].get('id')
+                            break
+                except IRPAPIError:
+                    pass
+
+                # Track eventRateSchemeIds per peril/region for disambiguation check
+                if event_rate_scheme_id is not None:
+                    key = (peril_code, region_code)
+                    if key not in event_rate_schemes_by_peril_region:
+                        event_rate_schemes_by_peril_region[key] = set()
+                    event_rate_schemes_by_peril_region[key].add(event_rate_scheme_id)
+
+                # Get regions for this analysis
+                regions = self.get_regions(analysis_id)
+                for region in regions:
+                    # Track PLT from regions too (in case analysisFramework differs)
+                    if region.get('framework') == 'PLT':
+                        has_plt = True
+                    # Enrich region with perilCode, regionCode, and eventRateSchemeId
+                    region['_perilCode'] = peril_code
+                    region['_regionCode'] = region_code
+                    region['_eventRateSchemeId'] = event_rate_scheme_id
+                    all_regions.append(region)
+            except IRPAPIError:
+                # If an analysis has no regions (e.g., raw DLM analysis), skip it
+                continue
+
+        if not all_regions:
+            return []
+
+        # Determine if we need to populate the array or can return empty
+        # Per API docs: regionPerilSimulationSet is "Required for HD analysis groups (PLT-based groups)"
+        # Also required when multiple eventRateSchemeIds exist for same peril/region (disambiguation)
+        needs_simulation_set = has_plt
+
+        if not needs_simulation_set:
+            # Check if any peril/region has multiple eventRateSchemeIds
+            for key, scheme_ids in event_rate_schemes_by_peril_region.items():
+                if len(scheme_ids) > 1:
+                    needs_simulation_set = True
+                    break
+
+        if not needs_simulation_set:
+            # Pure ELT with unambiguous rate schemes - API can handle it
+            return []
+
+        # Build unique key for deduplication (same region/peril/framework combo)
+        seen = set()
+        result = []
+
+        for region in all_regions:
+            framework = region.get('framework', 'ELT')
+            engine_version = region.get('engineVersion', '')
+            analysis_event_rate_scheme_id = region.get('_eventRateSchemeId')
+            sub_region = region.get('subRegion', '')
+
+            if framework == 'PLT':
+                # PLT/HD framework
+                # For PLT regions, get perilCode and regionCode from PET metadata
+                # because analysis-level codes may be generic (e.g., 'YY' for multi-peril)
+                pet_id = region.get('petId', 0)
+                event_rate_scheme_id = 0  # Always 0 for PLT in grouping requests
+                simulation_set_id = pet_id  # For PLT, simulationSetId = petId
+                periods = region.get('periods', 0)
+
+                # Get perilCode from PET metadata's modelRegionCode
+                # PET modelRegionCode format is regionCode + perilCode (e.g., "NAWF", "USFL")
+                # The 'perilCode' field in PET may differ (e.g., "FR" for Wildfire), so we
+                # extract the peril code from the last 2 characters of modelRegionCode
+                try:
+                    pet_metadata = self.reference_data_manager.get_pet_metadata_by_id(pet_id)
+                    pet_model_region_code = pet_metadata.get('modelRegionCode', '')
+                    # Extract perilCode from last 2 chars of PET modelRegionCode
+                    # e.g., "NAWF" -> "WF", "USFL" -> "FL"
+                    peril_code = pet_model_region_code[-2:] if len(pet_model_region_code) >= 2 else ''
+                    # Extract regionCode from first part of PET modelRegionCode
+                    region_code = pet_model_region_code[:-2] if len(pet_model_region_code) >= 2 else ''
+                    # modelRegionCode = subRegion + perilCode (e.g., "D1" + "WF" = "D1WF")
+                    model_region_code = sub_region + peril_code
+                except IRPAPIError:
+                    # Fallback to analysis-level codes if PET lookup fails
+                    peril_code = region.get('_perilCode', '')
+                    region_code = region.get('_regionCode', '')
+                    model_region_code = sub_region + peril_code
+
+                # Unique key for PLT
+                key = (engine_version, model_region_code, peril_code, region_code, 'PLT', pet_id)
+            else:
+                # ELT/DLM framework
+                # For ELT, use the analysis-level perilCode and regionCode
+                peril_code = region.get('_perilCode', '')
+                region_code = region.get('_regionCode', '')
+                model_region_code = sub_region + peril_code
+                rate_scheme_id = region.get('rateSchemeId')
+
+                # Look up simulationSetId and periods from SimulationSet table
+                try:
+                    if rate_scheme_id is not None and rate_scheme_id > 0:
+                        # Use rateSchemeId from regions (primary path)
+                        sim_set = self.reference_data_manager.get_simulation_set_by_event_rate_scheme_id(
+                            rate_scheme_id
+                        )
+                    elif analysis_event_rate_scheme_id is not None and analysis_event_rate_scheme_id > 0:
+                        # Use eventRateSchemeId from analysis additionalProperties
+                        # This provides precise lookup when rateSchemeId is not in regions
+                        sim_set = self.reference_data_manager.get_simulation_set_by_event_rate_scheme_id(
+                            analysis_event_rate_scheme_id
+                        )
+                    else:
+                        # Last resort fallback: lookup by regionCode + perilCode + engineVersion
+                        sim_set = self.reference_data_manager.get_simulation_set_by_region_peril_and_engine(
+                            region_code, peril_code, engine_version
+                        )
+                    event_rate_scheme_id = sim_set.get('eventRateSchemeId', 0)
+                    simulation_set_id = sim_set.get('id', 0)
+                    periods = sim_set.get('defaultPeriods', 0)
+                except IRPAPIError:
+                    # If lookup fails, use 0 as fallback
+                    event_rate_scheme_id = rate_scheme_id if rate_scheme_id else 0
+                    simulation_set_id = 0
+                    periods = 0
+
+                # Unique key for ELT - deduplicate by region, not by event rate scheme
+                # Multiple analyses may have different eventRateSchemeIds but same regions
+                key = (engine_version, model_region_code, peril_code, region_code, 'ELT')
+
+            # Skip duplicates
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # Look up model version from engine version, region code, and peril code
+            # SoftwareModelVersionMap uses broader codes like "NAWS", not "HTWS"
+            try:
+                model_version = self.reference_data_manager.get_model_version_by_engine_region_peril(
+                    engine_version, region_code, peril_code
+                )
+            except IRPAPIError:
+                # Fall back to engine-version-only lookup
+                try:
+                    model_version = self.reference_data_manager.get_model_version_by_engine_version(
+                        engine_version
+                    )
+                except IRPAPIError:
+                    # If lookup fails, extract version from engine version string
+                    # e.g., "HDv2.0" -> "2.0", "RL23" -> "23"
+                    model_version = engine_version.replace('HDv', '').replace('RL', '')
+
+            result.append({
+                "engineVersion": engine_version,
+                "eventRateSchemeId": event_rate_scheme_id,
+                "modelRegionCode": model_region_code,
+                "modelVersion": model_version,
+                "perilCode": peril_code,
+                "regionCode": region_code,
+                "simulationPeriods": periods,
+                "simulationSetId": simulation_set_id
+            })
+
+        return result
 
     def submit_analysis_grouping_job(
         self,
         group_name: str,
         analysis_names: List[str],
-        simulate_to_plt: bool = True,
+        simulate_to_plt: bool = False,
         num_simulations: int = 50000,
         propagate_detailed_losses: bool = False,
         reporting_window_start: str = "01/01/2021",
@@ -473,6 +726,7 @@ class AnalysisManager:
 
         # Resolve analysis/group names to URIs, tracking skipped items
         analysis_uris = []
+        analysis_ids = []  # Collect IDs for building regionPerilSimulationSet
         skipped_items = []
         included_items = []
 
@@ -514,6 +768,7 @@ class AnalysisManager:
 
             try:
                 analysis_uris.append(analysis_response[0]['uri'])
+                analysis_ids.append(analysis_response[0]['analysisId'])
                 included_items.append(name)
             except (KeyError, IndexError, TypeError) as e:
                 raise IRPAPIError(
@@ -533,7 +788,12 @@ class AnalysisManager:
         if currency is None:
             currency = self.reference_data_manager.get_analysis_currency()
         if region_peril_simulation_set is None:
-            region_peril_simulation_set = []
+            # Auto-populate regionPerilSimulationSet from analysis regions
+            # This is required for mixed ELT/PLT grouping (DLM + HD analyses/groups)
+            region_peril_simulation_set = self.build_region_peril_simulation_set(analysis_ids)
+
+        if len(region_peril_simulation_set) > 0:
+            simulate_to_plt = True
 
         data = {
             "resourceType": "analyses",
@@ -554,9 +814,9 @@ class AnalysisManager:
 
         try:
             response = self.client.request('POST', CREATE_ANALYSIS_GROUP, json=data)
-            group_id = extract_id_from_location_header(response, "analysis group creation")
+            job_id = extract_id_from_location_header(response, "analysis group creation")
             return {
-                'job_id': int(group_id),
+                'job_id': int(job_id),
                 'skipped': False,
                 'skipped_items': skipped_items,
                 'included_items': included_items
@@ -1192,3 +1452,47 @@ class AnalysisManager:
             return response.json()
         except Exception as e:
             raise IRPAPIError(f"Failed to get PLT for analysis {analysis_id}: {e}")
+
+    def get_regions(
+        self,
+        analysis_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve region/peril breakdown for an analysis or group.
+
+        This is used to build the regionPerilSimulationSet for grouping requests.
+        Each region entry contains framework, peril, region codes, and simulation identifiers
+        (rateSchemeId for ELT, petId for PLT).
+
+        Args:
+            analysis_id: Analysis or group ID
+
+        Returns:
+            List of region dicts containing:
+                - region: Region code (e.g., "NA")
+                - subRegion: Sub-region code (e.g., "I2")
+                - peril: Peril code (e.g., "EQ", "WS")
+                - rateSchemeId: Event rate scheme ID (for ELT framework)
+                - framework: Framework type ("ELT" or "PLT")
+                - analysisId: The analysis ID
+                - modelProfileId: Model profile ID
+                - petId: PET ID (for PLT/HD framework)
+                - numSamples: Number of samples
+                - periods: Number of periods
+                - applyContractFlag: Contract application flag
+                - engineVersion: Engine version (e.g., "RL23", "HDv2.0")
+
+        Raises:
+            IRPValidationError: If analysis_id is invalid
+            IRPAPIError: If request fails
+        """
+        validate_positive_int(analysis_id, "analysis_id")
+
+        try:
+            response = self.client.request(
+                'GET',
+                GET_ANALYSIS_REGIONS.format(analysisId=analysis_id)
+            )
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get regions for analysis {analysis_id}: {e}")
