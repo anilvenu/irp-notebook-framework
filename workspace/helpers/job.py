@@ -21,6 +21,7 @@ Workflow:
 
 import os
 import json
+from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 
@@ -28,8 +29,11 @@ from helpers.irp_integration import IRPClient
 from helpers.database import (
     execute_query, execute_command, execute_insert, DatabaseError
 )
-from helpers.constants import JobStatus, BatchType
+from helpers.constants import JobStatus, BatchType, WORKSPACE_PATH
 from helpers.configuration import BATCH_TYPE_TRANSFORMERS
+from helpers.sqlserver import execute_query_from_file
+from helpers.csv_export import save_dataframes_to_csv
+from helpers.context import WorkContext
 
 
 class JobError(Exception):
@@ -222,6 +226,10 @@ def _submit_job(job_id: int, job_config: Dict[str, Any], batch_type: str, irp_cl
             )
         elif batch_type == BatchType.EXPORT_TO_RDM:
             workflow_id, request_json, response_json = _submit_export_to_rdm_job(
+                job_id, job_config, irp_client
+            )
+        elif batch_type == BatchType.DATA_EXTRACTION:
+            workflow_id, request_json, response_json = _submit_data_extraction_job(
                 job_id, job_config, irp_client
             )
         # Add more batch types as needed
@@ -1097,6 +1105,191 @@ def _submit_export_to_rdm_job(
     }
 
     return workflow_id, request_json, response_json
+
+
+def _resolve_import_files_directory(cycle_type: str) -> str:
+    """
+    Resolve the cycle type to an import_files subdirectory name.
+
+    Logic:
+    - If cycle_type contains 'test' (case-insensitive), use 'test' directory
+    - Otherwise, use directory matching cycle_type (case-insensitive)
+
+    Args:
+        cycle_type: Cycle type from configuration (e.g., 'Quarterly', 'Annual', 'Test_Q1')
+
+    Returns:
+        Actual directory name as it exists on filesystem (e.g., 'quarterly', 'annual', 'test')
+
+    Raises:
+        ValueError: If no matching directory exists
+    """
+    cycle_type_lower = cycle_type.lower()
+
+    # If cycle type contains 'test', use test directory
+    if 'test' in cycle_type_lower:
+        target_dir = 'test'
+    else:
+        target_dir = cycle_type_lower
+
+    # Find directory case-insensitively
+    import_files_base = WORKSPACE_PATH / 'sql' / 'import_files'
+
+    if not import_files_base.exists():
+        raise ValueError(f"Import files base directory not found: {import_files_base}")
+
+    # Look for a directory that matches case-insensitively
+    for item in import_files_base.iterdir():
+        if item.is_dir() and item.name.lower() == target_dir:
+            return item.name  # Return actual directory name
+
+    raise ValueError(
+        f"Import files directory not found for cycle type '{cycle_type}'. "
+        f"Expected directory: {import_files_base / target_dir}"
+    )
+
+
+def _submit_data_extraction_job(
+    job_id: int,
+    job_config: Dict[str, Any],
+    client: IRPClient
+) -> Tuple[str, Dict, Dict]:
+    """
+    Execute Data Extraction SQL script and save results to CSV.
+
+    This is a synchronous operation that:
+    1. Resolves the SQL script path based on cycle type and import file
+    2. Executes the SQL script against SQL Server
+    3. Saves the resulting DataFrames to CSV files in the data folder
+
+    The SQL scripts follow a standard convention where they output:
+    - First SELECT: Account data (saved to {import_file}_Account.csv)
+    - Second SELECT: Location data (saved to {import_file}_Location.csv)
+
+    Note: Large result sets (millions of rows) are loaded into memory. For
+    production datasets, ensure adequate system memory is available.
+
+    Args:
+        job_id: Job ID
+        job_config: Job configuration data containing:
+            - Portfolio: Portfolio name
+            - Database: EDM database name (context only, not used for extraction)
+            - Import File: Import file identifier for SQL script naming
+            - Metadata: Dict containing Cycle Type and Current Date Value
+            - accounts_import_file: Account CSV filename
+            - locations_import_file: Location CSV filename
+        client: IRPClient instance (not used for local SQL execution)
+
+    Returns:
+        Tuple of (workflow_id, request_json, response_json)
+        workflow_id will be "N/A" since this is not an async Moody's operation
+    """
+    # Extract required fields
+    portfolio_name = job_config.get('Portfolio')
+    import_file = job_config.get('Import File')
+    metadata = job_config.get('Metadata', {})
+    cycle_type = metadata.get('Cycle Type', '')
+    date_value = metadata.get('Current Date Value', '')
+
+    accounts_filename = job_config.get('accounts_import_file', '')
+    locations_filename = job_config.get('locations_import_file', '')
+
+    if not portfolio_name:
+        raise ValueError("Missing required field: Portfolio")
+    if not import_file:
+        raise ValueError("Missing required field: Import File")
+    if not cycle_type:
+        raise ValueError("Missing required field: Cycle Type in Metadata")
+    if not date_value:
+        raise ValueError("Missing required field: Current Date Value in Metadata")
+
+    # Resolve cycle type directory
+    cycle_type_dir = _resolve_import_files_directory(cycle_type)
+
+    # Build SQL script path
+    sql_script_name = f"2_Create_{import_file}_Moodys_ImportFile.sql"
+    sql_script_path = WORKSPACE_PATH / 'sql' / 'import_files' / cycle_type_dir / sql_script_name
+
+    if not sql_script_path.exists():
+        raise ValueError(
+            f"SQL script not found: {sql_script_path}. "
+            f"Expected at workspace/sql/import_files/{cycle_type_dir}/{sql_script_name}"
+        )
+
+    # Build request JSON for logging
+    request_json = {
+        'job_id': job_id,
+        'batch_type': BatchType.DATA_EXTRACTION,
+        'portfolio': portfolio_name,
+        'import_file': import_file,
+        'cycle_type': cycle_type,
+        'date_value': date_value,
+        'sql_script': str(sql_script_path),
+        'accounts_file': accounts_filename,
+        'locations_file': locations_filename,
+        'submitted_at': datetime.now().isoformat()
+    }
+
+    # Execute SQL script
+    # Hardcoded connection: ASSURANT, database: DW_EXP_MGMT_USER
+    print(f"Executing data extraction for {import_file}...")
+    dataframes = execute_query_from_file(
+        file_path=sql_script_path,
+        params={
+            'DATE_VALUE': date_value,
+            'CYCLE_TYPE': cycle_type
+        },
+        connection='ASSURANT',
+        database='DW_EXP_MGMT_USER'
+    )
+
+    # Validate we got expected number of DataFrames
+    # SQL scripts output Account first, then Location (by convention)
+    if len(dataframes) < 2:
+        raise ValueError(
+            f"SQL script returned {len(dataframes)} result set(s), expected at least 2. "
+            f"Check that the script ends with SELECT statements for Account and Location tables."
+        )
+
+    # Get output directory - use active cycle's files/data folder
+    context = WorkContext()
+    data_path = context.workflow_root / 'files' / 'data'
+    data_path.mkdir(parents=True, exist_ok=True)
+
+    # Save DataFrames to CSV
+    # By SQL script convention: First result = Account, Second result = Location
+    account_df = dataframes[0]
+    location_df = dataframes[1]
+
+    # Strip .csv extension if present for the filenames
+    account_base = accounts_filename.replace('.csv', '')
+    location_base = locations_filename.replace('.csv', '')
+
+    print(f"Saving {len(account_df):,} account rows to {accounts_filename}...")
+    print(f"Saving {len(location_df):,} location rows to {locations_filename}...")
+
+    csv_files = save_dataframes_to_csv(
+        dataframes=[account_df, location_df],
+        filenames=[account_base, location_base],
+        output_dir=data_path
+    )
+
+    # Build success response
+    response_json = {
+        'workflow_id': 'N/A',
+        'status': 'SUCCESS',
+        'message': f'Data extraction completed for {import_file}',
+        'csv_files': [str(f) for f in csv_files],
+        'account_rows': len(account_df),
+        'location_rows': len(location_df),
+        'output_directory': str(data_path),
+        'completed_at': datetime.now().isoformat()
+    }
+
+    print(f"Data extraction completed: {len(account_df):,} accounts, {len(location_df):,} locations")
+
+    # Return N/A for workflow_id since this is synchronous
+    return 'N/A', request_json, response_json
 
 
 def _register_job_submission(
