@@ -530,42 +530,46 @@ def check_kerberos_status() -> Dict[str, Any]:
     return result
 
 
-def init_kerberos(keytab_path: Optional[str] = None, principal: Optional[str] = None) -> bool:
+def init_kerberos(keytab_path: Optional[str] = None, principal: Optional[str] = None, password: Optional[str] = None) -> bool:
     """
-    Initialize Kerberos credentials using a keytab file.
+    Initialize Kerberos credentials using a keytab file or password.
 
-    This function runs 'kinit' with the specified keytab and principal to
-    obtain a Kerberos ticket for Windows Authentication.
+    This function runs 'kinit' with the specified keytab or password and principal
+    to obtain a Kerberos ticket for Windows Authentication.
+
+    Authentication methods (tried in order):
+        1. Keytab file (if KRB5_KEYTAB is set and file exists)
+        2. Password (if KRB5_PASSWORD is set)
 
     Args:
         keytab_path: Path to the keytab file. Defaults to KRB5_KEYTAB env var.
         principal: Kerberos principal. Defaults to KRB5_PRINCIPAL env var.
+        password: Kerberos password. Defaults to KRB5_PASSWORD env var.
 
     Returns:
         True if successful, False otherwise
 
     Raises:
-        SQLServerConfigurationError: If keytab or principal not specified
+        SQLServerConfigurationError: If principal not specified or no auth method available
 
     Example:
-        # Using environment variables
+        # Using environment variables (keytab or password)
         if init_kerberos():
             print("Kerberos initialized successfully")
 
-        # Explicit parameters
+        # Explicit keytab
         if init_kerberos('/etc/krb5/svc_jupyter.keytab', 'svc_jupyter@CORP.LOCAL'):
+            print("Kerberos initialized successfully")
+
+        # Explicit password
+        if init_kerberos(principal='svc_jupyter@CORP.LOCAL', password='secret'):
             print("Kerberos initialized successfully")
     """
     import subprocess
 
     keytab = keytab_path or os.getenv('KRB5_KEYTAB')
     princ = principal or os.getenv('KRB5_PRINCIPAL')
-
-    if not keytab:
-        raise SQLServerConfigurationError(
-            "Kerberos keytab path not specified.\n"
-            "Set KRB5_KEYTAB environment variable or pass keytab_path parameter."
-        )
+    pwd = password or os.getenv('KRB5_PASSWORD')
 
     if not princ:
         raise SQLServerConfigurationError(
@@ -573,36 +577,65 @@ def init_kerberos(keytab_path: Optional[str] = None, principal: Optional[str] = 
             "Set KRB5_PRINCIPAL environment variable or pass principal parameter."
         )
 
-    if not os.path.exists(keytab):
-        raise SQLServerConfigurationError(
-            f"Kerberos keytab file not found: {keytab}"
-        )
+    # Method 1: Try keytab if available
+    if keytab and os.path.exists(keytab):
+        try:
+            result = subprocess.run(
+                ['kinit', '-k', '-t', keytab, princ],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
 
-    try:
-        result = subprocess.run(
-            ['kinit', '-k', '-t', keytab, princ],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+            if result.returncode == 0:
+                logger.info(f"Kerberos initialized via keytab for principal: {princ}")
+                return True
+            else:
+                logger.warning(f"Keytab auth failed: {result.stderr.strip()}. Trying password auth...")
 
-        if result.returncode == 0:
-            logger.info(f"Kerberos initialized successfully for principal: {princ}")
-            return True
-        else:
-            logger.error(f"kinit failed: {result.stderr}")
+        except subprocess.TimeoutExpired:
+            logger.warning("kinit with keytab timed out. Trying password auth...")
+        except FileNotFoundError:
+            raise SQLServerConfigurationError(
+                "kinit command not found. Kerberos tools may not be installed."
+            )
+        except Exception as e:
+            logger.warning(f"Keytab auth error: {e}. Trying password auth...")
+
+    # Method 2: Try password if available
+    if pwd:
+        try:
+            result = subprocess.run(
+                ['kinit', princ],
+                input=pwd + '\n',
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Kerberos initialized via password for principal: {princ}")
+                return True
+            else:
+                logger.error(f"Password auth failed: {result.stderr.strip()}")
+                return False
+
+        except subprocess.TimeoutExpired:
+            logger.error("kinit with password timed out")
+            return False
+        except FileNotFoundError:
+            raise SQLServerConfigurationError(
+                "kinit command not found. Kerberos tools may not be installed."
+            )
+        except Exception as e:
+            logger.error(f"Password auth error: {e}")
             return False
 
-    except subprocess.TimeoutExpired:
-        logger.error("kinit command timed out")
-        return False
-    except FileNotFoundError:
-        raise SQLServerConfigurationError(
-            "kinit command not found. Kerberos tools may not be installed."
-        )
-    except Exception as e:
-        logger.error(f"Kerberos initialization failed: {e}")
-        return False
+    # No authentication method available
+    raise SQLServerConfigurationError(
+        "No Kerberos credentials available.\n"
+        "Set KRB5_KEYTAB (with valid keytab file) or KRB5_PASSWORD environment variable."
+    )
 
 
 def is_ticket_valid(min_remaining_minutes: int = 5) -> bool:
