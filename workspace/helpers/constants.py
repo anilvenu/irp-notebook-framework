@@ -182,6 +182,7 @@ class BatchType:
     GROUPING_ROLLUP = 'Grouping Rollup'
     EXPORT_TO_RDM = 'Export to RDM'
     STAGING_ETL = 'Staging ETL'
+    DATA_EXTRACTION = 'Data Extraction'
     # Test-only batch types
     TEST_DEFAULT = 'test_default'
     TEST_MULTI_JOB = 'test_multi_job'
@@ -204,6 +205,7 @@ class BatchType:
         GROUPING_ROLLUP: ASYNCHRONOUS,
         EXPORT_TO_RDM: ASYNCHRONOUS,
         STAGING_ETL: ASYNCHRONOUS,
+        DATA_EXTRACTION: SYNCHRONOUS,
         # Test-only
         TEST_DEFAULT: ASYNCHRONOUS,
         TEST_MULTI_JOB: ASYNCHRONOUS,
@@ -224,6 +226,7 @@ class BatchType:
         GROUPING_ROLLUP: 'Group_Name',
         EXPORT_TO_RDM: 'Group_Name',
         STAGING_ETL: 'Database',
+        DATA_EXTRACTION: 'Import File',
         # Test-only
         TEST_DEFAULT: 'name',
         TEST_MULTI_JOB: 'name',
