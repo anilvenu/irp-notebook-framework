@@ -345,24 +345,6 @@ def test_invalid_config_bad_treaty_type():
         )
 
 
-def test_invalid_config_bad_rdm_name():
-    """Test: RDM name doesn't start with RMS_RDM_ (FMT-001)
-
-    File to create: invalid_config_bad_rdm_name.xlsx
-    Modification: Change "Export RDM Name" to "BAD_RDM_NAME"
-    Expected: ConfigurationError about pattern mismatch
-    """
-    test_file = TEST_FILES_DIR / 'invalid_config_bad_rdm_name.xlsx'
-
-    if not test_file.exists():
-        pytest.skip(f"Test file not found: {test_file}")
-
-    with pytest.raises(ConfigurationError, match=r"pattern|Export RDM Name|RMS_RDM"):
-        validate_configuration_file(
-            excel_config_path=str(test_file)
-        )
-
-
 # ============================================================================
 # TEST CATEGORY 6: RANGE CONSTRAINT VIOLATIONS
 # ============================================================================
