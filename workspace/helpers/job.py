@@ -1795,18 +1795,6 @@ def submit_job(
 
     Raises:
         JobError: If job not found
-
-    TODO:
-
-    1. Implement error check for job submission. If the submission succeeds, 
-       job should be updated to SUBMITTED status. If failed, it should be set 
-       to ERROR status
-    2. Implement error check when resubmitting a failed job. If the submission succeeds, 
-       job should be updated to SUBMITTED status. If failed, it should be set 
-       to ERROR status
-    3. Enhance batch recon. If any job is in ERROR status, the batch should be set 
-       to ERROR status
-
     """
     if not isinstance(job_id, int) or job_id <= 0:
         raise JobError(f"Invalid job_id: {job_id}")
@@ -1850,18 +1838,22 @@ def submit_job(
             # Submission failed - set job to ERROR status
             update_job_status(job_id, JobStatus.ERROR, schema=schema)
 
-            # Store submission info for audit trail even though job failed
-            _register_job_submission(
-                job_id,
-                workflow_id='ERROR',
-                request=request,
-                response=response,
-                submitted_ts=datetime.now(),
+            # Store submission info for audit trail (without changing status/workflow_id)
+            # Note: We do NOT call _register_job_submission here because it would
+            # overwrite the ERROR status with SUBMITTED and set a fake workflow_id
+            error_msg = response.get('error', 'Unknown submission error')
+            execute_command(
+                """UPDATE irp_job
+                   SET submission_request = %s,
+                       submission_response = %s,
+                       last_error = %s,
+                       updated_ts = NOW()
+                   WHERE id = %s""",
+                (json.dumps(request), json.dumps(response), error_msg, job_id),
                 schema=schema
             )
 
-            # Get error message and raise to caller
-            error_msg = response.get('error', 'Unknown submission error')
+            # Raise to caller
             raise JobError(f"Job submission failed: {error_msg}")
 
         # Submission succeeded - proceed with registration

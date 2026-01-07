@@ -385,8 +385,7 @@ METADATA_SCHEMA = {
         'Geocode Version': r'\d+(\.\d+)?(\.\d+)?',
         'Hazard Version': r'\d+(\.\d+)?(\.\d+)?',
         'Validate DLM Model Versions?': r'^[YN]$',
-        'Validate HD Model Versions?': r'^[YN]$',
-        'Export RDM Name': r'^(RM_|RMS_|TEST_)RDM_'
+        'Validate HD Model Versions?': r'^[YN]$'
     }
 }
 
