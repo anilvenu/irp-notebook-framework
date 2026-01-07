@@ -813,6 +813,98 @@ def test_resubmit_job_invalid_id(test_schema, mock_irp_client):
     assert 'invalid job_id' in str(exc_info.value).lower()
 
 
+@pytest.mark.database
+@pytest.mark.integration
+def test_submit_job_error_sets_error_status_not_submitted(test_schema, mock_irp_client):
+    """
+    Test that when job submission fails, the job ends up in ERROR status
+    with NULL workflow_id, not SUBMITTED status with 'ERROR' workflow_id.
+
+    This tests the fix for the bug where _register_job_submission was called
+    for failed jobs, overwriting the ERROR status with SUBMITTED.
+    """
+    from helpers.irp_integration.exceptions import IRPAPIError
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(
+        test_schema, 'test_error_status'
+    )
+
+    job_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB'},
+        schema=test_schema
+    )
+
+    # Make the API call fail
+    mock_irp_client.edm.submit_create_edm_job.side_effect = IRPAPIError("API connection failed")
+
+    # Attempt submission - should raise JobError
+    with pytest.raises(JobError) as exc_info:
+        submit_job(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
+    assert 'submission failed' in str(exc_info.value).lower()
+
+    # Verify job is in ERROR status (NOT SUBMITTED)
+    job = read_job(job_id, schema=test_schema)
+    assert job['status'] == JobStatus.ERROR, f"Expected ERROR status, got {job['status']}"
+
+    # Verify workflow_id is NULL (NOT 'ERROR')
+    assert job['moodys_workflow_id'] is None, f"Expected NULL workflow_id, got {job['moodys_workflow_id']}"
+
+    # Verify submission request/response were saved for audit trail
+    assert job['submission_request'] is not None
+    assert job['submission_response'] is not None
+
+    # Verify last_error was populated
+    assert job['last_error'] is not None
+    assert 'API connection failed' in job['last_error']
+
+
+@pytest.mark.database
+@pytest.mark.integration
+def test_submit_job_error_allows_retry(test_schema, mock_irp_client):
+    """
+    Test that a job in ERROR status can be retried (resubmitted).
+
+    This verifies the idempotency fix - ERROR jobs with NULL workflow_id
+    should be picked up for retry when submit_batch() is called again.
+    """
+    from helpers.irp_integration.exceptions import IRPAPIError
+
+    cycle_id, stage_id, step_id, config_id, batch_id = create_test_hierarchy(
+        test_schema, 'test_error_retry'
+    )
+
+    job_id = create_job_with_config(
+        batch_id, config_id,
+        job_configuration_data={'Database': 'TestDB'},
+        schema=test_schema
+    )
+
+    # First attempt fails
+    mock_irp_client.edm.submit_create_edm_job.side_effect = IRPAPIError("Temporary failure")
+
+    with pytest.raises(JobError):
+        submit_job(job_id, 'EDM Creation', mock_irp_client, schema=test_schema)
+
+    # Verify job is in ERROR status
+    job = read_job(job_id, schema=test_schema)
+    assert job['status'] == JobStatus.ERROR
+    assert job['moodys_workflow_id'] is None
+
+    # Now fix the API and retry
+    mock_irp_client.edm.submit_create_edm_job.side_effect = None
+    mock_irp_client.edm.submit_create_edm_job.return_value = 12345
+
+    # Retry should succeed because workflow_id is NULL
+    result_id = submit_job(job_id, 'EDM Creation', mock_irp_client, force=True, schema=test_schema)
+    assert result_id == job_id
+
+    # Verify job is now SUBMITTED with valid workflow_id
+    job = read_job(job_id, schema=test_schema)
+    assert job['status'] == JobStatus.SUBMITTED
+    assert job['moodys_workflow_id'] == '12345'  # str() of 12345
+
+
 # ==============================================================================
 # JOB CONFIGURATION SKIP TESTS (NEW FEATURE)
 # ==============================================================================
