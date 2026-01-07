@@ -21,7 +21,6 @@ Workflow:
 
 import os
 import json
-from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 
@@ -1253,7 +1252,7 @@ def _submit_data_extraction_job(
 
     # Get output directory - use active cycle's files/data folder
     context = WorkContext()
-    data_path = context.workflow_root / 'files' / 'data'
+    data_path = context.cycle_directory / 'files' / 'data'
     data_path.mkdir(parents=True, exist_ok=True)
 
     # Save DataFrames to CSV
