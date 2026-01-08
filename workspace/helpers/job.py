@@ -439,7 +439,8 @@ def _submit_mri_import_job(
             portfolio_name=portfolio_name,
             accounts_file_name=accounts_file,
             locations_file_name=locations_file,
-            mapping_file_name=mapping_file_name
+            mapping_file_name=mapping_file_name,
+            delimiter="TAB"  # Files are tab-delimited to handle commas in data
         )
     except Exception as e:
         raise JobError(f"Failed to submit MRI import job: {str(e)}")
