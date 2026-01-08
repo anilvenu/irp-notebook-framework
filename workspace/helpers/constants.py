@@ -222,7 +222,7 @@ class BatchType:
         ANALYSIS: 'Analysis Name',
         GROUPING: 'Group_Name',
         GROUPING_ROLLUP: 'Group_Name',
-        EXPORT_TO_RDM: 'Group_Name',
+        EXPORT_TO_RDM: 'rdm_name',
         STAGING_ETL: 'Database',
         # Test-only
         TEST_DEFAULT: 'name',
