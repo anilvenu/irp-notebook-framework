@@ -102,22 +102,49 @@ def build_post_processing_rows(
         'variable_value': json.dumps(products_perils)
     })
 
-    # RDM raw row
+    # Current date value row
     rows.append({
         'inforce_date': inforce_date,
-        'variable_name': 'rdm_raw',
-        'variable_value': rdm_raw_name
+        'variable_name': 'current_date_value',
+        'variable_value': current_date_value
     })
 
-    # RDM full row
+    # DB_USAP row (RDM full name)
     rdm_full_name = irp_client.rdm.get_rdm_database_full_name(rdm_raw_name)
     rows.append({
         'inforce_date': inforce_date,
-        'variable_name': 'rdm_full',
+        'variable_name': 'DB_USAP',
         'variable_value': rdm_full_name
     })
 
     return rows
+
+
+def delete_existing_rows_for_inforce_date(
+    inforce_date: str,
+    connection: str = 'ASSURANT',
+    database: str = 'DW_EXP_MGMT_USER'
+) -> int:
+    """
+    Delete existing rows for a given InforceDate before inserting new data.
+
+    Args:
+        inforce_date: The InforceDate value to delete (e.g., "03/31/2025")
+        connection: SQL Server connection name
+        database: Database name
+
+    Returns:
+        Number of rows deleted
+    """
+    return execute_command(
+        """
+        DELETE FROM Risk_Modeler_PremiumIQ_Variable
+        WHERE InforceDate = {{ inforce_date }}
+        """,
+        params={'inforce_date': inforce_date},
+        connection=connection,
+        database=database
+    )
 
 
 def write_post_processing_data(
@@ -128,6 +155,8 @@ def write_post_processing_data(
     """
     Write rows to Risk_Modeler_PremiumIQ_Variable table.
 
+    Deletes existing rows for the InforceDate first, then inserts new data.
+
     Args:
         rows: List of dicts with inforce_date, variable_name, variable_value
         connection: SQL Server connection name
@@ -136,6 +165,14 @@ def write_post_processing_data(
     Returns:
         Number of rows inserted
     """
+    if not rows:
+        return 0
+
+    # Delete existing rows for this inforce_date first
+    inforce_date = rows[0]['inforce_date']
+    delete_existing_rows_for_inforce_date(inforce_date, connection, database)
+
+    # Insert new rows
     inserted = 0
     for row in rows:
         execute_command(
