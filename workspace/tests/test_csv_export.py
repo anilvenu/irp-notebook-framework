@@ -246,8 +246,8 @@ def test_save_dataframes_to_csv_single_dataframe(sample_dataframe, temp_output_d
     assert result[0] == temp_output_dir / f'{filename}.csv'
     assert result[0].exists()
 
-    # Verify CSV contents
-    df_loaded = pd.read_csv(result[0])
+    # Verify CSV contents (tab-delimited)
+    df_loaded = pd.read_csv(result[0], sep='\t')
     assert len(df_loaded) == 3
     assert list(df_loaded.columns) == ['LocationID', 'PolicyNumber', 'Premium']
 
@@ -272,8 +272,8 @@ def test_save_dataframes_to_csv_multiple_dataframes(sample_dataframes, temp_outp
     for file_path in result:
         assert file_path.exists()
 
-    # Verify first CSV (Account)
-    df_account = pd.read_csv(result[0])
+    # Verify first CSV (Account, tab-delimited)
+    df_account = pd.read_csv(result[0], sep='\t')
     assert len(df_account) == 2
     assert 'ACCNTNUM' in df_account.columns
 
@@ -299,8 +299,8 @@ def test_save_dataframes_to_csv_with_index(sample_dataframe, temp_output_dir):
         index=True
     )
 
-    # Read and verify index was saved
-    df_loaded = pd.read_csv(result[0])
+    # Read and verify index was saved (tab-delimited)
+    df_loaded = pd.read_csv(result[0], sep='\t')
     assert 'Unnamed: 0' in df_loaded.columns  # pandas default index column name
 
 
@@ -417,8 +417,8 @@ def test_save_sql_results_to_csv_passes_all_parameters(sample_dataframe, temp_ou
         # Verify CSV was created
         assert result[0].exists()
 
-        # Verify index was saved (check by reading the CSV)
-        df_loaded = pd.read_csv(result[0])
+        # Verify index was saved (check by reading the CSV, tab-delimited)
+        df_loaded = pd.read_csv(result[0], sep='\t')
         assert 'Unnamed: 0' in df_loaded.columns
 
 
@@ -461,8 +461,8 @@ def test_full_workflow_useq_example(temp_output_dir):
     assert result[0].name == 'Modeling_202511_Moodys_Quarterly_USEQ_Account.csv'
     assert result[1].name == 'Modeling_202511_Moodys_Quarterly_USEQ_Location.csv'
 
-    # Verify file contents
-    df_account_loaded = pd.read_csv(result[0])
+    # Verify file contents (tab-delimited)
+    df_account_loaded = pd.read_csv(result[0], sep='\t')
     assert len(df_account_loaded) == 2
     assert list(df_account_loaded['ACCNTNUM']) == ['LOC001', 'LOC002']
 
