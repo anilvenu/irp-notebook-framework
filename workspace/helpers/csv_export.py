@@ -298,8 +298,9 @@ def save_dataframes_to_csv(
         # Full path
         file_path = output_path / filename
 
-        # Save to CSV
-        df.to_csv(file_path, index=index)
+        # Save as tab-delimited to avoid issues with commas in data
+        # Moody's accepts delimiter="TAB" for import files
+        df.to_csv(file_path, index=index, sep='\t')
 
         created_files.append(file_path)
 

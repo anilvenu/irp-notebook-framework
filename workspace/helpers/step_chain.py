@@ -15,6 +15,23 @@ from helpers.constants import BatchStatus, CycleStatus
 logger = logging.getLogger(__name__)
 
 
+# Stage 02 Step Chain Configuration
+# Data Extraction → Control Totals chaining
+STAGE_02_CHAIN = {
+    1: {
+        'next_step': 2,
+        'batch_type': 'Data Extraction',
+        'wait_for': BatchStatus.COMPLETED,
+        'description': 'Execute Data Extraction → Control Totals'
+    },
+    2: {
+        'next_step': None,  # Final step in Stage 02
+        'batch_type': None,
+        'wait_for': None,
+        'description': 'Control Totals (Final Step)'
+    }
+}
+
 # Stage 03 Step Chain Configuration
 # Maps step numbers to their next step and execution conditions
 STAGE_03_CHAIN = {
@@ -129,6 +146,7 @@ STAGE_06_CHAIN = {
 
 # Combined chain configuration by stage
 STAGE_CHAINS = {
+    2: STAGE_02_CHAIN,
     3: STAGE_03_CHAIN,
     4: STAGE_04_CHAIN,
     5: STAGE_05_CHAIN,
@@ -295,6 +313,10 @@ def _build_notebook_path(cycle_name: str, stage_num: int, step_num: int) -> Path
     """
     # Map step numbers to notebook filenames by stage
     STAGE_NOTEBOOKS = {
+        2: {
+            1: 'Step_01_Execute_Data_Extraction.ipynb',
+            2: 'Step_02_Control_Totals.ipynb'
+        },
         3: {
             1: 'Submit_Create_EDM_Batch.ipynb',
             2: 'Create_Base_Portfolios.ipynb',

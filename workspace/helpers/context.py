@@ -212,7 +212,7 @@ class WorkContext:
         return f"{self.cycle_name} → Stage {self.stage_num}: {self.stage_name} → Step {self.step_num}: {self.step_name}"
 
     @property
-    def cycle_directory(self):
+    def cycle_directory(self) -> Path:
         """Get the cycle directory path"""
         # Navigate up from notebook_path to find the Active_{cycle_name} directory
         current = self.notebook_path if self.notebook_path.is_dir() else self.notebook_path.parent

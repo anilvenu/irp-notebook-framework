@@ -562,7 +562,8 @@ def test_batch_type_transformers_registry():
         'Grouping',
         'Grouping Rollup',
         'Export to RDM',
-        'Staging ETL'
+        'Staging ETL',
+        'Data Extraction'
     ]
 
     expected_test_types = [
@@ -578,7 +579,7 @@ def test_batch_type_transformers_registry():
     for batch_type in expected_test_types:
         assert batch_type in BATCH_TYPE_TRANSFORMERS, f"Test batch type '{batch_type}' should be registered"
 
-    assert len(BATCH_TYPE_TRANSFORMERS) == 14, "Should have 12 business + 2 test batch types (total 14)"
+    assert len(BATCH_TYPE_TRANSFORMERS) == 15, "Should have 13 business + 2 test batch types (total 15)"
 
 
 @pytest.mark.unit
