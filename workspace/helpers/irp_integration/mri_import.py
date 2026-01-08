@@ -100,13 +100,13 @@ class MRIImportManager:
 
         modified = False
 
-        # Process account CSV
-        account_headers = list(pd.read_csv(accounts_file_path, nrows=0).columns)
+        # Process account CSV (tab-delimited)
+        account_headers = list(pd.read_csv(accounts_file_path, nrows=0, sep='\t').columns)
         account_items = mapping.get('accountItems', [])
         modified |= MRIImportManager._add_missing_sources(account_headers, account_items)
 
-        # Process location CSV
-        location_headers = list(pd.read_csv(locations_file_path, nrows=0).columns)
+        # Process location CSV (tab-delimited)
+        location_headers = list(pd.read_csv(locations_file_path, nrows=0, sep='\t').columns)
         location_items = mapping.get('locationItems', [])
         modified |= MRIImportManager._add_missing_sources(location_headers, location_items)
 
