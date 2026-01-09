@@ -307,6 +307,18 @@ JOB_PREVIEW_CONFIG = {
             'analysis_names: Combined list of all analysis and group names to export'
         ],
         'warning': 'This job requires all Grouping batches to complete first'
+    },
+    BatchType.DATA_EXTRACTION: {
+        'display_name': 'Data Extraction',
+        'headers': ['Job ID', 'Portfolio', 'Import File', 'Account File', 'Location File', 'Status'],
+        'fields': ['job_id', 'Portfolio', 'Import File', 'accounts_import_file', 'locations_import_file', 'status'],
+        'notes': [
+            'Full metadata from configuration file',
+            'Portfolio-specific fields from Portfolios sheet',
+            'SQL script path: import_files/{cycle_type}/2_Create_{Import File}_Moodys_ImportFile.sql',
+            'CSV output files: Account and Location files for Moody\'s import'
+        ],
+        'footer': 'Note: Data Extraction executes SQL scripts locally and exports CSVs to files/data/'
     }
 }
 

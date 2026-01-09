@@ -836,45 +836,73 @@ def submit_batch(
                 })
 
         elif job_record['status'] in (JobStatus.FINISHED, JobStatus.CANCELLED):
-            # For FINISHED/CANCELLED jobs, check if the entity still exists
-            # If entity is missing (e.g., deleted externally), resubmit the job
-            try:
-                job_config = job.get_job_config(job_record['id'], schema=schema)
-                job_config_data = job_config.get('job_configuration_data', {})
+            # For Data Extraction, always resubmit FINISHED jobs to regenerate CSVs
+            # This makes the notebook idempotent - re-running always produces fresh data
+            if batch['batch_type'] == BatchType.DATA_EXTRACTION:
+                try:
+                    job_config = job.get_job_config(job_record['id'], schema=schema)
+                    job_config_data = job_config.get('job_configuration_data', {})
 
-                # Get configuration data for batch types that need it (e.g., portfolio mapping)
-                config = read_configuration(batch['configuration_id'], schema=schema)
-                config_data = config.get('configuration_data', {})
-
-                entity_exists = validator.check_entity_exists_for_job(
-                    job_config_data,
-                    batch['batch_type'],
-                    config_data=config_data
-                )
-
-                if not entity_exists:
-                    # Entity is missing - resubmit the job
                     new_job_id = job.resubmit_job(
                         job_record['id'],
                         irp_client,
                         batch['batch_type'],
                         job_configuration_data=job_config_data,
-                        override_reason="Entity missing - resubmitted automatically",
+                        override_reason="Data extraction re-run",
                         schema=schema
                     )
                     submitted_jobs.append({
                         'job_id': new_job_id,
                         'original_job_id': job_record['id'],
                         'status': 'RESUBMITTED',
-                        'reason': 'entity_missing'
+                        'reason': 'data_extraction_rerun'
                     })
-            except Exception as e:
-                # Log error but continue with other jobs
-                submitted_jobs.append({
-                    'job_id': job_record['id'],
-                    'status': 'CHECK_FAILED',
-                    'error': str(e)
-                })
+                except Exception as e:
+                    submitted_jobs.append({
+                        'job_id': job_record['id'],
+                        'status': 'RESUBMIT_FAILED',
+                        'error': str(e)
+                    })
+            else:
+                # For other batch types, check if the entity still exists
+                # If entity is missing (e.g., deleted externally), resubmit the job
+                try:
+                    job_config = job.get_job_config(job_record['id'], schema=schema)
+                    job_config_data = job_config.get('job_configuration_data', {})
+
+                    # Get configuration data for batch types that need it (e.g., portfolio mapping)
+                    config = read_configuration(batch['configuration_id'], schema=schema)
+                    config_data = config.get('configuration_data', {})
+
+                    entity_exists = validator.check_entity_exists_for_job(
+                        job_config_data,
+                        batch['batch_type'],
+                        config_data=config_data
+                    )
+
+                    if not entity_exists:
+                        # Entity is missing - resubmit the job
+                        new_job_id = job.resubmit_job(
+                            job_record['id'],
+                            irp_client,
+                            batch['batch_type'],
+                            job_configuration_data=job_config_data,
+                            override_reason="Entity missing - resubmitted automatically",
+                            schema=schema
+                        )
+                        submitted_jobs.append({
+                            'job_id': new_job_id,
+                            'original_job_id': job_record['id'],
+                            'status': 'RESUBMITTED',
+                            'reason': 'entity_missing'
+                        })
+                except Exception as e:
+                    # Log error but continue with other jobs
+                    submitted_jobs.append({
+                        'job_id': job_record['id'],
+                        'status': 'CHECK_FAILED',
+                        'error': str(e)
+                    })
 
     # Update batch status to ACTIVE and set submitted_ts
     query = """

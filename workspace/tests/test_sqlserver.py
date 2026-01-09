@@ -1227,17 +1227,18 @@ def test_check_kerberos_status_not_set(monkeypatch):
     assert 'not enabled' in status['error']
 
 
-def test_init_kerberos_missing_keytab(monkeypatch):
-    """Test init_kerberos error when keytab not specified"""
+def test_init_kerberos_no_credentials(monkeypatch):
+    """Test init_kerberos error when neither keytab nor password is available"""
     from helpers.sqlserver import init_kerberos
 
     monkeypatch.delenv('KRB5_KEYTAB', raising=False)
+    monkeypatch.delenv('KRB5_PASSWORD', raising=False)
     monkeypatch.setenv('KRB5_PRINCIPAL', 'user@REALM')
 
     with pytest.raises(SQLServerConfigurationError) as exc_info:
         init_kerberos()
 
-    assert 'keytab path not specified' in str(exc_info.value)
+    assert 'No Kerberos credentials available' in str(exc_info.value)
 
 
 def test_init_kerberos_missing_principal(monkeypatch, tmp_path):
@@ -1257,17 +1258,19 @@ def test_init_kerberos_missing_principal(monkeypatch, tmp_path):
     assert 'principal not specified' in str(exc_info.value)
 
 
-def test_init_kerberos_keytab_not_found(monkeypatch):
-    """Test init_kerberos error when keytab file doesn't exist"""
+def test_init_kerberos_keytab_not_found_no_password(monkeypatch):
+    """Test init_kerberos error when keytab file doesn't exist and no password"""
     from helpers.sqlserver import init_kerberos
 
     monkeypatch.setenv('KRB5_KEYTAB', '/nonexistent/path/test.keytab')
     monkeypatch.setenv('KRB5_PRINCIPAL', 'user@REALM')
+    monkeypatch.delenv('KRB5_PASSWORD', raising=False)
 
+    # When keytab doesn't exist and no password, should error
     with pytest.raises(SQLServerConfigurationError) as exc_info:
         init_kerberos()
 
-    assert 'keytab file not found' in str(exc_info.value)
+    assert 'No Kerberos credentials available' in str(exc_info.value)
 
 
 def test_init_kerberos_explicit_params(monkeypatch, tmp_path):

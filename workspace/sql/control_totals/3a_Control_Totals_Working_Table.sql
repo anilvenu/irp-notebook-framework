@@ -397,13 +397,13 @@ Where State NOT IN ('PR','VI','GU')
 and FFModeled = 'Y'
 and main_bu = 'Clay'
 Group by CLIENTNAME
-Order by 1
+Order by 1;
 
 
 /*===========================================
 	US FL Commercial Flood
 ===========================================*/
-WITH CommercialFlood_ByCov_PolControlTotals AS (
+;WITH CommercialFlood_ByCov_PolControlTotals AS (
 SELECT Product_Group_ROE as Portfolio, b.AssociationAcctNum
 	,CASE WHEN BLANKET_LIMIT_TYPE = 'Policy Level Per Occurrence' AND SEPERATE_BLANKET_BUILDING_AND_CONTENT = 'Y' THEN MAX(a.Blanket_Building_Limit)+Max(a.Blanket_Content_Limit) --coded in the sublimit, here for totals
 		WHEN BLANKET_LIMIT_TYPE = 'Policy Level Per Occurrence' AND SEPERATE_BLANKET_BUILDING_AND_CONTENT = 'N' THEN MAX(a.BLANKET_COMBINED_LIMIT)

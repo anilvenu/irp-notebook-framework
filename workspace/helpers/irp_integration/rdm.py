@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Optional
 
 from helpers.irp_integration.utils import extract_id_from_location_header
 from .client import Client
-from .constants import CREATE_RDM_EXPORT_JOB, GET_EXPORT_JOB, SEARCH_DATABASES, WORKFLOW_COMPLETED_STATUSES
+from .constants import CREATE_RDM_EXPORT_JOB, GET_EXPORT_JOB, SEARCH_DATABASES, WORKFLOW_COMPLETED_STATUSES, DELETE_RDM, GET_DATABRIDGE_JOB
 from .exceptions import IRPAPIError, IRPJobError
 from .validators import validate_non_empty_string, validate_list_not_empty, validate_positive_int
 
@@ -401,3 +401,123 @@ class RDMManager:
             offset += limit
 
         return all_results
+
+    def submit_delete_rdm_job(self, rdm_name: str, server_name: str = "databridge-1") -> str:
+        """
+        Submit job to delete an RDM from the databridge server.
+
+        Args:
+            rdm_name: Name prefix of the RDM to delete
+            server_name: Name of the database server (default: "databridge-1")
+
+        Returns:
+            Job ID for the delete operation
+
+        Raises:
+            IRPAPIError: If RDM not found or delete request fails
+        """
+        validate_non_empty_string(rdm_name, "rdm_name")
+        validate_non_empty_string(server_name, "server_name")
+
+        # Get the full RDM name (with random suffix)
+        rdm_full_name = self.get_rdm_database_full_name(rdm_name, server_name)
+
+        # Submit delete request
+        try:
+            response = self.client.request(
+                'DELETE',
+                DELETE_RDM.format(instanceName=server_name, rdmName=rdm_full_name)
+            )
+            response_data = response.json()
+            job_id = response_data.get('jobId')
+
+            if not job_id:
+                raise IRPAPIError(f"Delete RDM response did not contain jobId: {response_data}")
+
+            return job_id
+        except Exception as e:
+            raise IRPAPIError(f"Failed to delete RDM '{rdm_name}': {e}") from e
+
+    def get_databridge_job(self, job_id: str) -> str:
+        """
+        Get the status of a databridge job.
+
+        Args:
+            job_id: Job ID from databridge operation (e.g., delete RDM)
+
+        Returns:
+            Job status string
+
+        Raises:
+            IRPAPIError: If request fails
+        """
+        validate_non_empty_string(job_id, "job_id")
+
+        try:
+            response = self.client.request(
+                'GET',
+                GET_DATABRIDGE_JOB.format(jobId=job_id)
+            )
+            # API returns a string directly
+            return response.text
+        except Exception as e:
+            raise IRPAPIError(f"Failed to get databridge job status for '{job_id}': {e}") from e
+
+    def poll_delete_rdm_job_to_completion(
+            self,
+            job_id: str,
+            interval: int = 10,
+            timeout: int = 600000
+    ) -> str:
+        """
+        Poll delete RDM job until completion or timeout.
+
+        Valid statuses:
+        - "Enqueued": Job queued for processing
+        - "Processing": Job in progress
+        - "Succeeded": Job completed successfully
+        - Any other status is treated as an error
+
+        Args:
+            job_id: Job ID from delete operation
+            interval: Polling interval in seconds (default: 10)
+            timeout: Maximum timeout in seconds (default: 600000)
+
+        Returns:
+            Final job status string ("Succeeded")
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPJobError: If job fails or times out
+            IRPAPIError: If polling fails
+        """
+        validate_non_empty_string(job_id, "job_id")
+        validate_positive_int(interval, "interval")
+        validate_positive_int(timeout, "timeout")
+
+        valid_in_progress_statuses = {"Enqueued", "Processing"}
+        success_status = "Succeeded"
+
+        start = time.time()
+        while True:
+            print(f"Polling delete RDM job ID {job_id}")
+            status = self.get_databridge_job(job_id)
+            print(f"Job status: {status}")
+
+            # Check if job completed successfully
+            if status == success_status:
+                return status
+
+            # Check if job failed
+            if status not in valid_in_progress_statuses:
+                raise IRPJobError(
+                    f"Delete RDM job ID {job_id} failed with status: {status}"
+                )
+
+            # Check timeout
+            if time.time() - start > timeout:
+                raise IRPJobError(
+                    f"Delete RDM job ID {job_id} did not complete within {timeout} seconds. Last status: {status}"
+                )
+
+            time.sleep(interval)

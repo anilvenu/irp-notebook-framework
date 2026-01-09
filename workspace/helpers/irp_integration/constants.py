@@ -92,6 +92,8 @@ CREATE_TAG = '/platform/referencedata/v1/tags'
 CREATE_RDM_EXPORT_JOB = '/platform/export/v1/jobs'
 GET_EXPORT_JOB = '/platform/export/v1/jobs/{jobId}'
 SEARCH_DATABASES = '/platform/riskdata/v1/dataservers/{serverId}/databases'
+DELETE_RDM = '/databridge/v1/sql-instances/{instanceName}/databases/{rdmName}'
+GET_DATABRIDGE_JOB = '/databridge/v1/jobs/{jobId}'
 
 # Currency endpoints
 SEARCH_CURRENCIES = '/data-store/referencetables/currency'

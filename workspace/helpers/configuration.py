@@ -166,6 +166,51 @@ def transform_mri_import(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     return job_configs
 
 
+def transform_data_extraction(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Transform configuration for Data Extraction batch type.
+    Creates one job configuration per base portfolio.
+
+    Each job extracts data from SQL Server and generates Account/Location CSV files.
+    The SQL script path is determined by:
+    - Cycle Type from Metadata (determines subdirectory: quarterly, annual, adhoc, test)
+    - Import File from portfolio row (determines script name)
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        List of job configurations (one per base portfolio)
+    """
+    metadata = _extract_metadata(config)
+    portfolios = config.get('Portfolios', [])
+    base_portfolios = get_base_portfolios(portfolios)
+
+    # Extract values from Metadata
+    date_value = metadata.get('Current Date Value', '')
+    cycle_type = metadata.get('Cycle Type', '')
+
+    job_configs = []
+    for portfolio_row in base_portfolios:
+        import_file = portfolio_row.get('Import File', '')
+
+        # Build CSV filenames (Account and Location)
+        accounts_import_file = f"Modeling_{date_value}_Moodys_{import_file}_Account.csv"
+        locations_import_file = f"Modeling_{date_value}_Moodys_{import_file}_Location.csv"
+
+        job_config = {
+            'Metadata': metadata,
+            **portfolio_row,
+            'accounts_import_file': accounts_import_file,
+            'locations_import_file': locations_import_file,
+            'date_value': date_value,
+            'cycle_type': cycle_type,
+        }
+        job_configs.append(job_config)
+
+    return job_configs
+
+
 def transform_create_reinsurance_treaties(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Transform configuration for Create Reinsurance Treaties batch type.
@@ -688,6 +733,7 @@ BATCH_TYPE_TRANSFORMERS = {
     BatchType.GROUPING_ROLLUP: transform_grouping_rollup,
     BatchType.EXPORT_TO_RDM: transform_export_to_rdm,
     BatchType.STAGING_ETL: transform_staging_etl,
+    BatchType.DATA_EXTRACTION: transform_data_extraction,
     # Test-only transformers (2)
     BatchType.TEST_DEFAULT: transform_test_default,
     BatchType.TEST_MULTI_JOB: transform_test_multi_job,
