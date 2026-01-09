@@ -1,12 +1,13 @@
 """
 Control Totals Validation Module
 
-This module provides functions for validating control totals against configuration thresholds,
-particularly for geocoding quality validation (GeoHaz Control Totals).
+This module provides functions for:
+- Comparing control totals between stages (3a vs 3b, 3b vs 3d)
+- Validating control totals against configuration thresholds (GeoHaz)
 """
 
 import pandas as pd
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 
 
 def validate_geohaz_thresholds(
