@@ -75,6 +75,7 @@ GET_ANALYSIS_ELT = '/platform/riskdata/v1/analyses/{analysisId}/elt'
 GET_ANALYSIS_EP = '/platform/riskdata/v1/analyses/{analysisId}/ep'
 GET_ANALYSIS_STATS = '/platform/riskdata/v1/analyses/{analysisId}/stats'
 GET_ANALYSIS_PLT = '/platform/riskdata/v1/analyses/{analysisId}/plt'
+GET_ANALYSIS_REGIONS = '/platform/riskdata/v1/analyses/{analysisId}/regions'
 
 # Perspective codes for analysis results
 PERSPECTIVE_CODES = ['GR', 'GU', 'RL']  # Gross, Ground-Up, Reinsurance Layer
@@ -97,3 +98,8 @@ GET_DATABRIDGE_JOB = '/databridge/v1/jobs/{jobId}'
 # Currency endpoints
 SEARCH_CURRENCIES = '/data-store/referencetables/currency'
 SEARCH_CURRENCY_SCHEME_VINTAGES = '/data-store/referencetables/currencyschemevintage'
+
+# Simulation/Model reference data endpoints
+SEARCH_SIMULATION_SETS = '/data-store/referenceTables/SimulationSet'
+SEARCH_PET_METADATA = '/data-store/referenceTables/PETMetadata'
+SEARCH_SOFTWARE_MODEL_VERSION_MAP = '/data-store/referenceTables/SoftwareModelVersionMap'
