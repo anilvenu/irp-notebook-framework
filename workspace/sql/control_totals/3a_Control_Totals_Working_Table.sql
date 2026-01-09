@@ -19,7 +19,7 @@ Runtime: <1 min
 /*===========================================
 	CB EQ
 ===========================================*/
-Select Product_group, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('CBEQ_', Product_group) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_EQ = 0 THEN CovALimit ELSE CovAlimit_EQ END)+
 (CASE WHEN Covblimit_EQ = 0 THEN CovbLimit ELSE Covblimit_EQ END)+
@@ -39,7 +39,7 @@ Order by 1
 /*===========================================
 	CB HU
 ===========================================*/
-Select Product_group, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('CBHU_', Product_group) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_hu = 0 THEN CovALimit ELSE CovAlimit_hu END)+
 (CASE WHEN Covblimit_hu = 0 THEN CovbLimit ELSE Covblimit_hu END)+
@@ -59,15 +59,15 @@ Order by 1
 /*===========================================
 	US EQ
 ===========================================*/
-Select Product_group, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('USEQ_', Product_group) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_EQ = 0 THEN CovALimit ELSE CovAlimit_EQ END)+
 (CASE WHEN Covblimit_EQ = 0 THEN CovbLimit ELSE Covblimit_EQ END)+
 (CASE WHEN Covclimit_EQ = 0 THEN CovcLimit ELSE Covclimit_EQ END)+
 (CASE WHEN Covdlimit_EQ = 0 THEN CovdLimit ELSE Covdlimit_EQ END)) LocationLimit,
 SUM((CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN EarthquakeDeductible ELSE EQDed_CovA END) +
-(CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovB END)	+				
-(CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovC END)	+					
+(CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovB END)	+
+(CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovC END)	+
 (CASE WHEN EQDed_CovA+EQDed_CovB+EQDed_CovC+EQDed_CovD = 0 THEN 0 ELSE EQDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -76,9 +76,9 @@ and EQModeled = 'Y'
 and main_bu <> 'Clay'
 Group by Product_group
 
-union all 
-Select 
-CLIENTNAME, SUM(Policypremium) PolicyPremium,
+union all
+Select
+CONCAT('USEQ_', CLIENTNAME) AS ExposureGroup, SUM(Policypremium) PolicyPremium,
 SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_EQ = 0 THEN CovALimit ELSE CovAlimit_EQ END)+
@@ -99,15 +99,15 @@ Order by 1
 /*===========================================
 	US FF
 ===========================================*/
-Select Product_group, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('USFF_', Product_group) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_ff = 0 THEN CovALimit ELSE CovAlimit_ff END)+
 (CASE WHEN Covblimit_ff = 0 THEN CovbLimit ELSE Covblimit_ff END)+
 (CASE WHEN Covclimit_ff = 0 THEN CovcLimit ELSE Covclimit_ff END)+
 (CASE WHEN Covdlimit_ff = 0 THEN CovdLimit ELSE Covdlimit_ff END)) LocationLimit,
 SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowingDeductible ELSE FFDed_CovA END) +
-(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
-(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
+(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+
+(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -117,16 +117,16 @@ and main_bu <> 'Clay'
 and Product_group <> 'Vol. HO (HIP)'
 Group by Product_group
 
-union all 
-Select a.Product_group_roe, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+union all
+Select CONCAT('USFF_', a.Product_group_roe) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_ff = 0 THEN CovALimit ELSE CovAlimit_ff END)+
 (CASE WHEN Covblimit_ff = 0 THEN CovbLimit ELSE Covblimit_ff END)+
 (CASE WHEN Covclimit_ff = 0 THEN CovcLimit ELSE Covclimit_ff END)+
 (CASE WHEN Covdlimit_ff = 0 THEN CovdLimit ELSE Covdlimit_ff END)) LocationLimit,
 SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowingDeductible ELSE FFDed_CovA END) +
-(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
-(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
+(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+
+(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -136,9 +136,9 @@ and main_bu <> 'Clay'
 and Product_group = 'Vol. HO (HIP)'
 Group by a.Product_group_roe
 
-union all 
-Select 
-CLIENTNAME, SUM(Policypremium) PolicyPremium,
+union all
+Select
+CONCAT('USFF_', CLIENTNAME) AS ExposureGroup, SUM(Policypremium) PolicyPremium,
 SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_ff = 0 THEN CovALimit ELSE CovAlimit_ff END)+
@@ -159,15 +159,15 @@ Order by 1
 /*===========================================
 	US ST
 ===========================================*/
-Select Product_group, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('USST_', Product_group) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_th = 0 THEN CovALimit ELSE CovAlimit_th END)+
 (CASE WHEN Covblimit_th = 0 THEN CovbLimit ELSE Covblimit_th END)+
 (CASE WHEN Covclimit_th = 0 THEN CovcLimit ELSE Covclimit_th END)+
 (CASE WHEN Covdlimit_th = 0 THEN CovdLimit ELSE Covdlimit_th END)) LocationLimit,
 SUM((CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN TORNADOHAILDEDUCTIBLE ELSE THDed_CovA END) +
-(CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovB END)	+				
-(CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovC END)	+					
+(CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovB END)	+
+(CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovC END)	+
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -177,16 +177,16 @@ and main_bu <> 'Clay'
 and Product_group <> 'Vol. HO (HIP)'
 Group by Product_group
 
-union all 
-Select a.Product_group_roe, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+union all
+Select CONCAT('USST_', a.Product_group_roe) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_th = 0 THEN CovALimit ELSE CovAlimit_th END)+
 (CASE WHEN Covblimit_th = 0 THEN CovbLimit ELSE Covblimit_th END)+
 (CASE WHEN Covclimit_th = 0 THEN CovcLimit ELSE Covclimit_th END)+
 (CASE WHEN Covdlimit_th = 0 THEN CovdLimit ELSE Covdlimit_th END)) LocationLimit,
 SUM((CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN TORNADOHAILDEDUCTIBLE ELSE THDed_CovA END) +
-(CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovB END)	+				
-(CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovC END)	+					
+(CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovB END)	+
+(CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovC END)	+
 (CASE WHEN THDed_CovA+THDed_CovB+THDed_CovC+THDed_CovD = 0 THEN 0 ELSE THDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -196,9 +196,9 @@ and main_bu <> 'Clay'
 and Product_group = 'Vol. HO (HIP)'
 Group by a.Product_group_roe
 
-union all 
-Select 
-CLIENTNAME, SUM(Policypremium) PolicyPremium,
+union all
+Select
+CONCAT('USST_', CLIENTNAME) AS ExposureGroup, SUM(Policypremium) PolicyPremium,
 SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_th = 0 THEN CovALimit ELSE CovAlimit_th END)+
@@ -219,15 +219,15 @@ Order by 1
 /*===========================================
 	US HU Leak
 ===========================================*/
-Select Product_group, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('USHU_', Product_group, '_Leak') AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_hu = 0 THEN CovALimit ELSE CovAlimit_hu END)+
 (CASE WHEN Covblimit_hu = 0 THEN CovbLimit ELSE Covblimit_hu END)+
 (CASE WHEN Covclimit_hu = 0 THEN CovcLimit ELSE Covclimit_hu END)+
 (CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END)) LocationLimit,
 SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDeductible ELSE HUDed_CovA END) +
-(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+				
-(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+					
+(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+
+(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -238,16 +238,16 @@ and Product_group <> 'Vol. HO (HIP)'
 and FLOOD_FLAG_TOTAL = 'n'
 Group by Product_group
 
-union all 
-Select a.Product_group_roe, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+union all
+Select CONCAT('USHU_', a.Product_group_roe, '_Leak') AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_hu = 0 THEN CovALimit ELSE CovAlimit_hu END)+
 (CASE WHEN Covblimit_hu = 0 THEN CovbLimit ELSE Covblimit_hu END)+
 (CASE WHEN Covclimit_hu = 0 THEN CovcLimit ELSE Covclimit_hu END)+
 (CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END)) LocationLimit,
 SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDeductible ELSE HUDed_CovA END) +
-(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+				
-(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+					
+(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END)	+
+(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END)	+
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -258,9 +258,9 @@ and Product_group = 'Vol. HO (HIP)'
 and FLOOD_FLAG_TOTAL = 'n'
 Group by a.Product_group_roe
 
-union all 
-Select 
-CLIENTNAME, SUM(Policypremium) PolicyPremium,
+union all
+Select
+CONCAT('USHU_', CLIENTNAME, '_Leak') AS ExposureGroup, SUM(Policypremium) PolicyPremium,
 SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_hu = 0 THEN CovALimit ELSE CovAlimit_hu END)+
@@ -282,7 +282,7 @@ Order by 1
 /*===========================================
 	US HU Full
 ===========================================*/
-Select Product_group, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('USHU_', Product_group, '_Full') AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_hu = 0 THEN CovALimit ELSE CovAlimit_hu END)+
 (CASE WHEN Covblimit_hu = 0 THEN CovbLimit ELSE Covblimit_hu END)+
@@ -309,27 +309,27 @@ and main_bu <> 'Clay'
 and FLOOD_FLAG_TOTAL = 'y'
 Group by Product_group
 
-union all 
-Select 
-CLIENTNAME, SUM(Policypremium) PolicyPremium,
+union all
+Select
+CONCAT('USHU_', CLIENTNAME, '_Full') AS ExposureGroup, SUM(Policypremium) PolicyPremium,
 SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_hu = 0 THEN CovALimit ELSE CovAlimit_hu END)+
 (CASE WHEN Covblimit_hu = 0 THEN CovbLimit ELSE Covblimit_hu END)+
 (CASE WHEN Covclimit_hu = 0 THEN CovcLimit ELSE Covclimit_hu END)+
 (CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END) +
-(CASE WHEN CovAlimit_Flood <> 0 THEN CovAlimit_Flood ELSE 0 END) +	
-(CASE WHEN CovBlimit_Flood <> 0 THEN CovBlimit_Flood ELSE 0 END) + 
-(CASE WHEN CovClimit_Flood <> 0 THEN CovClimit_Flood ELSE 0 END) + 
+(CASE WHEN CovAlimit_Flood <> 0 THEN CovAlimit_Flood ELSE 0 END) +
+(CASE WHEN CovBlimit_Flood <> 0 THEN CovBlimit_Flood ELSE 0 END) +
+(CASE WHEN CovClimit_Flood <> 0 THEN CovClimit_Flood ELSE 0 END) +
 (CASE WHEN CovDlimit_Flood <> 0 THEN CovDlimit_Flood ELSE 0 END)) LocationLimit,
 SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDeductible ELSE HUDed_CovA END) +
-(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END) +				
-(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END) +					
+(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END) +
+(CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END) +
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovD END)) LocationDeductible-- +
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD = 0 THEN FloodDeductible ELSE 0 END) +
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovA ELSE 0 END) +
---(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovB ELSE 0 END) + 
---(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovC ELSE 0 END) + 
+--(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovB ELSE 0 END) +
+--(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovC ELSE 0 END) +
 --(CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD <> 0 THEN FloodDed_CovD ELSE 0 END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working
 Where State NOT IN ('PR','VI','GU')
@@ -342,15 +342,15 @@ Order by 1
 /*===========================================
 	US WF
 ===========================================*/
-Select Product_group, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('USWF_', Product_group) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_ff = 0 THEN CovALimit ELSE CovAlimit_ff END)+
 (CASE WHEN Covblimit_ff = 0 THEN CovbLimit ELSE Covblimit_ff END)+
 (CASE WHEN Covclimit_ff = 0 THEN CovcLimit ELSE Covclimit_ff END)+
 (CASE WHEN Covdlimit_ff = 0 THEN CovdLimit ELSE Covdlimit_ff END)) LocationLimit,
 SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowingDeductible ELSE FFDed_CovA END) +
-(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
-(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
+(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+
+(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -360,16 +360,16 @@ and main_bu <> 'Clay'
 and Product_group <> 'Vol. HO (HIP)'
 Group by Product_group
 
-union all 
-Select a.Product_group_roe, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+union all
+Select CONCAT('USWF_', a.Product_group_roe) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_ff = 0 THEN CovALimit ELSE CovAlimit_ff END)+
 (CASE WHEN Covblimit_ff = 0 THEN CovbLimit ELSE Covblimit_ff END)+
 (CASE WHEN Covclimit_ff = 0 THEN CovcLimit ELSE Covclimit_ff END)+
 (CASE WHEN Covdlimit_ff = 0 THEN CovdLimit ELSE Covdlimit_ff END)) LocationLimit,
 SUM((CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN FireFollowingDeductible ELSE FFDed_CovA END) +
-(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+				
-(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+					
+(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovB END)	+
+(CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovC END)	+
 (CASE WHEN FFDed_CovA+FFDed_CovB+FFDed_CovC+FFDed_CovD = 0 THEN 0 ELSE FFDed_CovD END)) LocationDeductible
 From dbo.CombinedData_{{ DATE_VALUE }}_Working a
 join [dbo].[Just_Product_Group_Roe_Power_BI] b on a.product_group_roe = b.product_group_roe
@@ -379,9 +379,9 @@ and main_bu <> 'Clay'
 and Product_group = 'Vol. HO (HIP)'
 Group by a.Product_group_roe
 
-union all 
-Select 
-CLIENTNAME, SUM(Policypremium) PolicyPremium,
+union all
+Select
+CONCAT('USWF_', CLIENTNAME) AS ExposureGroup, SUM(Policypremium) PolicyPremium,
 SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_ff = 0 THEN CovALimit ELSE CovAlimit_ff END)+
@@ -445,9 +445,10 @@ SELECT Product_Group_ROE as Portfolio
 FROM dbo.CombinedData_{{ DATE_VALUE }}_Working
 WHERE ProductType in ('FB') )
 
-SELECT Count(Distinct AssociationName) PolicyCount
+SELECT 'USFL_Commercial' AS ExposureGroup
+,Count(Distinct AssociationName) PolicyCount
 ,SUM(PolicyPremium) PolicyPremium
-,SUM(Gross_Exposed_Limit) GrossExposedLimit 
+,SUM(Gross_Exposed_Limit) GrossExposedLimit
 ,'0' AS AttachmentPoint
 ,(SELECT SUM(DedAmt1) FROM CommercialFlood_ByCov_PolControlTotals) PolicyDeductible
 ,(SELECT SUM(Limit1+AggregateLimit) FROM CommercialFlood_ByCov_PolControlTotals) PolicyLimit
@@ -462,9 +463,10 @@ WHERE ProductType in ('FB')
 /*===========================================
 	US FL Excess Flood
 ===========================================*/
-SELECT Count(Distinct AssociationName) PolicyCount
+SELECT 'USFL_Excess' AS ExposureGroup
+,Count(Distinct AssociationName) PolicyCount
 ,SUM(PolicyPremium) PolicyPremium
-,SUM(Gross_Exposed_Limit) GrossExposedLimit 
+,SUM(Gross_Exposed_Limit) GrossExposedLimit
 ,'0' AS AttachmentPoint
 ,'0' as PolicyDeductible
 ,SUM(PolicyLimit) PolicyLimit
@@ -479,10 +481,10 @@ WHERE ProductType in ('EF','EG')
 /*===========================================
 	US FL Other Flood
 ===========================================*/
-SELECT CASE WHEN QEM_Product_Group = 'Lender Placed' AND State IN ('PR','VI','GU') THEN 'Other_CB' ELSE QEM_Product_Group END AS QEM_Product_Group,
+SELECT CONCAT('USFL_Other_', CASE WHEN QEM_Product_Group = 'Lender Placed' AND State IN ('PR','VI','GU') THEN 'Other_CB' ELSE QEM_Product_Group END) AS ExposureGroup,
 Count(*) PolicyCount
 ,SUM(PolicyPremium) PolicyPremium
-,SUM(Gross_Exposed_Limit) GrossExposedLimit 
+,SUM(Gross_Exposed_Limit) GrossExposedLimit
 ,SUM(FloodAttachmentPoint_CovA) AS AttachmentPoint
 ,SUM(CASE WHEN FLOODDEDUCTIBLE IS NULL THEN FLOODDED_COVA ELSE FLOODDEDUCTIBLE END) AS PolicyDeductible
 ,SUM(MODELED_TIV_FLOOD) PolicyLimit
@@ -493,5 +495,5 @@ Count(*) PolicyCount
 ,SUM(FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD) LocationDeductible
 FROM dbo.CombinedData_{{ DATE_VALUE }}_Working
 WHERE OTHER_FLOOD_IND = 'Y' --All Other Flood
-GROUP BY CASE WHEN QEM_Product_Group = 'Lender Placed' AND State IN ('PR','VI','GU') THEN 'Other_CB' ELSE QEM_Product_Group END
+GROUP BY CONCAT('USFL_Other_', CASE WHEN QEM_Product_Group = 'Lender Placed' AND State IN ('PR','VI','GU') THEN 'Other_CB' ELSE QEM_Product_Group END)
 ORDER BY 1
