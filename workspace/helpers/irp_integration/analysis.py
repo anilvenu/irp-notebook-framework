@@ -655,7 +655,34 @@ class AnalysisManager:
                 "simulationSetId": simulation_set_id
             })
 
-        return result
+        # Merge entries with same attributes but different engineVersion
+        # When the same modelRegionCode appears with multiple engine versions (e.g., RL22 and RL23),
+        # they should be merged into a single entry with comma-separated engineVersion (e.g., "RL23,RL22")
+        # This is required by the API to correctly group losses across engine versions
+        merged_result = {}
+        for entry in result:
+            # Create key from all fields except engineVersion
+            merge_key = (
+                entry["eventRateSchemeId"],
+                entry["modelRegionCode"],
+                entry["modelVersion"],
+                entry["perilCode"],
+                entry["regionCode"],
+                entry["simulationPeriods"],
+                entry["simulationSetId"]
+            )
+
+            if merge_key in merged_result:
+                # Merge engine versions (avoid duplicates)
+                existing_versions = set(merged_result[merge_key]["engineVersion"].split(","))
+                existing_versions.add(entry["engineVersion"])
+                # Sort to ensure consistent ordering (higher version first)
+                sorted_versions = sorted(existing_versions, reverse=True)
+                merged_result[merge_key]["engineVersion"] = ",".join(sorted_versions)
+            else:
+                merged_result[merge_key] = entry.copy()
+
+        return list(merged_result.values())
 
     def submit_analysis_grouping_job(
         self,
