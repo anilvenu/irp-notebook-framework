@@ -192,3 +192,225 @@ def get_import_file_mapping_from_config(configuration_data: Dict[str, Any]) -> D
             mapping[portfolio_name] = import_file
 
     return mapping
+
+
+def compare_3a_vs_3b(
+    results_3a: List[pd.DataFrame],
+    results_3b: List[pd.DataFrame]
+) -> Tuple[pd.DataFrame, bool]:
+    """
+    Compare control totals between 3a (Working Table) and 3b (Contract Import File).
+
+    This function compares 7 attributes between 3a and 3b results by ExposureGroup:
+    - PolicyCount: 3a.LocationCount vs 3b.PolicyCount
+    - PolicyPremium: 3a.PolicyPremium vs 3b.PolicyPremium
+    - PolicyLimit: 3a.PolicyLimit vs 3b.PolicyLimit
+    - LocationCountDistinct: 3a.LocationCount vs 3b.LocationCountDistinct
+    - TotalReplacementValue: 3a.TotalReplacementValue vs 3b.TotalReplacementValue
+    - LocationLimit: 3a.LocationLimit vs 3b.LocationLimit
+    - LocationDeductible: 3a.LocationDeductible vs 3b.LocationDeductible
+
+    Difference is calculated as: 3b_value - 3a_value (0 means match)
+
+    Args:
+        results_3a: List of DataFrames from 3a_Control_Totals_Working_Table.sql
+            Each DataFrame has columns: ExposureGroup, PolicyPremium, PolicyLimit,
+            LocationCountDistinct (labeled as such in some sections, LocationCount in others),
+            TotalReplacementValue, LocationLimit, LocationDeductible
+        results_3b: List of DataFrames from 3b_Control_Totals_Contract_Import_File_Tables.sql
+            Each DataFrame has columns: ExposureGroup, PolicyCount, PolicyPremium,
+            PolicyLimit, LocationCountDistinct, TotalReplacementValue, LocationLimit,
+            LocationDeductible
+
+    Returns:
+        Tuple of (comparison_df, all_matched):
+            - comparison_df: DataFrame with columns:
+                - ExposureGroup: The exposure group identifier
+                - Attribute: The attribute being compared
+                - 3a_Value: Value from Working Table
+                - 3b_Value: Value from Contract Import File
+                - Difference: 3b_Value - 3a_Value
+                - Status: "MATCH" if Difference == 0, else "MISMATCH"
+            - all_matched: Boolean indicating if all comparisons matched (all differences are 0)
+
+    Example:
+        ```python
+        from helpers.sqlserver import execute_query_from_file
+        from helpers.control_totals import compare_3a_vs_3b
+
+        # Execute 3a SQL
+        results_3a = execute_query_from_file(
+            'control_totals/3a_Control_Totals_Working_Table.sql',
+            params={'DATE_VALUE': '202503'},
+            connection='DATABRIDGE',
+            database='DW_EXP_MGMT_USER'
+        )
+
+        # Execute 3b SQL
+        results_3b = execute_query_from_file(
+            'control_totals/3b_Control_Totals_Contract_Import_File_Tables.sql',
+            params={'DATE_VALUE': '202503', 'CYCLE_TYPE': 'Quarterly'},
+            connection='DATABRIDGE',
+            database='DW_EXP_MGMT_USER'
+        )
+
+        # Compare
+        comparison_df, all_matched = compare_3a_vs_3b(results_3a, results_3b)
+        display(comparison_df)
+
+        if all_matched:
+            print("All control totals match!")
+        else:
+            print("WARNING: Some control totals do not match!")
+        ```
+    """
+    # Attributes to compare with their column mappings
+    # Format: (attribute_name, 3a_column, 3b_column)
+    COMPARISON_ATTRIBUTES = [
+        ('PolicyCount', 'LocationCount', 'PolicyCount'),
+        ('PolicyPremium', 'PolicyPremium', 'PolicyPremium'),
+        ('PolicyLimit', 'PolicyLimit', 'PolicyLimit'),
+        ('LocationCountDistinct', 'LocationCount', 'LocationCountDistinct'),
+        ('TotalReplacementValue', 'TotalReplacementValue', 'TotalReplacementValue'),
+        ('LocationLimit', 'LocationLimit', 'LocationLimit'),
+        ('LocationDeductible', 'LocationDeductible', 'LocationDeductible'),
+    ]
+
+    # Combine all 3a result sets into one DataFrame
+    df_3a_combined = pd.concat(results_3a, ignore_index=True)
+
+    # Combine all 3b result sets into one DataFrame
+    df_3b_combined = pd.concat(results_3b, ignore_index=True)
+
+    # Normalize column names - handle variations in column naming
+    # 3a may have LocationCountDistinct or LocationCount depending on section
+    if 'LocationCountDistinct' in df_3a_combined.columns and 'LocationCount' not in df_3a_combined.columns:
+        df_3a_combined = df_3a_combined.rename(columns={'LocationCountDistinct': 'LocationCount'})
+
+    # Build comparison results
+    comparison_results = []
+
+    # Get all unique ExposureGroups from both sources
+    all_exposure_groups = set(df_3a_combined['ExposureGroup'].unique()) | set(df_3b_combined['ExposureGroup'].unique())
+
+    for exposure_group in sorted(all_exposure_groups):
+        # Get row from 3a for this exposure group
+        row_3a = df_3a_combined[df_3a_combined['ExposureGroup'] == exposure_group]
+
+        # Get row from 3b for this exposure group
+        row_3b = df_3b_combined[df_3b_combined['ExposureGroup'] == exposure_group]
+
+        for attr_name, col_3a, col_3b in COMPARISON_ATTRIBUTES:
+            # Get 3a value
+            if row_3a.empty:
+                val_3a = None
+            elif col_3a in row_3a.columns:
+                val_3a = row_3a.iloc[0][col_3a]
+            else:
+                val_3a = None
+
+            # Get 3b value
+            if row_3b.empty:
+                val_3b = None
+            elif col_3b in row_3b.columns:
+                val_3b = row_3b.iloc[0][col_3b]
+            else:
+                val_3b = None
+
+            # Calculate difference (handle None values)
+            if val_3a is not None and val_3b is not None:
+                # Convert to numeric, handling string values like '0'
+                try:
+                    val_3a_num = float(val_3a) if val_3a is not None else 0
+                    val_3b_num = float(val_3b) if val_3b is not None else 0
+                    difference = val_3b_num - val_3a_num
+                    status = 'MATCH' if difference == 0 else 'MISMATCH'
+                except (ValueError, TypeError):
+                    difference = None
+                    status = 'ERROR'
+            else:
+                difference = None
+                status = 'MISSING' if val_3a is None or val_3b is None else 'ERROR'
+
+            comparison_results.append({
+                'ExposureGroup': exposure_group,
+                'Attribute': attr_name,
+                '3a_Value': val_3a,
+                '3b_Value': val_3b,
+                'Difference': difference,
+                'Status': status
+            })
+
+    # Convert to DataFrame
+    comparison_df = pd.DataFrame(comparison_results)
+
+    # Determine if all matched
+    all_matched = True
+    if not comparison_df.empty:
+        all_matched = (comparison_df['Status'] == 'MATCH').all()
+
+    return comparison_df, all_matched
+
+
+def compare_3a_vs_3b_pivot(
+    results_3a: List[pd.DataFrame],
+    results_3b: List[pd.DataFrame]
+) -> Tuple[pd.DataFrame, bool]:
+    """
+    Compare control totals between 3a and 3b in a pivoted format (one row per ExposureGroup).
+
+    This provides a more compact view where each row shows all attribute differences
+    for a single ExposureGroup.
+
+    Args:
+        results_3a: List of DataFrames from 3a_Control_Totals_Working_Table.sql
+        results_3b: List of DataFrames from 3b_Control_Totals_Contract_Import_File_Tables.sql
+
+    Returns:
+        Tuple of (comparison_df, all_matched):
+            - comparison_df: DataFrame with columns:
+                - ExposureGroup
+                - PolicyCount_Diff
+                - PolicyPremium_Diff
+                - PolicyLimit_Diff
+                - LocationCountDistinct_Diff
+                - TotalReplacementValue_Diff
+                - LocationLimit_Diff
+                - LocationDeductible_Diff
+                - Status: "MATCH" if all differences are 0, else "MISMATCH"
+            - all_matched: Boolean indicating if all comparisons matched
+
+    Example:
+        ```python
+        comparison_df, all_matched = compare_3a_vs_3b_pivot(results_3a, results_3b)
+        display(comparison_df)
+        ```
+    """
+    # Get the detailed comparison first
+    detailed_df, _ = compare_3a_vs_3b(results_3a, results_3b)
+
+    if detailed_df.empty:
+        return pd.DataFrame(), True
+
+    # Pivot to get one row per ExposureGroup
+    pivot_df = detailed_df.pivot(
+        index='ExposureGroup',
+        columns='Attribute',
+        values='Difference'
+    ).reset_index()
+
+    # Rename columns to include _Diff suffix
+    rename_map = {col: f'{col}_Diff' for col in pivot_df.columns if col != 'ExposureGroup'}
+    pivot_df = pivot_df.rename(columns=rename_map)
+
+    # Add overall status column
+    diff_columns = [col for col in pivot_df.columns if col.endswith('_Diff')]
+    pivot_df['Status'] = pivot_df[diff_columns].apply(
+        lambda row: 'MATCH' if all(v == 0 for v in row if v is not None and not pd.isna(v)) else 'MISMATCH',
+        axis=1
+    )
+
+    # Determine if all matched
+    all_matched = (pivot_df['Status'] == 'MATCH').all()
+
+    return pivot_df, all_matched
