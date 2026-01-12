@@ -612,6 +612,123 @@ def test_validate_special_references_products_perils_group_name():
 
 
 @pytest.mark.unit
+def test_validate_special_references_duplicate_peril_product_group():
+    """Test _validate_special_references catches duplicate Peril + Product Group combinations"""
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Name': 'Analysis1'},
+            {'Analysis Name': 'Analysis2'}
+        ],
+        "Moody's Reference Data": {
+            'Model Profiles': [],
+            'Output Profiles': [],
+            'Event Rate Schemes': []
+        },
+        'Reinsurance Treaties': [],
+        'Products and Perils': [
+            {'Analysis Name': 'Analysis1', 'Peril': 'EQ', 'Product Group': 'PG1'},
+            {'Analysis Name': 'Analysis2', 'Peril': 'EQ', 'Product Group': 'PG1'},  # Duplicate!
+            {'Analysis Name': 'Analysis1', 'Peril': 'HU', 'Product Group': 'PG2'}
+        ],
+        'Groupings': []
+    }
+
+    errors = _validate_special_references(config_data)
+
+    assert len(errors) == 1
+    assert 'BUS-005' in errors[0] or 'Duplicate' in errors[0]
+    assert 'EQ' in errors[0]
+    assert 'PG1' in errors[0]
+
+
+@pytest.mark.unit
+def test_validate_special_references_empty_peril_product_group_not_duplicate():
+    """Test _validate_special_references allows multiple rows with empty Peril/Product Group"""
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Name': 'Analysis1'},
+            {'Analysis Name': 'Analysis2'},
+            {'Analysis Name': 'Analysis3'}
+        ],
+        "Moody's Reference Data": {
+            'Model Profiles': [],
+            'Output Profiles': [],
+            'Event Rate Schemes': []
+        },
+        'Reinsurance Treaties': [],
+        'Products and Perils': [
+            {'Analysis Name': 'Analysis1', 'Peril': None, 'Product Group': None},
+            {'Analysis Name': 'Analysis2', 'Peril': None, 'Product Group': None},  # Not a duplicate
+            {'Analysis Name': 'Analysis3', 'Peril': 'EQ', 'Product Group': None}   # Partial - not checked
+        ],
+        'Groupings': []
+    }
+
+    errors = _validate_special_references(config_data)
+
+    assert len(errors) == 0
+
+
+@pytest.mark.unit
+def test_validate_special_references_unique_peril_product_group():
+    """Test _validate_special_references passes with unique Peril + Product Group combinations"""
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Name': 'Analysis1'},
+            {'Analysis Name': 'Analysis2'}
+        ],
+        "Moody's Reference Data": {
+            'Model Profiles': [],
+            'Output Profiles': [],
+            'Event Rate Schemes': []
+        },
+        'Reinsurance Treaties': [],
+        'Products and Perils': [
+            {'Analysis Name': 'Analysis1', 'Peril': 'EQ', 'Product Group': 'PG1'},
+            {'Analysis Name': 'Analysis2', 'Peril': 'HU', 'Product Group': 'PG1'},  # Different Peril
+            {'Analysis Name': 'Analysis1', 'Peril': 'EQ', 'Product Group': 'PG2'}   # Different Product Group
+        ],
+        'Groupings': []
+    }
+
+    errors = _validate_special_references(config_data)
+
+    assert len(errors) == 0
+
+
+@pytest.mark.unit
+def test_validate_special_references_multiple_duplicate_peril_product_groups():
+    """Test _validate_special_references reports all duplicate Peril + Product Group combinations"""
+    config_data = {
+        'Analysis Table': [
+            {'Analysis Name': 'Analysis1'},
+            {'Analysis Name': 'Analysis2'},
+            {'Analysis Name': 'Analysis3'}
+        ],
+        "Moody's Reference Data": {
+            'Model Profiles': [],
+            'Output Profiles': [],
+            'Event Rate Schemes': []
+        },
+        'Reinsurance Treaties': [],
+        'Products and Perils': [
+            {'Analysis Name': 'Analysis1', 'Peril': 'EQ', 'Product Group': 'PG1'},
+            {'Analysis Name': 'Analysis2', 'Peril': 'EQ', 'Product Group': 'PG1'},  # Duplicate 1
+            {'Analysis Name': 'Analysis1', 'Peril': 'HU', 'Product Group': 'PG2'},
+            {'Analysis Name': 'Analysis3', 'Peril': 'HU', 'Product Group': 'PG2'}   # Duplicate 2
+        ],
+        'Groupings': []
+    }
+
+    errors = _validate_special_references(config_data)
+
+    assert len(errors) == 1
+    # Both duplicates should be mentioned
+    assert 'EQ' in errors[0] and 'PG1' in errors[0]
+    assert 'HU' in errors[0] and 'PG2' in errors[0]
+
+
+@pytest.mark.unit
 def test_validate_groupings_references_success():
     """Test _validate_groupings_references with valid references"""
     config_data = {
