@@ -94,6 +94,7 @@ GET_EXPORT_JOB = '/platform/export/v1/jobs/{jobId}'
 SEARCH_DATABASES = '/platform/riskdata/v1/dataservers/{serverId}/databases'
 DELETE_RDM = '/databridge/v1/sql-instances/{instanceName}/databases/{rdmName}'
 GET_DATABRIDGE_JOB = '/databridge/v1/jobs/{jobId}'
+UPDATE_GROUP_ACCESS = '/databridge/v1/sql-instances/{instanceName}/Databases/{databaseName}'
 
 # Currency endpoints
 SEARCH_CURRENCIES = '/data-store/referencetables/currency'
