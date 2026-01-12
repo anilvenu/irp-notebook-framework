@@ -1216,6 +1216,27 @@ def _validate_special_references(config_data: Dict[str, Any]) -> List[str]:
                 f"in Analysis Table or Groupings"
             )
 
+    # 3. Validate Products and Perils - Peril + Product Group must be unique (for populated rows)
+    peril_product_combinations = []
+    for row in products_perils:
+        peril = row.get('Peril')
+        product_group = row.get('Product Group')
+        # Only check populated rows (both Peril and Product Group must be non-empty)
+        if pd.notna(peril) and pd.notna(product_group):
+            peril_product_combinations.append((peril, product_group))
+
+    # Find duplicates
+    seen = set()
+    duplicates = set()
+    for combo in peril_product_combinations:
+        if combo in seen:
+            duplicates.add(combo)
+        seen.add(combo)
+
+    if duplicates:
+        duplicate_strs = [f"(Peril='{p}', Product Group='{pg}')" for p, pg in sorted(duplicates)]
+        errors.append(_format_error('BUS-005', duplicates=', '.join(duplicate_strs)))
+
     return errors
 
 
