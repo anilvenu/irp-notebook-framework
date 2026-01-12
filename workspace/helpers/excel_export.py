@@ -163,3 +163,135 @@ def _format_validation_sheet(worksheet, data: pd.DataFrame) -> None:
         # Set column width with a little padding
         adjusted_width = max_length + 2
         worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
+
+
+def save_control_totals_comparison_to_excel(
+    comparison_results: pd.DataFrame,
+    date_value: str,
+    output_dir: Union[str, Path]
+) -> Optional[Path]:
+    """
+    Save 3a vs 3b control totals comparison results to an Excel file.
+
+    Creates a formatted Excel workbook with the comparison results showing
+    the differences between Working Table (3a) and Contract Import File (3b)
+    control totals.
+
+    Includes formatting:
+    - Bold headers
+    - Conditional coloring on Status column (green for MATCH, red for MISMATCH)
+    - Auto-fit column widths
+    - Number formatting for difference columns
+
+    Args:
+        comparison_results: DataFrame from compare_3a_vs_3b_pivot() with columns:
+            ExposureGroup, PolicyCount_Diff, PolicyPremium_Diff, PolicyLimit_Diff,
+            LocationCountDistinct_Diff, TotalReplacementValue_Diff, LocationLimit_Diff,
+            LocationDeductible_Diff, Status
+        date_value: Date value for filename (e.g., '202503')
+        output_dir: Directory to save the Excel file
+
+    Returns:
+        Path to created Excel file, or None if comparison_results is empty
+
+    Example:
+        ```python
+        comparison_results, all_matched = compare_3a_vs_3b_pivot(
+            results_3a, results_3b
+        )
+
+        excel_path = save_control_totals_comparison_to_excel(
+            comparison_results=comparison_results,
+            date_value='202503',
+            output_dir=Path('/path/to/notebook/directory')
+        )
+        ```
+    """
+    # Don't create file if no results
+    if comparison_results is None or comparison_results.empty:
+        return None
+
+    # Ensure output_dir is a Path
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build filename
+    filename = f"Control_Totals_Results_{date_value}.xlsx"
+    file_path = output_dir / filename
+
+    # Create Excel writer
+    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+        # Write DataFrame to sheet
+        comparison_results.to_excel(writer, sheet_name='3a_vs_3b_Comparison', index=False)
+
+        # Get the worksheet for formatting
+        worksheet = writer.sheets['3a_vs_3b_Comparison']
+
+        # Apply formatting
+        _format_comparison_sheet(worksheet, comparison_results)
+
+    return file_path
+
+
+def _format_comparison_sheet(worksheet, data: pd.DataFrame) -> None:
+    """
+    Apply formatting to a control totals comparison worksheet.
+
+    Args:
+        worksheet: openpyxl worksheet object
+        data: DataFrame that was written to the sheet (for column info)
+    """
+    # Define styles
+    header_font = Font(bold=True)
+    match_fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+    mismatch_fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
+    center_align = Alignment(horizontal='center')
+    right_align = Alignment(horizontal='right')
+
+    # Get column count
+    num_cols = len(data.columns)
+
+    # Find Status column index (if it exists)
+    status_col_idx = None
+    if 'Status' in data.columns:
+        status_col_idx = list(data.columns).index('Status') + 1  # 1-indexed for openpyxl
+
+    # Format header row (row 1)
+    for col in range(1, num_cols + 1):
+        cell = worksheet.cell(row=1, column=col)
+        cell.font = header_font
+        cell.alignment = center_align
+
+    # Apply formatting to data cells
+    for row in range(2, len(data) + 2):  # Start from row 2 (after header)
+        for col in range(1, num_cols + 1):
+            cell = worksheet.cell(row=row, column=col)
+            col_name = data.columns[col - 1]
+
+            # Right-align numeric columns (those ending with _Diff)
+            if col_name.endswith('_Diff'):
+                cell.alignment = right_align
+            else:
+                cell.alignment = center_align
+
+        # Apply conditional fill to Status cell only
+        if status_col_idx:
+            status_cell = worksheet.cell(row=row, column=status_col_idx)
+            status_value = status_cell.value
+            if status_value == 'MATCH':
+                status_cell.fill = match_fill
+            elif status_value == 'MISMATCH':
+                status_cell.fill = mismatch_fill
+
+    # Auto-fit column widths
+    for col_idx, column in enumerate(data.columns, 1):
+        # Calculate max width needed
+        max_length = len(str(column))  # Header length
+        for row in range(2, len(data) + 2):
+            cell_value = worksheet.cell(row=row, column=col_idx).value
+            if cell_value is not None:
+                max_length = max(max_length, len(str(cell_value)))
+
+        # Set column width with a little padding
+        adjusted_width = max_length + 2
+        worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
