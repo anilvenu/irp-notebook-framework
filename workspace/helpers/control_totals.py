@@ -194,6 +194,11 @@ def get_import_file_mapping_from_config(configuration_data: Dict[str, Any]) -> D
     return mapping
 
 
+def _is_flood_exposure_group(exposure_group: str) -> bool:
+    """Check if an ExposureGroup is a Flood portfolio (USFL_*)."""
+    return exposure_group.startswith('USFL_')
+
+
 def compare_3a_vs_3b(
     results_3a: List[pd.DataFrame],
     results_3b: List[pd.DataFrame]
@@ -201,7 +206,9 @@ def compare_3a_vs_3b(
     """
     Compare control totals between 3a (Working Table) and 3b (Contract Import File).
 
-    This function compares 7 attributes between 3a and 3b results by ExposureGroup:
+    This function compares attributes between 3a and 3b results by ExposureGroup.
+
+    For Non-Flood perils (CBEQ, CBHU, USEQ, USFF, USST, USHU, USWF), compares 7 attributes:
     - PolicyCount: 3a.LocationCount vs 3b.PolicyCount
     - PolicyPremium: 3a.PolicyPremium vs 3b.PolicyPremium
     - PolicyLimit: 3a.PolicyLimit vs 3b.PolicyLimit
@@ -210,17 +217,24 @@ def compare_3a_vs_3b(
     - LocationLimit: 3a.LocationLimit vs 3b.LocationLimit
     - LocationDeductible: 3a.LocationDeductible vs 3b.LocationDeductible
 
+    For Flood perils (USFL_*), compares 10 attributes with 3 additional Flood-specific:
+    - PolicyCount, PolicyPremium, PolicyLimit (same column names in 3a and 3b)
+    - AttachmentPoint, PolicyDeductible, PolicySublimit (Flood-only)
+    - LocationCountDistinct, TotalReplacementValue, LocationLimit, LocationDeductible
+
     Difference is calculated as: 3b_value - 3a_value (0 means match)
 
     Args:
         results_3a: List of DataFrames from 3a_Control_Totals_Working_Table.sql
             Each DataFrame has columns: ExposureGroup, PolicyPremium, PolicyLimit,
             LocationCountDistinct (labeled as such in some sections, LocationCount in others),
-            TotalReplacementValue, LocationLimit, LocationDeductible
+            TotalReplacementValue, LocationLimit, LocationDeductible.
+            Flood sections also have: PolicyCount, AttachmentPoint, PolicyDeductible, PolicySublimit
         results_3b: List of DataFrames from 3b_Control_Totals_Contract_Import_File_Tables.sql
             Each DataFrame has columns: ExposureGroup, PolicyCount, PolicyPremium,
             PolicyLimit, LocationCountDistinct, TotalReplacementValue, LocationLimit,
-            LocationDeductible
+            LocationDeductible.
+            Flood sections also have: AttachmentPoint, PolicyDeductible, PolicySublimit
 
     Returns:
         Tuple of (comparison_df, all_matched):
@@ -264,13 +278,27 @@ def compare_3a_vs_3b(
             print("WARNING: Some control totals do not match!")
         ```
     """
-    # Attributes to compare with their column mappings
+    # Non-Flood attributes: 7 attributes
     # Format: (attribute_name, 3a_column, 3b_column)
-    COMPARISON_ATTRIBUTES = [
+    NON_FLOOD_ATTRIBUTES = [
         ('PolicyCount', 'LocationCount', 'PolicyCount'),
         ('PolicyPremium', 'PolicyPremium', 'PolicyPremium'),
         ('PolicyLimit', 'PolicyLimit', 'PolicyLimit'),
         ('LocationCountDistinct', 'LocationCount', 'LocationCountDistinct'),
+        ('TotalReplacementValue', 'TotalReplacementValue', 'TotalReplacementValue'),
+        ('LocationLimit', 'LocationLimit', 'LocationLimit'),
+        ('LocationDeductible', 'LocationDeductible', 'LocationDeductible'),
+    ]
+
+    # Flood attributes: 10 attributes (column names match between 3a and 3b)
+    FLOOD_ATTRIBUTES = [
+        ('PolicyCount', 'PolicyCount', 'PolicyCount'),
+        ('PolicyPremium', 'PolicyPremium', 'PolicyPremium'),
+        ('AttachmentPoint', 'AttachmentPoint', 'AttachmentPoint'),
+        ('PolicyDeductible', 'PolicyDeductible', 'PolicyDeductible'),
+        ('PolicyLimit', 'PolicyLimit', 'PolicyLimit'),
+        ('PolicySublimit', 'PolicySublimit', 'PolicySublimit'),
+        ('LocationCountDistinct', 'LocationCountDistinct', 'LocationCountDistinct'),
         ('TotalReplacementValue', 'TotalReplacementValue', 'TotalReplacementValue'),
         ('LocationLimit', 'LocationLimit', 'LocationLimit'),
         ('LocationDeductible', 'LocationDeductible', 'LocationDeductible'),
@@ -282,8 +310,9 @@ def compare_3a_vs_3b(
     # Combine all 3b result sets into one DataFrame
     df_3b_combined = pd.concat(results_3b, ignore_index=True)
 
-    # Normalize column names - handle variations in column naming
+    # Normalize column names - handle variations in column naming for non-Flood
     # 3a may have LocationCountDistinct or LocationCount depending on section
+    # Only rename if LocationCount doesn't exist (to avoid overwriting Flood's LocationCountDistinct)
     if 'LocationCountDistinct' in df_3a_combined.columns and 'LocationCount' not in df_3a_combined.columns:
         df_3a_combined = df_3a_combined.rename(columns={'LocationCountDistinct': 'LocationCount'})
 
@@ -300,7 +329,13 @@ def compare_3a_vs_3b(
         # Get row from 3b for this exposure group
         row_3b = df_3b_combined[df_3b_combined['ExposureGroup'] == exposure_group]
 
-        for attr_name, col_3a, col_3b in COMPARISON_ATTRIBUTES:
+        # Select appropriate attribute list based on exposure group type
+        if _is_flood_exposure_group(exposure_group):
+            attributes = FLOOD_ATTRIBUTES
+        else:
+            attributes = NON_FLOOD_ATTRIBUTES
+
+        for attr_name, col_3a, col_3b in attributes:
             # Get 3a value
             if row_3a.empty:
                 val_3a = None
