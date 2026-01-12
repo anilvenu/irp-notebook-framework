@@ -4,12 +4,13 @@ RDM (Risk Data Model) export operations.
 Handles exporting analysis results to RDM via databridge.
 """
 
+import os
 import time
 from typing import Dict, List, Any, Optional
 
 from helpers.irp_integration.utils import extract_id_from_location_header
 from .client import Client
-from .constants import CREATE_RDM_EXPORT_JOB, GET_EXPORT_JOB, SEARCH_DATABASES, WORKFLOW_COMPLETED_STATUSES, DELETE_RDM, GET_DATABRIDGE_JOB
+from .constants import CREATE_RDM_EXPORT_JOB, GET_EXPORT_JOB, SEARCH_DATABASES, WORKFLOW_COMPLETED_STATUSES, DELETE_RDM, GET_DATABRIDGE_JOB, UPDATE_GROUP_ACCESS
 from .exceptions import IRPAPIError, IRPJobError
 from .validators import validate_non_empty_string, validate_list_not_empty, validate_positive_int
 
@@ -521,3 +522,63 @@ class RDMManager:
                 )
 
             time.sleep(interval)
+
+    def add_group_access_to_rdm(
+            self,
+            database_name: str,
+            group_id: Optional[str] = None,
+            server_name: str = "databridge-1"
+    ) -> Dict[str, Any]:
+        """
+        Add group access to an RDM database.
+
+        Args:
+            database_name: Name of the RDM database
+            group_id: Group ID to grant access to. If None, uses DATABRIDGE_GROUP_ID
+                environment variable.
+            server_name: Name of the database server (default: "databridge-1")
+
+        Returns:
+            Dict containing the API response
+
+        Raises:
+            IRPValidationError: If parameters are invalid
+            IRPAPIError: If request fails or group_id is not configured
+        """
+        validate_non_empty_string(database_name, "database_name")
+        validate_non_empty_string(server_name, "server_name")
+
+        # Get group_id from environment if not provided
+        if group_id is None:
+            group_id = os.environ.get('DATABRIDGE_GROUP_ID')
+            if not group_id:
+                raise IRPAPIError(
+                    "group_id parameter not provided and DATABRIDGE_GROUP_ID "
+                    "environment variable is not set"
+                )
+
+        validate_non_empty_string(group_id, "group_id")
+
+        # Build request payload
+        data = [
+            {
+                "operation": "Add",
+                "targetProperty": "groupId",
+                "value": group_id
+            }
+        ]
+
+        try:
+            response = self.client.request(
+                'PATCH',
+                UPDATE_GROUP_ACCESS.format(instanceName=server_name, databaseName=database_name),
+                json=data
+            )
+            # API returns 204 No Content on success
+            if response.status_code == 204:
+                return {}
+            return response.json()
+        except Exception as e:
+            raise IRPAPIError(
+                f"Failed to add group access to RDM '{database_name}': {e}"
+            ) from e
