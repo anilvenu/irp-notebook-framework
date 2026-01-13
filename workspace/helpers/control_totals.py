@@ -208,7 +208,7 @@ def compare_3a_vs_3b(
 
     This function compares attributes between 3a and 3b results by ExposureGroup.
 
-    For Non-Flood perils (CBEQ, CBHU, USEQ, USFF, USST, USHU, USWF), compares 7 attributes:
+    For Non-Flood perils (CBEQ, CBHU, USEQ, USFF, USOW, USHU, USWF), compares 7 attributes:
     - PolicyCount: 3a.LocationCount vs 3b.PolicyCount
     - PolicyPremium: 3a.PolicyPremium vs 3b.PolicyPremium
     - PolicyLimit: 3a.PolicyLimit vs 3b.PolicyLimit
@@ -568,7 +568,7 @@ def compare_3b_vs_3d(
     This function compares attributes between 3b and 3d results by ExposureGroup/PORTNAME.
     The comparison shows differences as: 3d_value - 3b_value (0 means match).
 
-    For Non-Flood perils (CBEQ, CBHU, USEQ, USFF, USST, USHU, USWF), compares 7 attributes:
+    For Non-Flood perils (CBEQ, CBHU, USEQ, USFF, USOW, USHU, USWF), compares 7 attributes:
     - PolicyCount, PolicyPremium, PolicyLimit
     - LocationCountDistinct, TotalReplacementValue, LocationLimit, LocationDeductible
 
