@@ -287,11 +287,13 @@ SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_hu = 0 THEN CovALimit ELSE CovAlimit_hu END)+
 (CASE WHEN Covblimit_hu = 0 THEN CovbLimit ELSE Covblimit_hu END)+
 (CASE WHEN Covclimit_hu = 0 THEN CovcLimit ELSE Covclimit_hu END)+
-(CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END) +
-(CASE WHEN CovAlimit_Flood <> 0 THEN CovAlimit_Flood ELSE 0 END) +	
-(CASE WHEN CovBlimit_Flood <> 0 THEN CovBlimit_Flood ELSE 0 END) + 
-(CASE WHEN CovClimit_Flood <> 0 THEN CovClimit_Flood ELSE 0 END) + 
-(CASE WHEN CovDlimit_Flood <> 0 THEN CovDlimit_Flood ELSE 0 END)) LocationLimit,
+(CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END)
+-- (CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END) +
+-- (CASE WHEN CovAlimit_Flood <> 0 THEN CovAlimit_Flood ELSE 0 END) +	
+-- (CASE WHEN CovBlimit_Flood <> 0 THEN CovBlimit_Flood ELSE 0 END) + 
+-- (CASE WHEN CovClimit_Flood <> 0 THEN CovClimit_Flood ELSE 0 END) + 
+-- (CASE WHEN CovDlimit_Flood <> 0 THEN CovDlimit_Flood ELSE 0 END)) 
+) LocationLimit,
 SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDeductible ELSE HUDed_CovA END) +
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END) +				
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END) +					
@@ -317,11 +319,13 @@ SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_hu = 0 THEN CovALimit ELSE CovAlimit_hu END)+
 (CASE WHEN Covblimit_hu = 0 THEN CovbLimit ELSE Covblimit_hu END)+
 (CASE WHEN Covclimit_hu = 0 THEN CovcLimit ELSE Covclimit_hu END)+
-(CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END) +
-(CASE WHEN CovAlimit_Flood <> 0 THEN CovAlimit_Flood ELSE 0 END) +
-(CASE WHEN CovBlimit_Flood <> 0 THEN CovBlimit_Flood ELSE 0 END) +
-(CASE WHEN CovClimit_Flood <> 0 THEN CovClimit_Flood ELSE 0 END) +
-(CASE WHEN CovDlimit_Flood <> 0 THEN CovDlimit_Flood ELSE 0 END)) LocationLimit,
+(CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END)
+-- (CASE WHEN Covdlimit_hu = 0 THEN CovdLimit ELSE Covdlimit_hu END) +
+-- (CASE WHEN CovAlimit_Flood <> 0 THEN CovAlimit_Flood ELSE 0 END) +
+-- (CASE WHEN CovBlimit_Flood <> 0 THEN CovBlimit_Flood ELSE 0 END) +
+-- (CASE WHEN CovClimit_Flood <> 0 THEN CovClimit_Flood ELSE 0 END) +
+-- (CASE WHEN CovDlimit_Flood <> 0 THEN CovDlimit_Flood ELSE 0 END)
+) LocationLimit,
 SUM((CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN HurricaneDeductible ELSE HUDed_CovA END) +
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovB END) +
 (CASE WHEN HUDed_CovA+HUDed_CovB+HUDed_CovC+HUDed_CovD = 0 THEN 0 ELSE HUDed_CovC END) +
