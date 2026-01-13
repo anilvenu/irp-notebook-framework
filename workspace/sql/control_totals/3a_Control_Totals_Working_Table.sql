@@ -159,7 +159,7 @@ Order by 1
 /*===========================================
 	US ST
 ===========================================*/
-Select CONCAT('USST_', Product_group) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('USOW_', Product_group) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_th = 0 THEN CovALimit ELSE CovAlimit_th END)+
 (CASE WHEN Covblimit_th = 0 THEN CovbLimit ELSE Covblimit_th END)+
@@ -178,7 +178,7 @@ and Product_group <> 'Vol. HO (HIP)'
 Group by Product_group
 
 union all
-Select CONCAT('USST_', a.Product_group_roe) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
+Select CONCAT('USOW_', a.Product_group_roe) AS ExposureGroup, SUM(Policypremium) PolicyPremium, SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_th = 0 THEN CovALimit ELSE CovAlimit_th END)+
 (CASE WHEN Covblimit_th = 0 THEN CovbLimit ELSE Covblimit_th END)+
@@ -198,7 +198,7 @@ Group by a.Product_group_roe
 
 union all
 Select
-CONCAT('USST_', CLIENTNAME) AS ExposureGroup, SUM(Policypremium) PolicyPremium,
+CONCAT('USOW_', CLIENTNAME) AS ExposureGroup, SUM(Policypremium) PolicyPremium,
 SUM(PolicyLimit) PolicyLimit, SUM(Gross_Exposed_Limit) GrossExposedLimit, Count(*) LocationCount,
 SUM(CovAValue+CovBValue+CovCValue+CovDValue) TotalReplacementValue,
 SUM((CASE WHEN CovAlimit_th = 0 THEN CovALimit ELSE CovAlimit_th END)+

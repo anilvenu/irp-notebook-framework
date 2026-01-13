@@ -107,7 +107,7 @@ Group by POLICYUSERTXT1
 Order by 1
 
 --US ST
-select concat('USST_',Product_group) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+select concat('USOW_',Product_group) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(TOCV4VAL+TOCV5VAL+TOCV6VAL+TOCV7VAL) TotalReplacementValue
 		,Sum(TOCV4LIMIT+TOCV5LIMIT+TOCV6LIMIT+TOCV7LIMIT) LocationLimit
@@ -120,7 +120,7 @@ and c.Product_Group <> 'Vol. HO (HIP)'
 Group by Product_group
 
 union all
-Select concat('USST_',a.ACCNTNAME) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USOW_',a.ACCNTNAME) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(TOCV4VAL+TOCV5VAL+TOCV6VAL+TOCV7VAL) TotalReplacementValue
 		,Sum(TOCV4LIMIT+TOCV5LIMIT+TOCV6LIMIT+TOCV7LIMIT) LocationLimit
@@ -133,7 +133,7 @@ and c.Product_Group = 'Vol. HO (HIP)'
 Group by a.ACCNTNAME
 
 union all
-Select concat('USST_',POLICYUSERTXT1) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USOW_',POLICYUSERTXT1) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(TOCV4VAL+TOCV5VAL+TOCV6VAL+TOCV7VAL) TotalReplacementValue
 		,Sum(TOCV4LIMIT+TOCV5LIMIT+TOCV6LIMIT+TOCV7LIMIT) LocationLimit
