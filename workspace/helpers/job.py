@@ -1042,6 +1042,7 @@ def _submit_export_to_rdm_job(
 
     Returns:
         Tuple of (workflow_id, request_json, response_json)
+        workflow_id is None if job was skipped (all items missing)
 
     Raises:
         ValueError: If required fields are missing
@@ -1066,23 +1067,7 @@ def _submit_export_to_rdm_job(
     if not analysis_names:
         raise ValueError("Missing required field: analysis_names")
 
-    # Submit RDM export job
-    try:
-        moody_job_id = client.rdm.submit_rdm_export_job(
-            server_name=server_name,
-            rdm_name=rdm_name,
-            analysis_names=analysis_names,
-            database_id=database_id,
-            analysis_edm_map=analysis_edm_map,
-            group_names=group_names_set
-        )
-    except Exception as e:
-        raise JobError(f"Failed to submit RDM export job: {str(e)}")
-
-    # Build workflow ID
-    workflow_id = str(moody_job_id)
-
-    # Build request/response structures
+    # Build request structure (before API call for logging)
     request_json = {
         'job_id': job_id,
         'batch_type': BatchType.EXPORT_TO_RDM,
@@ -1097,12 +1082,48 @@ def _submit_export_to_rdm_job(
         'submitted_at': datetime.now().isoformat()
     }
 
+    # Submit RDM export job (with skip_missing=True to handle missing items gracefully)
+    try:
+        result = client.rdm.submit_rdm_export_job(
+            server_name=server_name,
+            rdm_name=rdm_name,
+            analysis_names=analysis_names,
+            database_id=database_id,
+            analysis_edm_map=analysis_edm_map,
+            group_names=group_names_set,
+            skip_missing=True
+        )
+    except Exception as e:
+        raise JobError(f"Failed to submit RDM export job: {str(e)}")
+
+    # Check if job was skipped (all items missing)
+    if result.get('skipped'):
+        response_json = {
+            'workflow_id': None,
+            'skip_job': True,
+            'skip_reason': result.get('skip_reason', 'All analyses/groups were not found'),
+            'skipped_items': result.get('skipped_items', []),
+            'status': 'SKIPPED',
+            'message': f'RDM export job to "{rdm_name}" skipped - no valid items found'
+        }
+        return None, request_json, response_json
+
+    # Job was submitted successfully
+    moody_job_id = result['job_id']
+    workflow_id = str(moody_job_id)
+
     response_json = {
         'workflow_id': workflow_id,
         'moody_job_id': moody_job_id,
         'status': 'ACCEPTED',
-        'message': f'RDM export job submitted to export {len(analysis_names)} items to "{rdm_name}"'
+        'skipped_items': result.get('skipped_items', []),
+        'included_items': result.get('included_items', []),
+        'message': f'RDM export job submitted to export {len(result.get("included_items", []))} items to "{rdm_name}"'
     }
+
+    # Add note about skipped items if any
+    if result.get('skipped_items'):
+        response_json['message'] += f' ({len(result["skipped_items"])} items skipped - not found)'
 
     return workflow_id, request_json, response_json
 

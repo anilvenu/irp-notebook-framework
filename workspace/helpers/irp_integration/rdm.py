@@ -50,7 +50,8 @@ class RDMManager:
             self,
             server_name: str,
             rdm_name: str,
-            analysis_names: List[str]
+            analysis_names: List[str],
+            skip_missing: bool = False
     ) -> Dict[str, Any]:
         """
         Export multiple analyses to RDM (Risk Data Model) and poll to completion.
@@ -59,6 +60,7 @@ class RDMManager:
             server_name: Database server name
             rdm_name: Name for the RDM
             analysis_names: List of analysis names to export
+            skip_missing: If True, skip missing analyses instead of raising an error
 
         Returns:
             Dict containing final export job status
@@ -67,11 +69,18 @@ class RDMManager:
             IRPValidationError: If parameters are invalid
             IRPAPIError: If export fails or analyses not found
         """
-        rdm_export_job_id = self.submit_rdm_export_job(
+        result = self.submit_rdm_export_job(
             server_name=server_name,
             rdm_name=rdm_name,
-            analysis_names=analysis_names
+            analysis_names=analysis_names,
+            skip_missing=skip_missing
         )
+
+        # If job was skipped (all items missing), return the skip result
+        if result.get('skipped'):
+            return result
+
+        rdm_export_job_id = result['job_id']
         return self.poll_rdm_export_job_to_completion(rdm_export_job_id)
 
 
@@ -82,8 +91,9 @@ class RDMManager:
             analysis_names: List[str],
             database_id: Optional[int] = None,
             analysis_edm_map: Optional[Dict[str, str]] = None,
-            group_names: Optional[set] = None
-    ) -> int:
+            group_names: Optional[set] = None,
+            skip_missing: bool = True
+    ) -> Dict[str, Any]:
         """
         Submit RDM export job.
 
@@ -101,13 +111,21 @@ class RDMManager:
             group_names: Optional set of known group names. Items in this set are
                 looked up as groups (by name only), all others are looked up as
                 analyses (by name + EDM if mapping provided).
+            skip_missing: If True (default), skip analyses/groups that don't exist
+                instead of raising an error. If all items are missing, returns
+                a result with job_id=None and skipped=True.
 
         Returns:
-            Job ID
+            Dict containing:
+                - job_id: RDM export job ID (int), or None if skipped
+                - skipped: True if job was skipped (all items missing)
+                - skipped_items: List of item names that were not found and skipped
+                - included_items: List of item names that were found and included
+                - skip_reason: Reason for skipping (if skipped=True)
 
         Raises:
             IRPValidationError: If parameters are invalid
-            IRPAPIError: If job submission fails
+            IRPAPIError: If job submission fails, or if skip_missing=False and items not found
         """
         validate_non_empty_string(server_name, "server_name")
         validate_non_empty_string(rdm_name, "rdm_name")
@@ -142,14 +160,20 @@ class RDMManager:
                     f"the existing RDM first."
                 )
 
-        # Resolve analysis/group names to URIs
+        # Resolve analysis/group names to URIs, tracking skipped items
         resource_uris = []
+        skipped_items = []
+        included_items = []
+
         for name in analysis_names:
             # Determine if this is a group name or an analysis name
             if name in group_names:
                 # Group names are globally unique - search by name only
                 analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
                 if len(analysis_response) == 0:
+                    if skip_missing:
+                        skipped_items.append(name)
+                        continue
                     raise IRPAPIError(f"Group with this name does not exist: {name}")
                 if len(analysis_response) > 1:
                     raise IRPAPIError(f"Duplicate groups exist with name: {name}")
@@ -160,6 +184,9 @@ class RDMManager:
                     filter_str = f"analysisName = \"{name}\" AND exposureName = \"{edm_name}\""
                     analysis_response = self.analysis_manager.search_analyses(filter=filter_str)
                     if len(analysis_response) == 0:
+                        if skip_missing:
+                            skipped_items.append(name)
+                            continue
                         raise IRPAPIError(f"Analysis '{name}' not found for EDM '{edm_name}'")
                     if len(analysis_response) > 1:
                         raise IRPAPIError(f"Multiple analyses found with name '{name}' for EDM '{edm_name}'")
@@ -167,16 +194,30 @@ class RDMManager:
                     # Fallback to name-only search (legacy behavior)
                     analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
                     if len(analysis_response) == 0:
+                        if skip_missing:
+                            skipped_items.append(name)
+                            continue
                         raise IRPAPIError(f"Analysis with this name does not exist: {name}")
                     if len(analysis_response) > 1:
                         raise IRPAPIError(f"Duplicate analyses exist with name: {name}.")
 
             try:
                 resource_uris.append(analysis_response[0]['uri'])
+                included_items.append(name)
             except (KeyError, IndexError, TypeError) as e:
                 raise IRPAPIError(
                     f"Failed to extract URI for '{name}': {e}"
                 ) from e
+
+        # If all items were skipped, return a skip result instead of submitting
+        if not resource_uris:
+            return {
+                'job_id': None,
+                'skipped': True,
+                'skipped_items': skipped_items,
+                'included_items': [],
+                'skip_reason': f"All {len(skipped_items)} analyses/groups were not found"
+            }
 
         # Build settings - use databaseId if provided (appending to existing RDM),
         # otherwise use rdmName (creating new RDM)
@@ -201,7 +242,12 @@ class RDMManager:
         try:
             response = self.client.request('POST', CREATE_RDM_EXPORT_JOB, json=data)
             job_id = extract_id_from_location_header(response, "analysis job submission")
-            return int(job_id)
+            return {
+                'job_id': int(job_id),
+                'skipped': False,
+                'skipped_items': skipped_items,
+                'included_items': included_items
+            }
         except Exception as e:
             raise IRPAPIError(f"Failed to submit rdm export job : {e}")
 
