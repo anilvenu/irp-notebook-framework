@@ -3116,8 +3116,8 @@ class TestValidateRdmExportBatch:
 
         assert errors == []
 
-    def test_missing_group_returns_error(self):
-        """Missing group should return error."""
+    def test_missing_group_returns_warning(self):
+        """Missing group should return warning (will be skipped during export)."""
         validator = EntityValidator()
         validator._analysis_manager = Mock()
         validator._rdm_manager = Mock()
@@ -3138,14 +3138,18 @@ class TestValidateRdmExportBatch:
             'group_names_set': ['MissingGroup']
         }]
 
-        errors = validator.validate_rdm_export_batch(export_jobs)
+        messages = validator.validate_rdm_export_batch(export_jobs)
 
-        assert len(errors) == 1
-        assert 'ENT-GROUP-002' in errors[0]
-        assert 'MissingGroup' in errors[0]
+        # Missing groups generate warnings, but when ALL items are missing we also get an error
+        assert len(messages) == 2
+        assert 'WARN-GROUP-001' in messages[0]
+        assert 'MissingGroup' in messages[0]
+        # All items missing = blocking error
+        assert 'ENT-RDM-002' in messages[1]
+        assert 'All 1 analyses/groups are missing' in messages[1]
 
-    def test_missing_analysis_returns_error(self):
-        """Missing analysis should return error."""
+    def test_missing_analysis_returns_warning(self):
+        """Missing analysis should return warning (will be skipped during export)."""
         validator = EntityValidator()
         validator._analysis_manager = Mock()
         validator._rdm_manager = Mock()
@@ -3163,10 +3167,14 @@ class TestValidateRdmExportBatch:
             'group_names_set': []
         }]
 
-        errors = validator.validate_rdm_export_batch(export_jobs)
+        messages = validator.validate_rdm_export_batch(export_jobs)
 
-        assert len(errors) == 1
-        assert 'ENT-ANALYSIS-002' in errors[0]
+        # Missing analyses generate warnings, but when ALL items are missing we also get an error
+        assert len(messages) == 2
+        assert 'WARN-ANALYSIS-001' in messages[0]
+        # All items missing = blocking error
+        assert 'ENT-RDM-002' in messages[1]
+        assert 'All 1 analyses/groups are missing' in messages[1]
 
     def test_existing_rdm_returns_error(self):
         """Existing RDM should return error."""
@@ -3232,8 +3240,8 @@ class TestValidateRdmExportBatch:
 
         assert errors == []
 
-    def test_multiple_errors_returned(self):
-        """Multiple validation failures should all be reported."""
+    def test_multiple_messages_returned(self):
+        """Multiple validation issues should all be reported (warnings and errors)."""
         validator = EntityValidator()
         validator._analysis_manager = Mock()
         validator._rdm_manager = Mock()
@@ -3256,12 +3264,47 @@ class TestValidateRdmExportBatch:
             'group_names_set': ['MissingGroup']
         }]
 
-        errors = validator.validate_rdm_export_batch(export_jobs)
+        messages = validator.validate_rdm_export_batch(export_jobs)
 
-        error_codes = [e.split(':')[0] for e in errors]
-        assert 'ENT-GROUP-002' in error_codes
-        assert 'ENT-ANALYSIS-002' in error_codes
-        assert 'ENT-RDM-001' in error_codes
+        message_codes = [m.split(':')[0] for m in messages]
+        # Missing groups and analyses are warnings (will be skipped during export)
+        assert 'WARN-GROUP-001' in message_codes
+        assert 'WARN-ANALYSIS-001' in message_codes
+        # All items missing = blocking error
+        assert 'ENT-RDM-002' in message_codes
+        # RDM already exists is still an error (blocking)
+        assert 'ENT-RDM-001' in message_codes
+
+    def test_some_missing_not_all_returns_warning_only(self):
+        """When some items are missing but not all, only return warnings (no ENT-RDM-002)."""
+        validator = EntityValidator()
+        validator._analysis_manager = Mock()
+        validator._rdm_manager = Mock()
+
+        # First analysis exists, second doesn't
+        validator._analysis_manager.search_analyses_paginated.side_effect = [
+            [{'analysisName': 'Analysis1'}],  # Exists
+            []  # Missing
+        ]
+        # RDM doesn't exist
+        validator._rdm_manager.search_databases.return_value = []
+
+        export_jobs = [{
+            'rdm_name': 'RM_RDM_Test',
+            'server_name': 'databridge-1',
+            'analysis_names': ['Analysis1', 'MissingAnalysis'],
+            'analysis_edm_map': {'Analysis1': 'EDM1', 'MissingAnalysis': 'EDM1'},
+            'group_names_set': []
+        }]
+
+        messages = validator.validate_rdm_export_batch(export_jobs)
+
+        # Only warning for the missing analysis, no ENT-RDM-002 since some items exist
+        assert len(messages) == 1
+        assert 'WARN-ANALYSIS-001' in messages[0]
+        assert 'MissingAnalysis' in messages[0]
+        # Should NOT have ENT-RDM-002 since not all items are missing
+        assert not any('ENT-RDM-002' in m for m in messages)
 
     def test_only_groups_no_analyses(self):
         """Export with only groups should work."""
