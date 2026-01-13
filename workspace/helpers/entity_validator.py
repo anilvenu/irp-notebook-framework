@@ -1630,9 +1630,11 @@ class EntityValidator:
         """
         Validate RDM Export batch submission.
 
-        Pre-requisites (must exist):
-        - Analyses referenced must exist
-        - Groups referenced must exist
+        Pre-requisites:
+        - Analyses referenced should exist (missing analyses generate warnings,
+          not errors - they will be skipped during submission)
+        - Groups referenced should exist (missing groups generate warnings,
+          not errors - they will be skipped during submission)
 
         Entities to be created (must NOT exist):
         - RDM name must not already exist
@@ -1642,12 +1644,15 @@ class EntityValidator:
                         'server_name', 'analysis_edm_map', and 'group_names_set' keys
 
         Returns:
-            List of error messages (empty if all validation passes)
+            List of messages (errors and warnings).
+            Warnings are prefixed with 'WARN-' and indicate missing analyses/groups
+            that will be skipped during submission.
+            Errors (without WARN- prefix) block submission.
         """
         if not export_jobs:
             return []
 
-        all_errors = []
+        all_messages = []
 
         # Collect all items, analysis_edm_map, and group_names_set from all jobs
         all_items = []
@@ -1681,24 +1686,45 @@ class EntityValidator:
         group_items = [item for item in unique_items if item in group_names_set]
         analysis_items = [item for item in unique_items if item not in group_names_set]
 
-        # Pre-requisite 1: Groups must exist
-        if group_items:
-            _, group_errors = self.validate_groups_exist(group_items)
-            all_errors.extend(group_errors)
+        # Track missing items for "all missing" check
+        missing_groups = []
+        missing_analyses = []
 
-        # Pre-requisite 2: Analyses must exist
+        # Check groups existence - missing groups are warnings, not errors
+        # They will be skipped during submission
+        if group_items:
+            missing_groups, _ = self.validate_groups_exist(group_items)
+            if missing_groups:
+                all_messages.append(
+                    f"WARN-GROUP-001: The following groups were not found and will be skipped during export:{_format_entity_list(missing_groups)}"
+                )
+
+        # Check analyses existence - missing analyses are warnings, not errors
+        # They will be skipped during submission
         if analysis_items:
-            _, analysis_errors = self.validate_analyses_exist(
+            missing_analyses, _ = self.validate_analyses_exist(
                 analysis_items, analysis_edm_map
             )
-            all_errors.extend(analysis_errors)
+            if missing_analyses:
+                all_messages.append(
+                    f"WARN-ANALYSIS-001: The following analyses were not found and will be skipped during export:{_format_entity_list(missing_analyses)}"
+                )
 
-        # RDM must NOT exist
+        # Check if ALL items are missing - this is an error, not a warning
+        total_items = len(unique_items)
+        total_missing = len(missing_groups) + len(missing_analyses)
+        if total_items > 0 and total_missing == total_items:
+            all_messages.append(
+                f"ENT-RDM-002: All {total_items} analyses/groups are missing. "
+                f"Cannot create RDM '{rdm_name}' with no valid items to export."
+            )
+
+        # RDM must NOT exist - this is still a blocking error
         if rdm_name:
             rdm_errors = self.validate_rdm_not_exists(rdm_name, server_name)
-            all_errors.extend(rdm_errors)
+            all_messages.extend(rdm_errors)
 
-        return all_errors
+        return all_messages
 
     # =========================================================================
     # Entity Existence Check for FINISHED Jobs
