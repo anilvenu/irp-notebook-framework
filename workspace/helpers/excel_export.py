@@ -351,3 +351,122 @@ def _format_comparison_sheet(worksheet, data: pd.DataFrame) -> None:
         # Set column width with a little padding
         adjusted_width = max_length + 2
         worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
+
+
+def save_control_totals_3b_vs_3d_to_excel(
+    comparison_results: pd.DataFrame,
+    date_value: str,
+    output_dir: Union[str, Path]
+) -> Optional[Path]:
+    """
+    Save 3b vs 3d control totals comparison results to an Excel file.
+
+    Creates a formatted Excel workbook with the comparison results showing
+    the differences between Contract Import File (3b) and RMS EDM (3d)
+    control totals. Results are split into two sheets:
+    - 3b_vs_3d_NonFlood: Non-Flood perils (CBEQ, CBHU, USEQ, USFF, USST, USHU, USWF)
+    - 3b_vs_3d_Flood: Flood perils (USFL_*)
+
+    Includes formatting:
+    - Bold headers
+    - Conditional coloring on Status column (green for MATCH, red for MISMATCH)
+    - Auto-fit column widths
+    - Number formatting for difference columns
+
+    Args:
+        comparison_results: DataFrame from compare_3b_vs_3d_pivot() with columns:
+            ExposureGroup, PolicyCount_Diff, PolicyPremium_Diff, PolicyLimit_Diff,
+            LocationCountDistinct_Diff, TotalReplacementValue_Diff, LocationLimit_Diff,
+            LocationDeductible_Diff, Status.
+            Flood rows also have: AttachmentPoint_Diff, PolicyDeductible_Diff, PolicySublimit_Diff
+        date_value: Date value for filename (e.g., '202503')
+        output_dir: Directory to save the Excel file
+
+    Returns:
+        Path to created Excel file, or None if comparison_results is empty
+
+    Example:
+        ```python
+        comparison_results, all_matched = compare_3b_vs_3d_pivot(
+            results_3b, results_3d
+        )
+
+        excel_path = save_control_totals_3b_vs_3d_to_excel(
+            comparison_results=comparison_results,
+            date_value='202503',
+            output_dir=Path('/path/to/notebook/directory')
+        )
+        ```
+    """
+    # Don't create file if no results
+    if comparison_results is None or comparison_results.empty:
+        return None
+
+    # Ensure output_dir is a Path
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build filename
+    filename = f"Control_Totals_3b_vs_3d_{date_value}.xlsx"
+    file_path = output_dir / filename
+
+    # Split results into Flood and Non-Flood
+    is_flood = comparison_results['ExposureGroup'].apply(_is_flood_exposure_group)
+    flood_results = comparison_results[is_flood].copy()
+    non_flood_results = comparison_results[~is_flood].copy()
+
+    # Define column order for each sheet
+    # Non-Flood: 7 attributes + Status
+    non_flood_columns = [
+        'ExposureGroup',
+        'PolicyCount_Diff',
+        'PolicyPremium_Diff',
+        'PolicyLimit_Diff',
+        'LocationCountDistinct_Diff',
+        'TotalReplacementValue_Diff',
+        'LocationLimit_Diff',
+        'LocationDeductible_Diff',
+        'Status'
+    ]
+
+    # Flood: 10 attributes + Status (includes 3 Flood-specific)
+    flood_columns = [
+        'ExposureGroup',
+        'PolicyCount_Diff',
+        'PolicyPremium_Diff',
+        'AttachmentPoint_Diff',
+        'PolicyDeductible_Diff',
+        'PolicyLimit_Diff',
+        'PolicySublimit_Diff',
+        'LocationCountDistinct_Diff',
+        'TotalReplacementValue_Diff',
+        'LocationLimit_Diff',
+        'LocationDeductible_Diff',
+        'Status'
+    ]
+
+    # Filter to only include columns that exist in each DataFrame
+    non_flood_columns = [c for c in non_flood_columns if c in non_flood_results.columns]
+    flood_columns = [c for c in flood_columns if c in flood_results.columns]
+
+    # Reorder columns
+    if not non_flood_results.empty:
+        non_flood_results = non_flood_results[non_flood_columns]
+    if not flood_results.empty:
+        flood_results = flood_results[flood_columns]
+
+    # Create Excel writer
+    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+        # Write Non-Flood sheet
+        if not non_flood_results.empty:
+            non_flood_results.to_excel(writer, sheet_name='3b_vs_3d_NonFlood', index=False)
+            worksheet = writer.sheets['3b_vs_3d_NonFlood']
+            _format_comparison_sheet(worksheet, non_flood_results)
+
+        # Write Flood sheet
+        if not flood_results.empty:
+            flood_results.to_excel(writer, sheet_name='3b_vs_3d_Flood', index=False)
+            worksheet = writer.sheets['3b_vs_3d_Flood']
+            _format_comparison_sheet(worksheet, flood_results)
+
+    return file_path

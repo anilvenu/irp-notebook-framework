@@ -387,6 +387,381 @@ def compare_3a_vs_3b(
     return comparison_df, all_matched
 
 
+def normalize_3d_results(results_3d: List[pd.DataFrame]) -> pd.DataFrame:
+    """
+    Normalize 3d SQL results (10 result sets) into a single unified DataFrame.
+
+    The 3d SQL returns 10 result sets that need to be combined:
+    - Non-USFL (4 result sets): indices 0-3
+        0: #PolicySummary - PORTNAME, PolicyCount, PolicyLimit, PolicyPremium, AttachmentPoint, PolicyDeductible
+        1: #LocationCounts - PORTNAME, LocationCountDistinct, LocationCountCampus
+        2: #LocationValues - PORTNAME, TotalReplacementValue, LocationLimit
+        3: #LocationDeductibles - PORTNAME, LocationDeductible
+
+    - USFL Flood (6 result sets): indices 4-9
+        4: #FloodAccountControls - PORTNAME, PolicyCount, PolicyPremium, PolicyLimit_NonCommercialFlood, AttachmentPoint, PolicyDeductible
+        5: #FloodCommercialPolicyLimit - USFL_Commercial_PolicyLimit (single value)
+        6: #FloodCommercialSublimit - PORTNAME, Policy_Sublimit
+        7: #FloodLocationCounts - PORTNAME, LocationCountDistinct, LocationCountCampus
+        8: #FloodLocationValues - PORTNAME, TotalReplacementValue, LocationLimit, LocationDeductible_NonCommercialFlood
+        9: #FloodCommercialLocationDeductible - USFL_Commercial_LocationDeductible (single value)
+
+    Args:
+        results_3d: List of 10 DataFrames from 3d_RMS_EDM_Control_Totals.sql
+
+    Returns:
+        Unified DataFrame with columns:
+            - PORTNAME
+            - PolicyCount
+            - PolicyPremium
+            - PolicyLimit
+            - AttachmentPoint (Flood only, 0 for Non-Flood)
+            - PolicyDeductible (Flood only, 0 for Non-Flood)
+            - PolicySublimit (Flood only, 0 for Non-Flood)
+            - LocationCountDistinct
+            - LocationCountCampus
+            - TotalReplacementValue
+            - LocationLimit
+            - LocationDeductible
+    """
+    if len(results_3d) < 10:
+        raise ValueError(f"Expected 10 result sets from 3d SQL, got {len(results_3d)}")
+
+    # Extract Non-USFL result sets (indices 0-3)
+    df_policy_summary = results_3d[0].copy()  # PolicyCount, PolicyLimit, PolicyPremium, AttachmentPoint, PolicyDeductible
+    df_location_counts = results_3d[1].copy()  # LocationCountDistinct, LocationCountCampus
+    df_location_values = results_3d[2].copy()  # TotalReplacementValue, LocationLimit
+    df_location_deductibles = results_3d[3].copy()  # LocationDeductible
+
+    # Extract USFL Flood result sets (indices 4-9)
+    df_flood_account = results_3d[4].copy()  # PolicyCount, PolicyPremium, PolicyLimit_NonCommercialFlood, AttachmentPoint, PolicyDeductible
+    df_flood_commercial_policy_limit = results_3d[5].copy()  # USFL_Commercial_PolicyLimit (single row)
+    df_flood_sublimit = results_3d[6].copy()  # Policy_Sublimit
+    df_flood_location_counts = results_3d[7].copy()  # LocationCountDistinct, LocationCountCampus
+    df_flood_location_values = results_3d[8].copy()  # TotalReplacementValue, LocationLimit, LocationDeductible_NonCommercialFlood
+    df_flood_commercial_location_ded = results_3d[9].copy()  # USFL_Commercial_LocationDeductible (single row)
+
+    # Process Non-USFL data
+    non_flood_rows = []
+    if not df_policy_summary.empty:
+        # Merge all Non-USFL data on PORTNAME
+        df_non_flood = df_policy_summary.copy()
+
+        if not df_location_counts.empty:
+            df_non_flood = df_non_flood.merge(df_location_counts, on='PORTNAME', how='outer')
+
+        if not df_location_values.empty:
+            df_non_flood = df_non_flood.merge(df_location_values, on='PORTNAME', how='outer')
+
+        if not df_location_deductibles.empty:
+            # Location deductibles may aggregate across multiple tables, so use sum if duplicates
+            df_ded_agg = df_location_deductibles.groupby('PORTNAME', as_index=False)['LocationDeductible'].sum()
+            df_non_flood = df_non_flood.merge(df_ded_agg, on='PORTNAME', how='outer', suffixes=('', '_loc'))
+            # If there was a LocationDeductible from another source, use the location one
+            if 'LocationDeductible_loc' in df_non_flood.columns:
+                df_non_flood['LocationDeductible'] = df_non_flood['LocationDeductible_loc'].fillna(df_non_flood.get('LocationDeductible', 0))
+                df_non_flood = df_non_flood.drop(columns=['LocationDeductible_loc'])
+
+        # Add missing columns for Non-Flood (AttachmentPoint, PolicyDeductible, PolicySublimit are 0)
+        for col in ['AttachmentPoint', 'PolicyDeductible']:
+            if col not in df_non_flood.columns:
+                df_non_flood[col] = 0
+        df_non_flood['PolicySublimit'] = 0
+
+        non_flood_rows.append(df_non_flood)
+
+    # Process USFL Flood data
+    flood_rows = []
+    if not df_flood_account.empty:
+        # Start with account controls
+        df_flood = df_flood_account.copy()
+
+        # Rename PolicyLimit_NonCommercialFlood to PolicyLimit
+        if 'PolicyLimit_NonCommercialFlood' in df_flood.columns:
+            df_flood = df_flood.rename(columns={'PolicyLimit_NonCommercialFlood': 'PolicyLimit'})
+
+        # Merge sublimit data
+        if not df_flood_sublimit.empty:
+            df_flood = df_flood.merge(df_flood_sublimit, on='PORTNAME', how='outer')
+        else:
+            df_flood['Policy_Sublimit'] = 0
+
+        # Rename Policy_Sublimit to PolicySublimit for consistency
+        if 'Policy_Sublimit' in df_flood.columns:
+            df_flood = df_flood.rename(columns={'Policy_Sublimit': 'PolicySublimit'})
+
+        # Merge location counts
+        if not df_flood_location_counts.empty:
+            df_flood = df_flood.merge(df_flood_location_counts, on='PORTNAME', how='outer')
+
+        # Merge location values
+        if not df_flood_location_values.empty:
+            df_flood = df_flood.merge(df_flood_location_values, on='PORTNAME', how='outer')
+            # Rename LocationDeductible_NonCommercialFlood to LocationDeductible
+            if 'LocationDeductible_NonCommercialFlood' in df_flood.columns:
+                df_flood = df_flood.rename(columns={'LocationDeductible_NonCommercialFlood': 'LocationDeductible'})
+
+        # Handle USFL_Commercial special cases
+        # Update PolicyLimit for USFL_Commercial from single-value result set
+        if not df_flood_commercial_policy_limit.empty and 'USFL_Commercial_PolicyLimit' in df_flood_commercial_policy_limit.columns:
+            commercial_policy_limit = df_flood_commercial_policy_limit.iloc[0]['USFL_Commercial_PolicyLimit']
+            if pd.notna(commercial_policy_limit):
+                mask = df_flood['PORTNAME'] == 'USFL_Commercial'
+                if mask.any():
+                    df_flood.loc[mask, 'PolicyLimit'] = commercial_policy_limit
+
+        # Update LocationDeductible for USFL_Commercial from single-value result set
+        if not df_flood_commercial_location_ded.empty and 'USFL_Commercial_LocationDeductible' in df_flood_commercial_location_ded.columns:
+            commercial_loc_ded = df_flood_commercial_location_ded.iloc[0]['USFL_Commercial_LocationDeductible']
+            if pd.notna(commercial_loc_ded):
+                mask = df_flood['PORTNAME'] == 'USFL_Commercial'
+                if mask.any():
+                    df_flood.loc[mask, 'LocationDeductible'] = commercial_loc_ded
+
+        flood_rows.append(df_flood)
+
+    # Combine Non-Flood and Flood data
+    all_dfs = non_flood_rows + flood_rows
+    if not all_dfs:
+        return pd.DataFrame()
+
+    df_combined = pd.concat(all_dfs, ignore_index=True)
+
+    # Standardize column order
+    standard_columns = [
+        'PORTNAME',
+        'PolicyCount',
+        'PolicyPremium',
+        'PolicyLimit',
+        'AttachmentPoint',
+        'PolicyDeductible',
+        'PolicySublimit',
+        'LocationCountDistinct',
+        'LocationCountCampus',
+        'TotalReplacementValue',
+        'LocationLimit',
+        'LocationDeductible'
+    ]
+
+    # Only include columns that exist, fill missing with 0
+    for col in standard_columns:
+        if col not in df_combined.columns:
+            df_combined[col] = 0
+
+    # Reorder columns
+    df_combined = df_combined[standard_columns]
+
+    # Fill NaN with 0 for numeric columns
+    numeric_cols = standard_columns[1:]  # All except PORTNAME
+    df_combined[numeric_cols] = df_combined[numeric_cols].fillna(0)
+
+    return df_combined
+
+
+def compare_3b_vs_3d(
+    results_3b: List[pd.DataFrame],
+    results_3d: List[pd.DataFrame]
+) -> Tuple[pd.DataFrame, bool]:
+    """
+    Compare control totals between 3b (Contract Import File) and 3d (RMS EDM).
+
+    This function compares attributes between 3b and 3d results by ExposureGroup/PORTNAME.
+    The comparison shows differences as: 3d_value - 3b_value (0 means match).
+
+    For Non-Flood perils (CBEQ, CBHU, USEQ, USFF, USST, USHU, USWF), compares 7 attributes:
+    - PolicyCount, PolicyPremium, PolicyLimit
+    - LocationCountDistinct, TotalReplacementValue, LocationLimit, LocationDeductible
+
+    For Flood perils (USFL_*), compares 10 attributes with 3 additional Flood-specific:
+    - PolicyCount, PolicyPremium, PolicyLimit
+    - AttachmentPoint, PolicyDeductible, PolicySublimit (Flood-only)
+    - LocationCountDistinct, TotalReplacementValue, LocationLimit, LocationDeductible
+
+    Args:
+        results_3b: List of DataFrames from 3b_Control_Totals_Contract_Import_File_Tables.sql
+            Each DataFrame has columns: ExposureGroup, PolicyCount, PolicyPremium,
+            PolicyLimit, LocationCountDistinct, TotalReplacementValue, LocationLimit,
+            LocationDeductible.
+            Flood sections also have: AttachmentPoint, PolicyDeductible, PolicySublimit
+        results_3d: List of 10 DataFrames from 3d_RMS_EDM_Control_Totals.sql
+
+    Returns:
+        Tuple of (comparison_df, all_matched):
+            - comparison_df: DataFrame with columns:
+                - ExposureGroup: The exposure group identifier (maps to PORTNAME)
+                - Attribute: The attribute being compared
+                - 3b_Value: Value from Contract Import File
+                - 3d_Value: Value from RMS EDM
+                - Difference: 3d_Value - 3b_Value
+                - Status: "MATCH" if Difference == 0, else "MISMATCH"
+            - all_matched: Boolean indicating if all comparisons matched
+    """
+    # Non-Flood attributes: 7 attributes
+    NON_FLOOD_ATTRIBUTES = [
+        'PolicyCount',
+        'PolicyPremium',
+        'PolicyLimit',
+        'LocationCountDistinct',
+        'TotalReplacementValue',
+        'LocationLimit',
+        'LocationDeductible',
+    ]
+
+    # Flood attributes: 10 attributes
+    FLOOD_ATTRIBUTES = [
+        'PolicyCount',
+        'PolicyPremium',
+        'AttachmentPoint',
+        'PolicyDeductible',
+        'PolicyLimit',
+        'PolicySublimit',
+        'LocationCountDistinct',
+        'TotalReplacementValue',
+        'LocationLimit',
+        'LocationDeductible',
+    ]
+
+    # Combine all 3b result sets into one DataFrame
+    df_3b_combined = pd.concat(results_3b, ignore_index=True)
+
+    # Normalize 3d results into single DataFrame
+    df_3d_normalized = normalize_3d_results(results_3d)
+
+    # Map 3b ExposureGroup to match 3d PORTNAME
+    # 3b uses ExposureGroup column, 3d uses PORTNAME
+    # They should be the same values (e.g., "CBEQ", "USEQ_Clay_21st", "USFL_Commercial")
+
+    # Build comparison results
+    comparison_results = []
+
+    # Get all unique exposure groups from both sources
+    exposure_groups_3b = set(df_3b_combined['ExposureGroup'].unique()) if 'ExposureGroup' in df_3b_combined.columns else set()
+    exposure_groups_3d = set(df_3d_normalized['PORTNAME'].unique()) if 'PORTNAME' in df_3d_normalized.columns else set()
+    all_exposure_groups = exposure_groups_3b | exposure_groups_3d
+
+    for exposure_group in sorted(all_exposure_groups):
+        # Get row from 3b for this exposure group
+        row_3b = df_3b_combined[df_3b_combined['ExposureGroup'] == exposure_group]
+
+        # Get row from 3d for this exposure group (PORTNAME)
+        row_3d = df_3d_normalized[df_3d_normalized['PORTNAME'] == exposure_group]
+
+        # Select appropriate attribute list based on exposure group type
+        if _is_flood_exposure_group(exposure_group):
+            attributes = FLOOD_ATTRIBUTES
+        else:
+            attributes = NON_FLOOD_ATTRIBUTES
+
+        for attr_name in attributes:
+            # Get 3b value
+            if row_3b.empty:
+                val_3b = None
+            elif attr_name in row_3b.columns:
+                val_3b = row_3b.iloc[0][attr_name]
+            else:
+                val_3b = None
+
+            # Get 3d value
+            if row_3d.empty:
+                val_3d = None
+            elif attr_name in row_3d.columns:
+                val_3d = row_3d.iloc[0][attr_name]
+            else:
+                val_3d = None
+
+            # Calculate difference (handle None values)
+            if val_3b is not None and val_3d is not None:
+                try:
+                    val_3b_num = float(val_3b) if val_3b is not None else 0
+                    val_3d_num = float(val_3d) if val_3d is not None else 0
+                    difference = val_3d_num - val_3b_num
+                    status = 'MATCH' if difference == 0 else 'MISMATCH'
+                except (ValueError, TypeError):
+                    difference = None
+                    status = 'ERROR'
+            else:
+                difference = None
+                status = 'MISSING' if val_3b is None or val_3d is None else 'ERROR'
+
+            comparison_results.append({
+                'ExposureGroup': exposure_group,
+                'Attribute': attr_name,
+                '3b_Value': val_3b,
+                '3d_Value': val_3d,
+                'Difference': difference,
+                'Status': status
+            })
+
+    # Convert to DataFrame
+    comparison_df = pd.DataFrame(comparison_results)
+
+    # Determine if all matched
+    all_matched = True
+    if not comparison_df.empty:
+        all_matched = (comparison_df['Status'] == 'MATCH').all()
+
+    return comparison_df, all_matched
+
+
+def compare_3b_vs_3d_pivot(
+    results_3b: List[pd.DataFrame],
+    results_3d: List[pd.DataFrame]
+) -> Tuple[pd.DataFrame, bool]:
+    """
+    Compare control totals between 3b and 3d in a pivoted format (one row per ExposureGroup).
+
+    This provides a more compact view where each row shows all attribute differences
+    for a single ExposureGroup.
+
+    Args:
+        results_3b: List of DataFrames from 3b_Control_Totals_Contract_Import_File_Tables.sql
+        results_3d: List of 10 DataFrames from 3d_RMS_EDM_Control_Totals.sql
+
+    Returns:
+        Tuple of (comparison_df, all_matched):
+            - comparison_df: DataFrame with columns:
+                - ExposureGroup
+                - PolicyCount_Diff
+                - PolicyPremium_Diff
+                - PolicyLimit_Diff
+                - LocationCountDistinct_Diff
+                - TotalReplacementValue_Diff
+                - LocationLimit_Diff
+                - LocationDeductible_Diff
+                - Status: "MATCH" if all differences are 0, else "MISMATCH"
+                (Flood rows also have: AttachmentPoint_Diff, PolicyDeductible_Diff, PolicySublimit_Diff)
+            - all_matched: Boolean indicating if all comparisons matched
+    """
+    # Get the detailed comparison first
+    detailed_df, _ = compare_3b_vs_3d(results_3b, results_3d)
+
+    if detailed_df.empty:
+        return pd.DataFrame(), True
+
+    # Pivot to get one row per ExposureGroup
+    pivot_df = detailed_df.pivot(
+        index='ExposureGroup',
+        columns='Attribute',
+        values='Difference'
+    ).reset_index()
+
+    # Rename columns to include _Diff suffix
+    rename_map = {col: f'{col}_Diff' for col in pivot_df.columns if col != 'ExposureGroup'}
+    pivot_df = pivot_df.rename(columns=rename_map)
+
+    # Add overall status column
+    diff_columns = [col for col in pivot_df.columns if col.endswith('_Diff')]
+    pivot_df['Status'] = pivot_df[diff_columns].apply(
+        lambda row: 'MATCH' if all(v == 0 for v in row if v is not None and not pd.isna(v)) else 'MISMATCH',
+        axis=1
+    )
+
+    # Determine if all matched
+    all_matched = (pivot_df['Status'] == 'MATCH').all()
+
+    return pivot_df, all_matched
+
+
 def compare_3a_vs_3b_pivot(
     results_3a: List[pd.DataFrame],
     results_3b: List[pd.DataFrame]
