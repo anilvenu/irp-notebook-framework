@@ -375,7 +375,7 @@ def save_control_totals_3b_vs_3d_to_excel(
 
     Args:
         comparison_results: DataFrame from compare_3b_vs_3d_pivot() with columns:
-            ExposureGroup, PolicyCount_Diff, PolicyPremium_Diff, PolicyLimit_Diff,
+            PORTNAME, PolicyCount_Diff, PolicyPremium_Diff, PolicyLimit_Diff,
             LocationCountDistinct_Diff, TotalReplacementValue_Diff, LocationLimit_Diff,
             LocationDeductible_Diff, Status.
             Flood rows also have: AttachmentPoint_Diff, PolicyDeductible_Diff, PolicySublimit_Diff
@@ -411,14 +411,15 @@ def save_control_totals_3b_vs_3d_to_excel(
     file_path = output_dir / filename
 
     # Split results into Flood and Non-Flood
-    is_flood = comparison_results['ExposureGroup'].apply(_is_flood_exposure_group)
+    # Note: 3b vs 3d comparison uses PORTNAME (mapped from 3b ExposureGroup to 3d PORTNAME)
+    is_flood = comparison_results['PORTNAME'].apply(_is_flood_exposure_group)
     flood_results = comparison_results[is_flood].copy()
     non_flood_results = comparison_results[~is_flood].copy()
 
     # Define column order for each sheet
     # Non-Flood: 7 attributes + Status
     non_flood_columns = [
-        'ExposureGroup',
+        'PORTNAME',
         'PolicyCount_Diff',
         'PolicyPremium_Diff',
         'PolicyLimit_Diff',
@@ -431,7 +432,7 @@ def save_control_totals_3b_vs_3d_to_excel(
 
     # Flood: 10 attributes + Status (includes 3 Flood-specific)
     flood_columns = [
-        'ExposureGroup',
+        'PORTNAME',
         'PolicyCount_Diff',
         'PolicyPremium_Diff',
         'AttachmentPoint_Diff',
