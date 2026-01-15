@@ -869,9 +869,10 @@ def compare_3d_vs_3e(
     Aggregates 3e results by PORTNAME (summing across geocode levels),
     filters to base portfolios only, and compares against 3d normalized results.
 
-    Attributes compared:
-    - Non-Flood: RiskCount vs PolicyCount, TIV vs PolicyLimit, TRV vs TotalReplacementValue
-    - Flood (USFL_*): RiskCount vs LocationCountDistinct, TIV vs LocationLimit, TRV vs TotalReplacementValue
+    Attributes compared (same for all portfolios):
+    - RiskCount (3e) vs LocationCountDistinct (3d)
+    - TIV (3e) vs LocationLimit (3d)
+    - TRV (3e) vs TotalReplacementValue (3d)
 
     Args:
         results_3d: List of 10 DataFrames from 3d_RMS_EDM_Control_Totals.sql
@@ -908,15 +909,9 @@ def compare_3d_vs_3e(
         )
         ```
     """
-    # Non-Flood attribute mappings: (attribute_name, 3e_column, 3d_column)
-    NON_FLOOD_ATTRIBUTES = [
-        ('RiskCount', 'RiskCount', 'PolicyCount'),
-        ('TIV', 'TIV', 'PolicyLimit'),
-        ('TRV', 'TRV', 'TotalReplacementValue'),
-    ]
-
-    # Flood attribute mappings: (attribute_name, 3e_column, 3d_column)
-    FLOOD_ATTRIBUTES = [
+    # Attribute mappings: (attribute_name, 3e_column, 3d_column)
+    # Same mapping for both Flood and Non-Flood since we're comparing 3d vs 3e for all portfolios
+    ATTRIBUTES = [
         ('RiskCount', 'RiskCount', 'LocationCountDistinct'),
         ('TIV', 'TIV', 'LocationLimit'),
         ('TRV', 'TRV', 'TotalReplacementValue'),
@@ -955,13 +950,7 @@ def compare_3d_vs_3e(
         # Get row from 3e for this portfolio
         row_3e = df_3e_filtered[df_3e_filtered['PORTNAME'] == portname]
 
-        # Select appropriate attribute list based on portfolio type
-        if _is_flood_exposure_group(portname):
-            attributes = FLOOD_ATTRIBUTES
-        else:
-            attributes = NON_FLOOD_ATTRIBUTES
-
-        for attr_name, col_3e, col_3d in attributes:
+        for attr_name, col_3e, col_3d in ATTRIBUTES:
             # Get 3d value
             if row_3d.empty:
                 val_3d = None
