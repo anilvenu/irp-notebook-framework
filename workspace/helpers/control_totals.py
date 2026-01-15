@@ -10,120 +10,6 @@ import pandas as pd
 from typing import Dict, List, Any, Tuple, Optional
 
 
-# =============================================================================
-# 3b ExposureGroup → 3d PORTNAME Mapping
-# =============================================================================
-# The 3b SQL constructs ExposureGroup from product groups and user text fields,
-# while 3d PORTNAME comes directly from RMS EDM portinfo table.
-# This mapping enables comparison between the two naming conventions.
-#
-# Pattern: 3b uses descriptive names from import files (e.g., "Vol. HO (Choice & FS)")
-#          3d uses abbreviated PORTNAME values (e.g., "CHFS")
-#
-# To add new mappings:
-#   1. Run 3b SQL to see ExposureGroup values
-#   2. Run 3d SQL to see PORTNAME values
-#   3. Add mapping: 'ExposureGroup_from_3b': 'PORTNAME_from_3d'
-# =============================================================================
-
-EXPOSURE_GROUP_TO_PORTNAME = {
-    # CBEQ - Caribbean Earthquake
-    'CBEQ_Lender Placed': 'CBEQ',
-
-    # CBHU - Caribbean Hurricane
-    'CBHU_Lender Placed': 'CBHU',
-
-    # USEQ - US Earthquake (Non-Flood)
-    'USEQ_21ST MORTGAGE CORP - REIN': 'USEQ_Clay_21st',
-    'USEQ_CLAYTON HOMES': 'USEQ_Clay_Homes',
-    'USEQ_Mobile Home': 'USEQ_Manufactured',
-    'USEQ_Vol. HO (Choice & FS)': 'USEQ_CHFS',
-    'USEQ_Vol. HO (Condo)': 'USEQ_Condo',
-    'USEQ_Renters': 'USEQ_Renters',
-
-    # USFF - US Fire Following (Non-Flood)
-    'USFF_21ST MORTGAGE CORP - REIN': 'USFF_Clay_21st',
-    'USFF_CLAYTON HOMES': 'USFF_Clay_Homes',
-    'USFF_Mobile Home': 'USFF_Manufactured',
-    'USFF_Vol. HO (Choice & FS)': 'USFF_CHFS',
-    'USFF_Vol. HO (Condo)': 'USFF_Condo',
-    'USFF_Geico HIP 1.0': 'USFF_Geico_HIP1',
-    'USFF_Geico HIP 2.0': 'USFF_Geico_75HIP2',
-    'USFF_Lender Placed': 'USFF_Lender_P',
-    'USFF_Other': 'USFF_Other',
-    'USFF_Renters': 'USFF_Renters',
-
-    # USOW - US Other Wind (Non-Flood)
-    'USOW_21ST MORTGAGE CORP - REIN': 'USOW_Clay_21st',
-    'USOW_CLAYTON HOMES': 'USOW_Clay_Homes',
-    'USOW_Mobile Home': 'USOW_Manufactured',
-    'USOW_Vol. HO (Choice & FS)': 'USOW_CHFS',
-    'USOW_Vol. HO (Condo)': 'USOW_Condo',
-    'USOW_Geico HIP 1.0': 'USOW_Geico_HIP1',
-    'USOW_Geico HIP 2.0': 'USOW_Geico_75HIP2',
-    'USOW_Lender Placed': 'USOW_Lender_P',
-    'USOW_Other': 'USOW_Other',
-    'USOW_Renters': 'USOW_Renters',
-
-    # USWF - US Wildfire (Non-Flood)
-    'USWF_21ST MORTGAGE CORP - REIN': 'USWF_Clay_21st',
-    'USWF_CLAYTON HOMES': 'USWF_Clay_Homes',
-    'USWF_Mobile Home': 'USWF_Manufactured',
-    'USWF_Vol. HO (Choice & FS)': 'USWF_CHFS',
-    'USWF_Vol. HO (Condo)': 'USWF_Condo',
-    'USWF_Geico HIP 1.0': 'USWF_Geico_HIP1',
-    'USWF_Geico HIP 2.0': 'USWF_Geico_75HIP2',
-    'USWF_Lender Placed': 'USWF_Lender_P',
-    'USWF_Other': 'USWF_Other',
-    'USWF_Renters': 'USWF_Renters',
-
-    # USHU Leak - US Hurricane Leak
-    'USHU_21ST MORTGAGE CORP - REIN_Leak': 'USHU_Leak_Clay_21st',
-    'USHU_CLAYTON HOMES_Leak': 'USHU_Leak_Clay_Homes',
-    'USHU_Mobile Home_Leak': 'USHU_Leak_Manufact',
-    'USHU_Vol. HO (Choice & FS)_Leak': 'USHU_Leak_CHFS',
-    'USHU_Vol. HO (Condo)_Leak': 'USHU_Leak_Condo',
-    'USHU_Geico HIP 1.0_Leak': 'USHU_Leak_Geico_HIP1',
-    'USHU_Geico HIP 2.0_Leak': 'USHU_Leak_Geico_75H2',
-    'USHU_Lender Placed_Leak': 'USHU_Leak_Lender_P',
-    'USHU_Other_Leak': 'USHU_Leak_Other',
-    'USHU_Renters_Leak': 'USHU_Leak_Renters',
-
-    # USHU Full - US Hurricane Full
-    'USHU_21ST MORTGAGE CORP - REIN_Full': 'USHU_Full_Clay_21st',
-    'USHU_CLAYTON HOMES_Full': 'USHU_Full_Clay_Homes',
-    'USHU_Mobile Home_Full': 'USHU_Full_Manufact',
-    'USHU_Lender Placed_Full': 'USHU_Full_Lender_P',
-    'USHU_Other_Full': 'USHU_Full_Other',
-    'USHU_Renters_Full': 'USHU_Full_Renters',
-
-    # USFL - US Flood (different structure)
-    'USFL_Commercial': 'USFL_Commercial',
-    'USFL_Excess': 'USFL_Excess',
-    'USFL_Other_Clayton': 'USFL_Other_Clayton',
-    'USFL_Other_Lender Placed': 'USFL_Other_Lender_P',
-    'USFL_Other_Mobile Home': 'USFL_Other_Manufact',
-    'USFL_Other_Other': 'USFL_Other_Other',
-    'USFL_Other_Other_CB': 'USFL_Other_CB',
-    'USFL_Other_Renters': 'USFL_Other_Renters',
-}
-
-
-def _map_exposure_group_to_portname(exposure_group: str) -> str:
-    """
-    Map a 3b ExposureGroup value to its corresponding 3d PORTNAME.
-
-    If no mapping exists, returns the original value (assumes already matching).
-
-    Args:
-        exposure_group: ExposureGroup value from 3b results
-
-    Returns:
-        Corresponding PORTNAME value for 3d comparison
-    """
-    return EXPOSURE_GROUP_TO_PORTNAME.get(exposure_group, exposure_group)
-
-
 def validate_geohaz_thresholds(
     geocoding_results: pd.DataFrame,
     geohaz_thresholds: List[Dict[str, Any]],
@@ -306,6 +192,24 @@ def get_import_file_mapping_from_config(configuration_data: Dict[str, Any]) -> D
             mapping[portfolio_name] = import_file
 
     return mapping
+
+
+def get_exposure_group_portname_mapping(configuration_data: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Extract ExposureGroup to Portname mapping from configuration data.
+
+    This mapping is used to align 3b ExposureGroup values with 3d PORTNAME values
+    during control totals comparison.
+
+    Args:
+        configuration_data: Full configuration dictionary from read_configuration()
+
+    Returns:
+        Dictionary mapping ExposureGroup values to Portname values.
+        Example: {"USEQ_Vol. HO (Choice & FS)": "USEQ_CHFS", ...}
+    """
+    mapping_list = configuration_data.get('ExposureGroup <-> Portname', [])
+    return {row['ExposureGroup']: row['Portname'] for row in mapping_list}
 
 
 def _is_flood_exposure_group(exposure_group: str) -> bool:
@@ -674,7 +578,8 @@ def normalize_3d_results(results_3d: List[pd.DataFrame]) -> pd.DataFrame:
 
 def compare_3b_vs_3d(
     results_3b: List[pd.DataFrame],
-    results_3d: List[pd.DataFrame]
+    results_3d: List[pd.DataFrame],
+    exposure_group_mapping: Dict[str, str]
 ) -> Tuple[pd.DataFrame, bool]:
     """
     Compare control totals between 3b (Contract Import File) and 3d (RMS EDM).
@@ -698,6 +603,8 @@ def compare_3b_vs_3d(
             LocationDeductible.
             Flood sections also have: AttachmentPoint, PolicyDeductible, PolicySublimit
         results_3d: List of 10 DataFrames from 3d_RMS_EDM_Control_Totals.sql
+        exposure_group_mapping: Dictionary mapping ExposureGroup values to Portname values
+            from configuration (e.g., {"USEQ_Vol. HO (Choice & FS)": "USEQ_CHFS"})
 
     Returns:
         Tuple of (comparison_df, all_matched):
@@ -745,9 +652,12 @@ def compare_3b_vs_3d(
     # 3b uses descriptive names (e.g., "USEQ_Vol. HO (Choice & FS)")
     # 3d uses abbreviated PORTNAME (e.g., "USEQ_CHFS")
     # Apply mapping to create a new column for comparison
+    # Values not in mapping pass through unchanged
     if 'ExposureGroup' in df_3b_combined.columns:
-        df_3b_combined['PORTNAME'] = df_3b_combined['ExposureGroup'].apply(
-            _map_exposure_group_to_portname
+        df_3b_combined['PORTNAME'] = (
+            df_3b_combined['ExposureGroup']
+            .map(exposure_group_mapping)
+            .fillna(df_3b_combined['ExposureGroup'])
         )
 
     # Build comparison results
@@ -824,7 +734,8 @@ def compare_3b_vs_3d(
 
 def compare_3b_vs_3d_pivot(
     results_3b: List[pd.DataFrame],
-    results_3d: List[pd.DataFrame]
+    results_3d: List[pd.DataFrame],
+    exposure_group_mapping: Dict[str, str]
 ) -> Tuple[pd.DataFrame, bool]:
     """
     Compare control totals between 3b and 3d in a pivoted format (one row per PORTNAME).
@@ -835,6 +746,8 @@ def compare_3b_vs_3d_pivot(
     Args:
         results_3b: List of DataFrames from 3b_Control_Totals_Contract_Import_File_Tables.sql
         results_3d: List of 10 DataFrames from 3d_RMS_EDM_Control_Totals.sql
+        exposure_group_mapping: Dictionary mapping ExposureGroup values to Portname values
+            from configuration (e.g., {"USEQ_Vol. HO (Choice & FS)": "USEQ_CHFS"})
 
     Returns:
         Tuple of (comparison_df, all_matched):
@@ -852,7 +765,7 @@ def compare_3b_vs_3d_pivot(
             - all_matched: Boolean indicating if all comparisons matched
     """
     # Get the detailed comparison first
-    detailed_df, _ = compare_3b_vs_3d(results_3b, results_3d)
+    detailed_df, _ = compare_3b_vs_3d(results_3b, results_3d, exposure_group_mapping)
 
     if detailed_df.empty:
         return pd.DataFrame(), True

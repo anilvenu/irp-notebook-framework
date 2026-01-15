@@ -341,7 +341,8 @@ CONFIGURATION_TAB_LIST = [
     'Analysis Table',
     'Groupings',
     'Products and Perils',
-    "Moody's Reference Data"
+    "Moody's Reference Data",
+    'ExposureGroup <-> Portname'
 ]
 
 # ============================================================================
@@ -619,6 +620,22 @@ MOODYS_REFERENCE_SCHEMA = {
     'unique_within_column': True
 }
 
+# ExposureGroup <-> Portname Mapping Sheet
+# Maps 3b ExposureGroup values to 3d PORTNAME values for control totals comparison
+EXPOSURE_GROUP_PORTNAME_SCHEMA = {
+    'structure_type': 'table',
+    'required_columns': ['ExposureGroup', 'Portname'],
+    'column_types': {
+        'ExposureGroup': 'string',
+        'Portname': 'string'
+    },
+    'nullable': {
+        'ExposureGroup': False,
+        'Portname': False
+    },
+    'unique_columns': ['ExposureGroup', 'Portname']
+}
+
 # Master schema registry
 EXCEL_VALIDATION_SCHEMAS = {
     'Metadata': METADATA_SCHEMA,
@@ -629,7 +646,8 @@ EXCEL_VALIDATION_SCHEMAS = {
     'Analysis Table': ANALYSIS_TABLE_SCHEMA,
     'Groupings': GROUPINGS_SCHEMA,
     'Products and Perils': PRODUCTS_PERILS_SCHEMA,
-    "Moody's Reference Data": MOODYS_REFERENCE_SCHEMA
+    "Moody's Reference Data": MOODYS_REFERENCE_SCHEMA,
+    'ExposureGroup <-> Portname': EXPOSURE_GROUP_PORTNAME_SCHEMA
 }
 
 # ============================================================================
