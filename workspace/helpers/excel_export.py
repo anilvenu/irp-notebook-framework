@@ -471,3 +471,98 @@ def save_control_totals_3b_vs_3d_to_excel(
             _format_comparison_sheet(worksheet, flood_results)
 
     return file_path
+
+
+def save_control_totals_3d_vs_3e_to_excel(
+    comparison_results: pd.DataFrame,
+    date_value: str,
+    output_dir: Union[str, Path]
+) -> Optional[Path]:
+    """
+    Save 3d vs 3e control totals comparison results to an Excel file.
+
+    Creates a formatted Excel workbook with the comparison results showing
+    the differences between RMS EDM Control Totals (3d) and Geocoding Summary (3e).
+    Results are split into two sheets:
+    - 3d_vs_3e_NonFlood: Non-Flood perils
+    - 3d_vs_3e_Flood: Flood perils (USFL_*)
+
+    Includes formatting:
+    - Bold headers
+    - Conditional coloring on Status column (green for MATCH, red for MISMATCH)
+    - Auto-fit column widths
+    - Number formatting for difference columns
+
+    Args:
+        comparison_results: DataFrame from compare_3d_vs_3e_pivot() with columns:
+            PORTNAME, RiskCount_Diff, TIV_Diff, TRV_Diff, Status
+        date_value: Date value for filename (e.g., '202503')
+        output_dir: Directory to save the Excel file
+
+    Returns:
+        Path to created Excel file, or None if comparison_results is empty
+
+    Example:
+        ```python
+        comparison_results, all_matched = compare_3d_vs_3e_pivot(
+            results_3d, results_3e, base_portfolio_names
+        )
+
+        excel_path = save_control_totals_3d_vs_3e_to_excel(
+            comparison_results=comparison_results,
+            date_value='202503',
+            output_dir=Path('/path/to/notebook/directory')
+        )
+        ```
+    """
+    # Don't create file if no results
+    if comparison_results is None or comparison_results.empty:
+        return None
+
+    # Ensure output_dir is a Path
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build filename
+    filename = f"Control_Totals_3d_vs_3e_{date_value}.xlsx"
+    file_path = output_dir / filename
+
+    # Split results into Flood and Non-Flood
+    is_flood = comparison_results['PORTNAME'].apply(_is_flood_exposure_group)
+    flood_results = comparison_results[is_flood].copy()
+    non_flood_results = comparison_results[~is_flood].copy()
+
+    # Define column order (same for both Flood and Non-Flood in this comparison)
+    columns = [
+        'PORTNAME',
+        'RiskCount_Diff',
+        'TIV_Diff',
+        'TRV_Diff',
+        'Status'
+    ]
+
+    # Filter to only include columns that exist in each DataFrame
+    non_flood_columns = [c for c in columns if c in non_flood_results.columns]
+    flood_columns = [c for c in columns if c in flood_results.columns]
+
+    # Reorder columns
+    if not non_flood_results.empty:
+        non_flood_results = non_flood_results[non_flood_columns]
+    if not flood_results.empty:
+        flood_results = flood_results[flood_columns]
+
+    # Create Excel writer
+    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+        # Write Non-Flood sheet
+        if not non_flood_results.empty:
+            non_flood_results.to_excel(writer, sheet_name='3d_vs_3e_NonFlood', index=False)
+            worksheet = writer.sheets['3d_vs_3e_NonFlood']
+            _format_comparison_sheet(worksheet, non_flood_results)
+
+        # Write Flood sheet
+        if not flood_results.empty:
+            flood_results.to_excel(writer, sheet_name='3d_vs_3e_Flood', index=False)
+            worksheet = writer.sheets['3d_vs_3e_Flood']
+            _format_comparison_sheet(worksheet, flood_results)
+
+    return file_path

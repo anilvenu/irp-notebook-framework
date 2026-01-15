@@ -856,3 +856,221 @@ def compare_3a_vs_3b_pivot(
     all_matched = (pivot_df['Status'] == 'MATCH').all()
 
     return pivot_df, all_matched
+
+
+def compare_3d_vs_3e(
+    results_3d: List[pd.DataFrame],
+    results_3e: List[pd.DataFrame],
+    base_portfolios: List[str]
+) -> Tuple[pd.DataFrame, bool]:
+    """
+    Compare RMS EDM Control Totals (3d) against Geocoding Summary (3e).
+
+    Aggregates 3e results by PORTNAME (summing across geocode levels),
+    filters to base portfolios only, and compares against 3d normalized results.
+
+    Attributes compared:
+    - Non-Flood: RiskCount vs PolicyCount, TIV vs PolicyLimit, TRV vs TotalReplacementValue
+    - Flood (USFL_*): RiskCount vs LocationCountDistinct, TIV vs LocationLimit, TRV vs TotalReplacementValue
+
+    Args:
+        results_3d: List of 10 DataFrames from 3d_RMS_EDM_Control_Totals.sql
+        results_3e: List of DataFrames from 3e_GeocodingSummary.sql (use first)
+        base_portfolios: List of portfolio names to include (from config)
+
+    Returns:
+        Tuple of (comparison_df, all_matched):
+            - comparison_df: DataFrame with columns:
+                - PORTNAME: The portfolio name
+                - Attribute: The attribute being compared (RiskCount, TIV, TRV)
+                - 3d_Value: Value from RMS EDM Control Totals
+                - 3e_Value: Value from Geocoding Summary
+                - Difference: 3d_Value - 3e_Value
+                - Status: "MATCH" if Difference == 0, else "MISMATCH"
+            - all_matched: Boolean indicating if all comparisons matched (all differences are 0)
+
+    Example:
+        ```python
+        from helpers.control_totals import compare_3d_vs_3e
+        from helpers.configuration import get_base_portfolios
+
+        # Get base portfolio names
+        base_portfolio_list = get_base_portfolios(config_data.get('Portfolios', []))
+        base_portfolio_names = [p['Portfolio'] for p in base_portfolio_list]
+
+        # Execute SQL queries
+        results_3d = execute_query_from_file('3d_RMS_EDM_Control_Totals.sql', ...)
+        results_3e = execute_query_from_file('3e_GeocodingSummary.sql', ...)
+
+        # Compare
+        comparison_df, all_matched = compare_3d_vs_3e(
+            results_3d, results_3e, base_portfolio_names
+        )
+        ```
+    """
+    # Non-Flood attribute mappings: (attribute_name, 3e_column, 3d_column)
+    NON_FLOOD_ATTRIBUTES = [
+        ('RiskCount', 'RiskCount', 'PolicyCount'),
+        ('TIV', 'TIV', 'PolicyLimit'),
+        ('TRV', 'TRV', 'TotalReplacementValue'),
+    ]
+
+    # Flood attribute mappings: (attribute_name, 3e_column, 3d_column)
+    FLOOD_ATTRIBUTES = [
+        ('RiskCount', 'RiskCount', 'LocationCountDistinct'),
+        ('TIV', 'TIV', 'LocationLimit'),
+        ('TRV', 'TRV', 'TotalReplacementValue'),
+    ]
+
+    # Normalize 3d results into single DataFrame
+    df_3d = normalize_3d_results(results_3d)
+
+    # Get 3e results (first result set)
+    df_3e = results_3e[0].copy() if results_3e else pd.DataFrame()
+
+    if df_3e.empty:
+        return pd.DataFrame(), True
+
+    # Aggregate 3e by PORTNAME (sum across all geocode levels)
+    df_3e_agg = df_3e.groupby('PORTNAME').agg({
+        'RiskCount': 'sum',
+        'TIV': 'sum',
+        'TRV': 'sum'
+    }).reset_index()
+
+    # Filter both to base portfolios only
+    df_3d_filtered = df_3d[df_3d['PORTNAME'].isin(base_portfolios)].copy()
+    df_3e_filtered = df_3e_agg[df_3e_agg['PORTNAME'].isin(base_portfolios)].copy()
+
+    # Get all unique base portfolios from both sources
+    all_portfolios = set(df_3d_filtered['PORTNAME'].unique()) | set(df_3e_filtered['PORTNAME'].unique())
+
+    # Build comparison results
+    comparison_results = []
+
+    for portname in sorted(all_portfolios):
+        # Get row from 3d for this portfolio
+        row_3d = df_3d_filtered[df_3d_filtered['PORTNAME'] == portname]
+
+        # Get row from 3e for this portfolio
+        row_3e = df_3e_filtered[df_3e_filtered['PORTNAME'] == portname]
+
+        # Select appropriate attribute list based on portfolio type
+        if _is_flood_exposure_group(portname):
+            attributes = FLOOD_ATTRIBUTES
+        else:
+            attributes = NON_FLOOD_ATTRIBUTES
+
+        for attr_name, col_3e, col_3d in attributes:
+            # Get 3d value
+            if row_3d.empty:
+                val_3d = None
+            elif col_3d in row_3d.columns:
+                val_3d = row_3d.iloc[0][col_3d]
+            else:
+                val_3d = None
+
+            # Get 3e value
+            if row_3e.empty:
+                val_3e = None
+            elif col_3e in row_3e.columns:
+                val_3e = row_3e.iloc[0][col_3e]
+            else:
+                val_3e = None
+
+            # Calculate difference (handle None values)
+            if val_3d is not None and val_3e is not None:
+                try:
+                    val_3d_num = float(val_3d) if val_3d is not None else 0
+                    val_3e_num = float(val_3e) if val_3e is not None else 0
+                    difference = val_3d_num - val_3e_num
+                    status = 'MATCH' if difference == 0 else 'MISMATCH'
+                except (ValueError, TypeError):
+                    difference = None
+                    status = 'ERROR'
+            else:
+                difference = None
+                status = 'MISSING' if val_3d is None or val_3e is None else 'ERROR'
+
+            comparison_results.append({
+                'PORTNAME': portname,
+                'Attribute': attr_name,
+                '3d_Value': val_3d,
+                '3e_Value': val_3e,
+                'Difference': difference,
+                'Status': status
+            })
+
+    # Convert to DataFrame
+    comparison_df = pd.DataFrame(comparison_results)
+
+    # Determine if all matched
+    all_matched = True
+    if not comparison_df.empty:
+        all_matched = (comparison_df['Status'] == 'MATCH').all()
+
+    return comparison_df, all_matched
+
+
+def compare_3d_vs_3e_pivot(
+    results_3d: List[pd.DataFrame],
+    results_3e: List[pd.DataFrame],
+    base_portfolios: List[str]
+) -> Tuple[pd.DataFrame, bool]:
+    """
+    Compare 3d vs 3e in pivoted format (one row per PORTNAME).
+
+    This provides a more compact view where each row shows all attribute differences
+    for a single PORTNAME.
+
+    Args:
+        results_3d: List of 10 DataFrames from 3d_RMS_EDM_Control_Totals.sql
+        results_3e: List of DataFrames from 3e_GeocodingSummary.sql (use first)
+        base_portfolios: List of portfolio names to include (from config)
+
+    Returns:
+        Tuple of (comparison_df, all_matched):
+            - comparison_df: DataFrame with columns:
+                - PORTNAME
+                - RiskCount_Diff
+                - TIV_Diff
+                - TRV_Diff
+                - Status: "MATCH" if all differences are 0, else "MISMATCH"
+            - all_matched: Boolean indicating if all comparisons matched
+
+    Example:
+        ```python
+        comparison_df, all_matched = compare_3d_vs_3e_pivot(
+            results_3d, results_3e, base_portfolio_names
+        )
+        display(comparison_df)
+        ```
+    """
+    # Get the detailed comparison first
+    detailed_df, _ = compare_3d_vs_3e(results_3d, results_3e, base_portfolios)
+
+    if detailed_df.empty:
+        return pd.DataFrame(), True
+
+    # Pivot to get one row per PORTNAME
+    pivot_df = detailed_df.pivot(
+        index='PORTNAME',
+        columns='Attribute',
+        values='Difference'
+    ).reset_index()
+
+    # Rename columns to include _Diff suffix
+    rename_map = {col: f'{col}_Diff' for col in pivot_df.columns if col != 'PORTNAME'}
+    pivot_df = pivot_df.rename(columns=rename_map)
+
+    # Add overall status column
+    diff_columns = [col for col in pivot_df.columns if col.endswith('_Diff')]
+    pivot_df['Status'] = pivot_df[diff_columns].apply(
+        lambda row: 'MATCH' if all(v == 0 for v in row if v is not None and not pd.isna(v)) else 'MISMATCH',
+        axis=1
+    )
+
+    # Determine if all matched
+    all_matched = (pivot_df['Status'] == 'MATCH').all()
+
+    return pivot_df, all_matched
