@@ -170,9 +170,10 @@ def _is_flood_exposure_group(exposure_group: str) -> bool:
     return exposure_group.startswith('USFL_')
 
 
-def save_control_totals_comparison_to_excel(
+def save_data_extraction_control_totals_to_excel(
     comparison_results: pd.DataFrame,
     date_value: str,
+    cycle_type: str,
     output_dir: Union[str, Path]
 ) -> Optional[Path]:
     """
@@ -197,6 +198,7 @@ def save_control_totals_comparison_to_excel(
             LocationDeductible_Diff, Status.
             Flood rows also have: AttachmentPoint_Diff, PolicyDeductible_Diff, PolicySublimit_Diff
         date_value: Date value for filename (e.g., '202503')
+        cycle_type: Cycle type for filename (e.g., 'Quarterly', 'Annual')
         output_dir: Directory to save the Excel file
 
     Returns:
@@ -208,9 +210,10 @@ def save_control_totals_comparison_to_excel(
             results_3a, results_3b
         )
 
-        excel_path = save_control_totals_comparison_to_excel(
+        excel_path = save_data_extraction_control_totals_to_excel(
             comparison_results=comparison_results,
             date_value='202503',
+            cycle_type='Quarterly',
             output_dir=Path('/path/to/notebook/directory')
         )
         ```
@@ -224,7 +227,7 @@ def save_control_totals_comparison_to_excel(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Build filename
-    filename = f"Control_Totals_Results_{date_value}.xlsx"
+    filename = f"Data_Extraction_Control_Totals_{date_value}_{cycle_type}.xlsx"
     file_path = output_dir / filename
 
     # Split results into Flood and Non-Flood
@@ -353,7 +356,7 @@ def _format_comparison_sheet(worksheet, data: pd.DataFrame) -> None:
         worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
 
 
-def save_control_totals_3b_vs_3d_to_excel(
+def save_data_import_control_totals_to_excel(
     comparison_results_3b_vs_3d: pd.DataFrame,
     date_value: str,
     cycle_type: str,
@@ -403,7 +406,7 @@ def save_control_totals_3b_vs_3d_to_excel(
             results_3d, results_3e, base_portfolio_names
         )
 
-        excel_path = save_control_totals_3b_vs_3d_to_excel(
+        excel_path = save_data_import_control_totals_to_excel(
             comparison_results_3b_vs_3d=comparison_3b_vs_3d,
             date_value='202503',
             cycle_type='Quarterly',
@@ -424,7 +427,7 @@ def save_control_totals_3b_vs_3d_to_excel(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Build filename
-    filename = f"Control_Totals_{date_value}_{cycle_type}.xlsx"
+    filename = f"Data_Import_Control_Totals_{date_value}_{cycle_type}.xlsx"
     file_path = output_dir / filename
 
     # Create Excel writer
