@@ -281,7 +281,7 @@ def _submit_edm_creation_job(
         raise ValueError("Missing required field: Database")
 
     # Submit EDM creation job
-    moody_job_id = client.edm.submit_create_edm_job(
+    moody_job_id, http_request_body = client.edm.submit_create_edm_job(
         edm_name=edm_name
     )
 
@@ -293,9 +293,7 @@ def _submit_edm_creation_job(
         'job_id': job_id,
         'batch_type': 'EDM Creation',
         'configuration': job_config,
-        'api_request': {
-            'edm_name': edm_name
-        },
+        'http_request_body': http_request_body,
         'submitted_at': datetime.now().isoformat()
     }
 
@@ -350,7 +348,7 @@ def _submit_portfolio_creation_job(
     description = f"{portfolio_name} created via IRP Notebook Framework"
 
     # Create portfolio synchronously
-    portfolio_id = client.portfolio.create_portfolio(
+    portfolio_id, http_request_body = client.portfolio.create_portfolio(
         edm_name=edm_name,
         portfolio_name=portfolio_name,
         portfolio_number=portfolio_number,
@@ -365,12 +363,7 @@ def _submit_portfolio_creation_job(
         'job_id': job_id,
         'batch_type': BatchType.PORTFOLIO_CREATION,
         'configuration': job_config,
-        'api_request': {
-            'edm_name': edm_name,
-            'portfolio_name': portfolio_name,
-            'portfolio_number': portfolio_number,
-            'description': description
-        },
+        'http_request_body': http_request_body,
         'submitted_at': datetime.now().isoformat()
     }
 
@@ -434,7 +427,7 @@ def _submit_mri_import_job(
     # Submit MRI import job
     # Directory resolution is handled automatically by submit_mri_import_job
     try:
-        workflow_id = client.mri_import.submit_mri_import_job(
+        workflow_id, http_request_body = client.mri_import.submit_mri_import_job(
             edm_name=edm_name,
             portfolio_name=portfolio_name,
             accounts_file_name=accounts_file,
@@ -450,13 +443,7 @@ def _submit_mri_import_job(
         'job_id': job_id,
         'batch_type': 'MRI Import',
         'configuration': job_config,
-        'api_request': {
-            'edm_name': edm_name,
-            'portfolio_name': portfolio_name,
-            'accounts_file': accounts_file,
-            'locations_file': locations_file,
-            'mapping_file': mapping_file_name
-        },
+        'http_request_body': http_request_body,
         'submitted_at': datetime.now().isoformat()
     }
 
@@ -546,7 +533,7 @@ def _submit_create_reinsurance_treaty_job(
     priority = int(job_config.get('Inuring Priority', 1))
 
     # Create treaty synchronously
-    treaty_id = client.treaty.create_treaty(
+    treaty_id, http_request_body = client.treaty.create_treaty(
         edm_name=edm_name,
         treaty_name=treaty_name,
         treaty_number=treaty_number,
@@ -579,12 +566,7 @@ def _submit_create_reinsurance_treaty_job(
         'job_id': job_id,
         'batch_type': BatchType.CREATE_REINSURANCE_TREATIES,
         'configuration': job_config,
-        'api_request': {
-            'edm_name': edm_name,
-            'treaty_name': treaty_name,
-            'treaty_number': treaty_number,
-            'treaty_type': treaty_type
-        },
+        'http_request_body': http_request_body,
         'submitted_at': datetime.now().isoformat()
     }
 
@@ -629,7 +611,7 @@ def _submit_edm_db_upgrade_job(
         raise ValueError("Missing required field: target_edm_version")
 
     # Submit EDM upgrade job
-    moody_job_id = client.edm.submit_upgrade_edm_data_version_job(
+    moody_job_id, http_request_body = client.edm.submit_upgrade_edm_data_version_job(
         edm_name=edm_name,
         edm_version=target_version
     )
@@ -642,10 +624,7 @@ def _submit_edm_db_upgrade_job(
         'job_id': job_id,
         'batch_type': BatchType.EDM_DB_UPGRADE,
         'configuration': job_config,
-        'api_request': {
-            'edm_name': edm_name,
-            'target_edm_version': target_version
-        },
+        'http_request_body': http_request_body,
         'submitted_at': datetime.now().isoformat()
     }
 
@@ -872,7 +851,7 @@ def _submit_analysis_job(
 
     # Submit analysis job
     try:
-        moody_job_id = client.analysis.submit_portfolio_analysis_job(
+        moody_job_id, http_request_body = client.analysis.submit_portfolio_analysis_job(
             edm_name=edm_name,
             portfolio_name=portfolio_name,
             job_name=analysis_name,
@@ -893,16 +872,7 @@ def _submit_analysis_job(
         'job_id': job_id,
         'batch_type': BatchType.ANALYSIS,
         'configuration': job_config,
-        'api_request': {
-            'edm_name': edm_name,
-            'portfolio_name': portfolio_name,
-            'analysis_name': analysis_name,
-            'analysis_profile': analysis_profile,
-            'output_profile': output_profile,
-            'event_rate': event_rate,
-            'treaty_names': treaty_names,
-            'tag_names': tag_names
-        },
+        'http_request_body': http_request_body,
         'submitted_at': datetime.now().isoformat()
     }
 
@@ -964,17 +934,11 @@ def _submit_grouping_job(
     if not analysis_names:
         raise ValueError("Missing required field: items (analysis names)")
 
-    # Build request structure (before API call for logging)
+    # Build initial request structure (before API call for logging)
     request_json = {
         'job_id': job_id,
         'batch_type': BatchType.GROUPING,
         'configuration': job_config,
-        'api_request': {
-            'group_name': group_name,
-            'analysis_names': analysis_names,
-            'analysis_edm_map': analysis_edm_map,
-            'group_names': group_names_list
-        },
         'submitted_at': datetime.now().isoformat()
     }
 
@@ -989,6 +953,10 @@ def _submit_grouping_job(
         )
     except Exception as e:
         raise JobError(f"Failed to submit grouping job: {str(e)}")
+
+    # Add http_request_body from result (if available)
+    if result.get('http_request_body'):
+        request_json['http_request_body'] = result['http_request_body']
 
     # Check if job was skipped (all analyses missing)
     if result.get('skipped'):
@@ -1067,18 +1035,11 @@ def _submit_export_to_rdm_job(
     if not analysis_names:
         raise ValueError("Missing required field: analysis_names")
 
-    # Build request structure (before API call for logging)
+    # Build initial request structure (before API call for logging)
     request_json = {
         'job_id': job_id,
         'batch_type': BatchType.EXPORT_TO_RDM,
         'configuration': job_config,
-        'api_request': {
-            'rdm_name': rdm_name,
-            'server_name': server_name,
-            'analysis_count': len(analysis_names),
-            'analysis_edm_map': analysis_edm_map,
-            'group_names_set': group_names_list
-        },
         'submitted_at': datetime.now().isoformat()
     }
 
@@ -1095,6 +1056,10 @@ def _submit_export_to_rdm_job(
         )
     except Exception as e:
         raise JobError(f"Failed to submit RDM export job: {str(e)}")
+
+    # Add http_request_body from result (if available)
+    if result.get('http_request_body'):
+        request_json['http_request_body'] = result['http_request_body']
 
     # Check if job was skipped (all items missing)
     if result.get('skipped'):
