@@ -404,14 +404,20 @@ def mock_irp_client(mocker):
     submitted_edms = []
 
     def mock_submit_edm(edm_name, server_name="databridge-1"):
-        """Mock EDM submission - returns incrementing job IDs"""
+        """Mock EDM submission - returns tuple of (job_id, request_body)"""
         job_id = len(submitted_edms) + 1
+        request_body = {
+            'exposureName': edm_name,
+            'exposureNumber': edm_name[:20],
+            'serverName': server_name
+        }
         submitted_edms.append({
             'job_id': job_id,
             'edm_name': edm_name,
-            'server_name': server_name
+            'server_name': server_name,
+            'request_body': request_body
         })
-        return job_id
+        return job_id, request_body
 
     mock_edm.submit_create_edm_job.side_effect = mock_submit_edm
 
