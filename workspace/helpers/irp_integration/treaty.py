@@ -5,7 +5,7 @@ Handles treaty-related operations including creation, retrieval,
 and Line of Business (LOB) assignments.
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 from .client import Client
 from .constants import (
     CREATE_TREATY,
@@ -134,7 +134,8 @@ class TreatyManager:
         treaty_ids = []
         for treaty_data in treaty_data_list:
             try:
-                treaty_id = self.create_treaty(
+                # Returns tuple of (treaty_id, request_body) - we only need treaty_id here
+                treaty_id, _ = self.create_treaty(
                     edm_name=treaty_data['edm_name'],
                     treaty_name=treaty_data['treaty_name'],
                     treaty_number=treaty_data['treaty_number'],
@@ -189,7 +190,7 @@ class TreatyManager:
             aggregate_limit: float,
             aggregate_deductible: float,
             priority: int,
-    ) -> int:
+    ) -> Tuple[int, Dict[str, Any]]:
         """
         Create a treaty with provided parameters.
 
@@ -218,7 +219,7 @@ class TreatyManager:
             priority: Priority
 
         Returns:
-            Treaty ID of the created treaty
+            Tuple of (treaty_id, request_body) where request_body is the HTTP request payload
 
         Raises:
             IRPValidationError: If parameters are invalid
@@ -335,7 +336,7 @@ class TreatyManager:
             for lob in lobs:
                 self.create_treaty_lob(exposure_id, int(treaty_id), int(lob['lobId']), lob['lobName'])
 
-            return int(treaty_id)
+            return int(treaty_id), data
         except KeyError as e:
             raise IRPAPIError(f"Missing expected LOB field during treaty creation: {e}")
         except Exception as e:

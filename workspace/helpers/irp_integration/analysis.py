@@ -6,7 +6,7 @@ Handles portfolio analysis submission, job tracking, and analysis group creation
 
 import json
 import time
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from .client import Client
 from .constants import (
     CREATE_ANALYSIS_JOB, DELETE_ANALYSIS, GET_ANALYSIS_GROUPING_JOB,
@@ -133,7 +133,8 @@ class AnalysisManager:
         job_ids = []
         for analysis_data in analysis_data_list:
             try:
-                job_id = self.submit_portfolio_analysis_job(
+                # Returns tuple of (job_id, request_body) - we only need job_id here
+                job_id, _ = self.submit_portfolio_analysis_job(
                     edm_name=analysis_data['edm_name'],
                     portfolio_name=analysis_data['portfolio_name'],
                     job_name=analysis_data['job_name'],
@@ -166,7 +167,7 @@ class AnalysisManager:
         min_loss_threshold: float = 1.0,
         treat_construction_occupancy_as_unknown: bool = True,
         num_max_loss_event: int = 1
-    ) -> int:
+    ) -> Tuple[int, Dict[str, Any]]:
         """
         Submit portfolio analysis job (submits but doesn't wait).
 
@@ -187,7 +188,7 @@ class AnalysisManager:
             num_max_loss_event: Number of max loss events to include (default: 1)
 
         Returns:
-            Workflow ID (Moody's job ID)
+            Tuple of (job_id, request_body) where request_body is the HTTP request payload
 
         Raises:
             IRPValidationError: If inputs are invalid
@@ -342,7 +343,7 @@ class AnalysisManager:
         try:
             response = self.client.request('POST', CREATE_ANALYSIS_JOB, json=data)
             job_id = extract_id_from_location_header(response, "analysis job submission")
-            return int(job_id)
+            return int(job_id), data
         except Exception as e:
             raise IRPAPIError(f"Failed to submit analysis job '{job_name}' for portfolio {portfolio_name}: {e}")
 
@@ -846,7 +847,8 @@ class AnalysisManager:
                 'job_id': int(job_id),
                 'skipped': False,
                 'skipped_items': skipped_items,
-                'included_items': included_items
+                'included_items': included_items,
+                'http_request_body': data
             }
         except Exception as e:
             raise IRPAPIError(f"Failed to submit analysis group job '{group_name}': {e}")

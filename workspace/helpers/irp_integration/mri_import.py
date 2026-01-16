@@ -5,7 +5,7 @@ Handles Multi-Risk Insurance (MRI) data imports including file uploads
 to AWS S3 and import execution via Moody's Risk Modeler API.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import boto3
 from boto3.s3.transfer import TransferConfig
 import requests
@@ -326,7 +326,7 @@ class MRIImportManager:
         skip_lines: int = 1,
         currency: str = "USD",
         append_locations: bool = False
-    ) -> int:
+    ) -> Tuple[int, Dict[str, Any]]:
         """
         Submit MRI import job without polling (returns immediately).
 
@@ -347,7 +347,7 @@ class MRIImportManager:
             append_locations: Append to existing locations (default: False)
 
         Returns:
-            Workflow ID (int)
+            Tuple of (workflow_id, request_body) where request_body is the HTTP request payload
 
         Raises:
             IRPValidationError: If parameters are invalid
@@ -377,7 +377,7 @@ class MRIImportManager:
         try:
             response = self.client.request('POST', EXECUTE_IMPORT, json=data)
             workflow_id = extract_id_from_location_header(response, "MRI import submission")
-            return int(workflow_id)
+            return int(workflow_id), data
         except Exception as e:
             raise IRPAPIError(f"Failed to submit MRI import: {e}")
             
@@ -473,7 +473,7 @@ class MRIImportManager:
         skip_lines: int = 1,
         currency: str = "USD",
         append_locations: bool = False
-    ) -> int:
+    ) -> Tuple[int, Dict[str, Any]]:
         """
         Submit a single MRI import job (without polling).
 
@@ -500,7 +500,7 @@ class MRIImportManager:
             append_locations: Append to existing locations (default: False)
 
         Returns:
-            Workflow ID (int)
+            Tuple of (workflow_id, request_body) where request_body is the HTTP request payload
 
         Raises:
             IRPValidationError: If parameters are invalid
@@ -636,7 +636,7 @@ class MRIImportManager:
 
         # Submit MRI import (without polling)
         print(f'Submitting import job for {edm_name}/{portfolio_name}...')
-        workflow_id = self.submit_import_job(
+        workflow_id, http_request_body = self.submit_import_job(
             edm_name,
             int(portfolio_id),
             int(bucket_id),
@@ -649,7 +649,7 @@ class MRIImportManager:
             append_locations=append_locations
         )
         print(f'Import job submitted with workflow ID: {workflow_id}')
-        return workflow_id
+        return workflow_id, http_request_body
 
 
     def get_file_size_kb(self, file_path: str) -> int:
