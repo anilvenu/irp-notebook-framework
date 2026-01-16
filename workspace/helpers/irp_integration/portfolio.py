@@ -299,13 +299,15 @@ class PortfolioManager:
                     f"Missing geohaz job data: {e}"
                 ) from e
 
-            job_ids.append(self.submit_geohaz_job(
+            # Returns tuple of (job_id, request_body) - we only need job_id here
+            job_id, _ = self.submit_geohaz_job(
                 portfolio_name=portfolio_name,
                 edm_name=edm_name,
                 version=version,
                 hazard_eq=hazard_eq,
                 hazard_ws=hazard_ws
-            ))
+            )
+            job_ids.append(job_id)
 
         return job_ids
         
@@ -318,7 +320,7 @@ class PortfolioManager:
                           hazard_ws: bool = False,
                           geocode_layer_options: Optional[Dict[str, Any]] = None,
                           hazard_layer_options: Optional[Dict[str, Any]] = None
-    ) -> int:
+    ) -> Tuple[int, Dict[str, Any]]:
         """
         Execute geocoding and/or hazard operations on portfolio.
 
@@ -330,7 +332,7 @@ class PortfolioManager:
             hazard_ws: Enable windstorm hazard (default: False)
 
         Returns:
-            Job ID
+            Tuple of (job_id, request_body) where request_body is the HTTP request payload
 
         Raises:
             IRPValidationError: If inputs are invalid
@@ -434,7 +436,7 @@ class PortfolioManager:
                 json=data
             )
             job_id = extract_id_from_location_header(response, "portfolio geohaz")
-            return int(job_id)
+            return int(job_id), data
         except Exception as e:
             raise IRPAPIError(f"Failed to execute geohaz for portfolio '{portfolio_uri}': {e}")
         

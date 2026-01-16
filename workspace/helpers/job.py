@@ -671,7 +671,7 @@ def _submit_geohaz_job(
         raise ValueError("Missing required field: Database")
 
     # Submit GeoHaz job
-    moody_job_id = client.portfolio.submit_geohaz_job(
+    moody_job_id, http_request_body = client.portfolio.submit_geohaz_job(
         portfolio_name=portfolio_name,
         edm_name=edm_name,
         version=geocode_version,
@@ -687,11 +687,7 @@ def _submit_geohaz_job(
         'job_id': job_id,
         'batch_type': BatchType.GEOHAZ,
         'configuration': job_config,
-        'api_request': {
-            'portfolio_name': portfolio_name,
-            'edm_name': edm_name,
-            'geocode_version': geocode_version
-        },
+        'http_request_body': http_request_body,
         'submitted_at': datetime.now().isoformat()
     }
 
