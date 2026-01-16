@@ -356,6 +356,7 @@ def _format_comparison_sheet(worksheet, data: pd.DataFrame) -> None:
 def save_control_totals_3b_vs_3d_to_excel(
     comparison_results_3b_vs_3d: pd.DataFrame,
     date_value: str,
+    cycle_type: str,
     output_dir: Union[str, Path],
     comparison_results_3d_vs_3e: Optional[pd.DataFrame] = None
 ) -> Optional[Path]:
@@ -385,6 +386,7 @@ def save_control_totals_3b_vs_3d_to_excel(
             LocationDeductible_Diff, Status.
             Flood rows also have: AttachmentPoint_Diff, PolicyDeductible_Diff, PolicySublimit_Diff
         date_value: Date value for filename (e.g., '202503')
+        cycle_type: Cycle type for filename (e.g., 'Quarterly', 'Annual')
         output_dir: Directory to save the Excel file
         comparison_results_3d_vs_3e: Optional DataFrame from compare_3d_vs_3e_pivot() with columns:
             PORTNAME, RiskCount_Diff, TIV_Diff, TRV_Diff, Status
@@ -404,6 +406,7 @@ def save_control_totals_3b_vs_3d_to_excel(
         excel_path = save_control_totals_3b_vs_3d_to_excel(
             comparison_results_3b_vs_3d=comparison_3b_vs_3d,
             date_value='202503',
+            cycle_type='Quarterly',
             output_dir=Path('/path/to/notebook/directory'),
             comparison_results_3d_vs_3e=comparison_3d_vs_3e
         )
@@ -421,7 +424,7 @@ def save_control_totals_3b_vs_3d_to_excel(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Build filename
-    filename = f"Control_Totals_3b_vs_3d_{date_value}.xlsx"
+    filename = f"Control_Totals_{date_value}_{cycle_type}.xlsx"
     file_path = output_dir / filename
 
     # Create Excel writer
