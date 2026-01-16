@@ -315,30 +315,30 @@ def _build_notebook_path(cycle_name: str, stage_num: int, step_num: int) -> Path
     STAGE_NOTEBOOKS = {
         2: {
             1: 'Step_01_Execute_Data_Extraction.ipynb',
-            2: 'Step_02_Control_Totals.ipynb'
+            2: 'Step_02_Control_Totals (chained).ipynb'
         },
         3: {
             1: 'Submit_Create_EDM_Batch.ipynb',
-            2: 'Create_Base_Portfolios.ipynb',
-            3: 'Submit_MRI_Import_Batch.ipynb',
-            4: 'Create_Reinsurance_Treaties.ipynb',
-            5: 'Submit_EDM_Version_Upgrade_Batch.ipynb',
-            6: 'Submit_GeoHaz_Batch.ipynb',
-            7: 'Execute_Portfolio_Mapping.ipynb',
-            8: 'Control_Totals.ipynb'
+            2: 'Create_Base_Portfolios (chained).ipynb',
+            3: 'Submit_MRI_Import_Batch (chained).ipynb',
+            4: 'Create_Reinsurance_Treaties (chained).ipynb',
+            5: 'Submit_EDM_Version_Upgrade_Batch (chained).ipynb',
+            6: 'Submit_GeoHaz_Batch (chained).ipynb',
+            7: 'Execute_Portfolio_Mapping (chained).ipynb',
+            8: 'Control_Totals (chained).ipynb'
         },
         4: {
             1: 'Execute_Analysis.ipynb',
-            2: 'Analysis_Summary.ipynb'
+            2: 'Analysis_Summary (chained).ipynb'
         },
         5: {
             1: 'Group_Analysis_Results.ipynb',
-            2: 'Group_Rollup.ipynb',
-            3: 'Grouping_Summary.ipynb'
+            2: 'Group_Rollup (chained).ipynb',
+            3: 'Grouping_Summary (chained).ipynb'
         },
         6: {
             1: 'Export_to_RDM.ipynb',
-            2: 'Verify_RDM_Export.ipynb'
+            2: 'Verify_RDM_Export (chained).ipynb'
         }
     }
 
