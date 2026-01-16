@@ -246,7 +246,8 @@ class RDMManager:
                 'job_id': int(job_id),
                 'skipped': False,
                 'skipped_items': skipped_items,
-                'included_items': included_items
+                'included_items': included_items,
+                'http_request_body': data
             }
         except Exception as e:
             raise IRPAPIError(f"Failed to submit rdm export job : {e}")

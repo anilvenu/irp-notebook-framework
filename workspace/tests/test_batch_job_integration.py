@@ -122,7 +122,7 @@ def test_end_to_end_batch_workflow(test_schema, mock_irp_client):
     jobs = get_batch_jobs(batch_id, schema=test_schema)
     assert len(jobs) > 0, f"No job retieved by get_batch_jobs"
     for job in jobs:
-        assert job['status'] == JobStatus.SUBMITTED, f"Expected {JobStatus.ACTIVE} for jobs and received {batch['status']}"
+        assert job['status'] == JobStatus.SUBMITTED, f"Expected {JobStatus.SUBMITTED} for jobs and received {job['status']}"
 
     # Step 4: Track jobs to completion
     for job in jobs:

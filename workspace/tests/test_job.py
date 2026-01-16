@@ -893,7 +893,7 @@ def test_submit_job_error_allows_retry(test_schema, mock_irp_client):
 
     # Now fix the API and retry
     mock_irp_client.edm.submit_create_edm_job.side_effect = None
-    mock_irp_client.edm.submit_create_edm_job.return_value = 12345
+    mock_irp_client.edm.submit_create_edm_job.return_value = (12345, {'exposureName': 'TestDB'})
 
     # Retry should succeed because workflow_id is NULL
     result_id = submit_job(job_id, 'EDM Creation', mock_irp_client, force=True, schema=test_schema)

@@ -7,7 +7,7 @@ associated data retrieval (cedants, LOBs).
 
 import json
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from .client import Client
 from .constants import SEARCH_DATABASE_SERVERS, SEARCH_EXPOSURE_SETS, CREATE_EXPOSURE_SET, SEARCH_EDMS, CREATE_EDM, UPGRADE_EDM_DATA_VERSION, DELETE_EDM, GET_CEDANTS, GET_LOBS, WORKFLOW_IN_PROGRESS_STATUSES
 from .exceptions import IRPAPIError, IRPJobError, IRPReferenceDataError
@@ -115,11 +115,12 @@ class EDMManager:
                     f"Missing 'server_name' or 'server_name' in create edm data: {e}"
                 ) from e
 
-            # Submit job
-            job_ids.append(self.submit_create_edm_job(
+            # Submit job (returns tuple of job_id, request_body - we only need job_id here)
+            job_id, _ = self.submit_create_edm_job(
                 edm_name=edm_name,
                 server_name=server_name
-            ))
+            )
+            job_ids.append(job_id)
         
         return job_ids
 
@@ -233,7 +234,7 @@ class EDMManager:
         return all_results
         
 
-    def submit_create_edm_job(self, edm_name: str, server_name: str = "databridge-1") -> int:
+    def submit_create_edm_job(self, edm_name: str, server_name: str = "databridge-1") -> Tuple[int, Dict[str, Any]]:
         """
         Submit job to create a new EDM (exposure).
 
@@ -242,7 +243,7 @@ class EDMManager:
             server_name: Name of the database server (default: "databridge-1")
 
         Returns:
-            The EDM ID
+            Tuple of (job_id, request_body) where request_body is the HTTP request payload
         """
         validate_non_empty_string(edm_name, "edm_name")
 
@@ -280,7 +281,7 @@ class EDMManager:
                 json=data
             )
             job_id = extract_id_from_location_header(response, "EDM creation")
-            return int(job_id)
+            return int(job_id), data
         except Exception as e:
             raise IRPAPIError(f"Failed to create EDM '{edm_name}': {e}")
 
@@ -313,15 +314,17 @@ class EDMManager:
                     f"Missing upgrade edm version data: {e}"
                 ) from e
 
-            job_ids.append(self.submit_upgrade_edm_data_version_job(
+            # Submit job (returns tuple of job_id, request_body - we only need job_id here)
+            job_id, _ = self.submit_upgrade_edm_data_version_job(
                 edm_name=edm_name,
                 edm_version=edm_version
-            ))
+            )
+            job_ids.append(job_id)
 
         return job_ids
 
 
-    def submit_upgrade_edm_data_version_job(self, edm_name: str, edm_version: str) -> int:
+    def submit_upgrade_edm_data_version_job(self, edm_name: str, edm_version: str) -> Tuple[int, Dict[str, Any]]:
         """
         Submit job to upgrade EDM data version.
 
@@ -330,7 +333,7 @@ class EDMManager:
             edm_version: Target EDM data version (e.g., "22")
 
         Returns:
-            The job ID
+            Tuple of (job_id, request_body) where request_body is the HTTP request payload
 
         Raises:
             IRPValidationError: If parameters are invalid
@@ -356,7 +359,7 @@ class EDMManager:
                 json=data
             )
             job_id = extract_id_from_location_header(response, "EDM data version upgrade")
-            return int(job_id)
+            return int(job_id), data
         except Exception as e:
             raise IRPAPIError(f"Failed to upgrade EDM data version for EDM '{edm_name}': {e}")
 

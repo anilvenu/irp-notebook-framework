@@ -6,7 +6,7 @@ Handles portfolio creation, retrieval, and geocoding/hazard operations.
 
 import time
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from helpers.constants import WORKSPACE_PATH
@@ -198,13 +198,15 @@ class PortfolioManager:
                     f"Missing value in create portfolio data: {e}"
                 ) from e
             
-            portfolio_ids.append(self.create_portfolio(
+            # Returns tuple of (portfolio_id, request_body) - we only need portfolio_id here
+            portfolio_id, _ = self.create_portfolio(
                 edm_name=edm_name,
                 portfolio_name=portfolio_name,
                 portfolio_number=portfolio_number,
                 description=description
-            ))
-        
+            )
+            portfolio_ids.append(portfolio_id)
+
         return portfolio_ids
 
 
@@ -214,7 +216,7 @@ class PortfolioManager:
         portfolio_name: str,
         portfolio_number: str = "1",
         description: str = ""
-    ) -> int:
+    ) -> Tuple[int, Dict[str, Any]]:
         """
         Create new portfolio in EDM.
 
@@ -225,7 +227,7 @@ class PortfolioManager:
             description: Portfolio description (default: "")
 
         Returns:
-            Portfolio ID of created portfolio
+            Tuple of (portfolio_id, request_body) where request_body is the HTTP request payload
 
         Raises:
             IRPValidationError: If inputs are invalid
@@ -258,7 +260,7 @@ class PortfolioManager:
         try:
             response = self.client.request('POST', CREATE_PORTFOLIO.format(exposureId=exposure_id), json=data)
             portfolio_id = extract_id_from_location_header(response, "portfolio creation")
-            return int(portfolio_id)
+            return int(portfolio_id), data
         except Exception as e:
             raise IRPAPIError(f"Failed to create portfolio '{portfolio_name}' in exposure id '{exposure_id}': {e}")
 
@@ -297,13 +299,15 @@ class PortfolioManager:
                     f"Missing geohaz job data: {e}"
                 ) from e
 
-            job_ids.append(self.submit_geohaz_job(
+            # Returns tuple of (job_id, request_body) - we only need job_id here
+            job_id, _ = self.submit_geohaz_job(
                 portfolio_name=portfolio_name,
                 edm_name=edm_name,
                 version=version,
                 hazard_eq=hazard_eq,
                 hazard_ws=hazard_ws
-            ))
+            )
+            job_ids.append(job_id)
 
         return job_ids
         
@@ -316,7 +320,7 @@ class PortfolioManager:
                           hazard_ws: bool = False,
                           geocode_layer_options: Optional[Dict[str, Any]] = None,
                           hazard_layer_options: Optional[Dict[str, Any]] = None
-    ) -> int:
+    ) -> Tuple[int, Dict[str, Any]]:
         """
         Execute geocoding and/or hazard operations on portfolio.
 
@@ -328,7 +332,7 @@ class PortfolioManager:
             hazard_ws: Enable windstorm hazard (default: False)
 
         Returns:
-            Job ID
+            Tuple of (job_id, request_body) where request_body is the HTTP request payload
 
         Raises:
             IRPValidationError: If inputs are invalid
@@ -432,7 +436,7 @@ class PortfolioManager:
                 json=data
             )
             job_id = extract_id_from_location_header(response, "portfolio geohaz")
-            return int(job_id)
+            return int(job_id), data
         except Exception as e:
             raise IRPAPIError(f"Failed to execute geohaz for portfolio '{portfolio_uri}': {e}")
         
