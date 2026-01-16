@@ -198,7 +198,8 @@ def save_dataframes_to_csv(
     dataframes: Union[pd.DataFrame, List[pd.DataFrame]],
     filenames: Union[str, List[str]],
     output_dir: Optional[Union[str, Path]] = None,
-    index: bool = False
+    index: bool = False,
+    delimiter: str = '\t'
 ) -> List[Path]:
     """
     Save one or more pandas DataFrames to CSV files in the working files directory.
@@ -217,15 +218,20 @@ def save_dataframes_to_csv(
         output_dir: Optional explicit output directory. If None, uses get_working_files_path()
                    to auto-detect based on current notebook location
         index: Whether to include DataFrame index in CSV (default: False)
+        delimiter: Field delimiter character (default: '\\t' for tab-delimited Moody's imports).
+                  Use ',' for standard comma-delimited CSV files.
 
     Returns:
         List of Path objects for the created CSV files
 
     Examples:
-        # Single DataFrame
+        # Single DataFrame (tab-delimited for Moody's import)
         filename = build_import_filename('202511', 'USEQ', 'Account', cycle_type='Quarterly')
         save_dataframes_to_csv(df, filename)
-        # → Modeling_202511_Moodys_Quarterly_USEQ_Account.csv
+        # → Modeling_202511_Moodys_Quarterly_USEQ_Account.csv (tab-delimited)
+
+        # Comma-delimited for general investigation files
+        save_dataframes_to_csv(df, 'my_data', delimiter=',')
 
         # Multiple DataFrames
         filenames = build_import_filenames(
@@ -298,9 +304,8 @@ def save_dataframes_to_csv(
         # Full path
         file_path = output_path / filename
 
-        # Save as tab-delimited to avoid issues with commas in data
-        # Moody's accepts delimiter="TAB" for import files
-        df.to_csv(file_path, index=index, sep='\t')
+        # Save with specified delimiter (default tab for Moody's import files)
+        df.to_csv(file_path, index=index, sep=delimiter)
 
         created_files.append(file_path)
 

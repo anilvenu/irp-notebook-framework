@@ -17,7 +17,7 @@ Runtime: <1 min
 **********************************************************************************************************************************************/
 
 --CB EQ
-Select concat('CBEQ_',Product_group),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit, 
+Select concat('CBEQ_',Product_group) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBEQ_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(EQCV4VAL+EQCV5VAL+EQCV6VAL+EQCV7VAL) TotalReplacementValue
 		,Sum(EQCV4LIMIT+EQCV5LIMIT+EQCV6LIMIT+EQCV7LIMIT) LocationLimit
@@ -30,7 +30,7 @@ Group by Product_group
 Order by 1
 
 --CB HU
-Select concat('CBHU_',Product_group), 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('CBHU_',Product_group) AS ExposureGroup, 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_CBHU_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(WSCV4VAL+WSCV5VAL+WSCV6VAL+WSCV7VAL) TotalReplacementValue
 		,Sum(WSCV4LIMIT+WSCV5LIMIT+WSCV6LIMIT+WSCV7LIMIT) LocationLimit
@@ -44,7 +44,7 @@ Group by Product_group
 Order by 1
 
 --US EQ
-Select concat('USEQ_',Product_group),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USEQ_',Product_group) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(EQCV4VAL+EQCV5VAL+EQCV6VAL+EQCV7VAL) TotalReplacementValue
 		,Sum(EQCV4LIMIT+EQCV5LIMIT+EQCV6LIMIT+EQCV7LIMIT) LocationLimit
@@ -56,11 +56,11 @@ where a.USERTXT2 <> 'Clay'
 Group by Product_group
 
 union all
-Select concat('USEQ_',POLICYUSERTXT1),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USEQ_',POLICYUSERTXT1) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(EQCV4VAL+EQCV5VAL+EQCV6VAL+EQCV7VAL) TotalReplacementValue
 		,Sum(EQCV4LIMIT+EQCV5LIMIT+EQCV6LIMIT+EQCV7LIMIT) LocationLimit
-		,SUM(EQCV4DED +EQCV5DED +EQCV6DED +EQCV7DED+EQSITEDED) as LocationDeductible  
+		,SUM(EQCV4DED +EQCV5DED +EQCV6DED +EQCV7DED+EQSITEDED) as LocationDeductible
 From dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Account a
 Full Outer Join dbo.modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USEQ_Location b on a.ACCNTNUM = b.ACCNTNUM
 where a.USERTXT2 = 'Clay'
@@ -69,7 +69,7 @@ Order by 1
 	
 
 --US FF
-Select concat('USFF_',Product_group),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USFF_',Product_group) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(EQCV4VAL+EQCV5VAL+EQCV6VAL+EQCV7VAL) TotalReplacementValue
 		,Sum(EQCV4LIMIT+EQCV5LIMIT+EQCV6LIMIT+EQCV7LIMIT) LocationLimit
@@ -82,11 +82,11 @@ and c.Product_Group <> 'Vol. HO (HIP)'
 Group by Product_group
 
 union all
-Select concat('USFF_',a.ACCNTNAME),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USFF_',a.ACCNTNAME) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(EQCV4VAL+EQCV5VAL+EQCV6VAL+EQCV7VAL) TotalReplacementValue
 		,Sum(EQCV4LIMIT+EQCV5LIMIT+EQCV6LIMIT+EQCV7LIMIT) LocationLimit
-		,SUM(EQCV4DED +EQCV5DED +EQCV6DED +EQCV7DED+EQSITEDED) as LocationDeductible 
+		,SUM(EQCV4DED +EQCV5DED +EQCV6DED +EQCV7DED+EQSITEDED) as LocationDeductible
 From dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account a
 Full Outer Join dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location b on a.ACCNTNUM = b.ACCNTNUM
 join [dbo].[Just_Product_Group_Roe_Power_BI] c on a.ACCNTNAME = c.product_group_roe
@@ -95,7 +95,7 @@ and  c.Product_Group = 'Vol. HO (HIP)'
 Group by a.ACCNTNAME
 
 union all
-Select concat('USFF_',POLICYUSERTXT1),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USFF_',POLICYUSERTXT1) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFF_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(EQCV4VAL+EQCV5VAL+EQCV6VAL+EQCV7VAL) TotalReplacementValue
 		,Sum(EQCV4LIMIT+EQCV5LIMIT+EQCV6LIMIT+EQCV7LIMIT) LocationLimit
@@ -107,7 +107,7 @@ Group by POLICYUSERTXT1
 Order by 1
 
 --US ST
-select concat('USST_',Product_group),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+select concat('USOW_',Product_group) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(TOCV4VAL+TOCV5VAL+TOCV6VAL+TOCV7VAL) TotalReplacementValue
 		,Sum(TOCV4LIMIT+TOCV5LIMIT+TOCV6LIMIT+TOCV7LIMIT) LocationLimit
@@ -120,7 +120,7 @@ and c.Product_Group <> 'Vol. HO (HIP)'
 Group by Product_group
 
 union all
-Select concat('USST_',a.ACCNTNAME),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USOW_',a.ACCNTNAME) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(TOCV4VAL+TOCV5VAL+TOCV6VAL+TOCV7VAL) TotalReplacementValue
 		,Sum(TOCV4LIMIT+TOCV5LIMIT+TOCV6LIMIT+TOCV7LIMIT) LocationLimit
@@ -133,7 +133,7 @@ and c.Product_Group = 'Vol. HO (HIP)'
 Group by a.ACCNTNAME
 
 union all
-Select concat('USST_',POLICYUSERTXT1),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USOW_',POLICYUSERTXT1) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USOW_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(TOCV4VAL+TOCV5VAL+TOCV6VAL+TOCV7VAL) TotalReplacementValue
 		,Sum(TOCV4LIMIT+TOCV5LIMIT+TOCV6LIMIT+TOCV7LIMIT) LocationLimit
@@ -146,7 +146,7 @@ Order by 1
 
 
 --US HU leak
-Select concat('USHU_',Product_group,'_Leak'),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USHU_',Product_group,'_Leak') AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(WSCV4VAL+WSCV5VAL+WSCV6VAL+WSCV7VAL) TotalReplacementValue
 		,Sum(WSCV4LIMIT+WSCV5LIMIT+WSCV6LIMIT+WSCV7LIMIT) LocationLimit
@@ -159,7 +159,7 @@ and c.Product_Group <> 'Vol. HO (HIP)'
 Group by Product_group
 
 union all
-Select concat('USHU_',a.ACCNTNAME,'_Leak'),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USHU_',a.ACCNTNAME,'_Leak') AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(WSCV4VAL+WSCV5VAL+WSCV6VAL+WSCV7VAL) TotalReplacementValue
 		,Sum(WSCV4LIMIT+WSCV5LIMIT+WSCV6LIMIT+WSCV7LIMIT) LocationLimit
@@ -172,7 +172,7 @@ and c.Product_Group = 'Vol. HO (HIP)'
 Group by a.ACCNTNAME
 
 union all
-Select concat('USHU_',POLICYUSERTXT1,'_Leak'),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USHU_',POLICYUSERTXT1,'_Leak') AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Leak_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(WSCV4VAL+WSCV5VAL+WSCV6VAL+WSCV7VAL) TotalReplacementValue
 		,Sum(WSCV4LIMIT+WSCV5LIMIT+WSCV6LIMIT+WSCV7LIMIT) LocationLimit
@@ -184,7 +184,7 @@ Group by POLICYUSERTXT1
 Order by 1
 
 --US HU full
-Select concat('USHU_',Product_group,'_Full'),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USHU_',Product_group,'_Full') AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(WSCV4VAL+WSCV5VAL+WSCV6VAL+WSCV7VAL) TotalReplacementValue
 		,SUM((WSCV4LIMIT+WSCV5LIMIT+WSCV6LIMIT+WSCV7LIMIT)) LocationLimit
@@ -200,7 +200,7 @@ where a.USERTXT2 <> 'Clay'
 Group by Product_group
 
 union all
-Select concat('USHU_',POLICYUSERTXT1,'_Full'),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USHU_',POLICYUSERTXT1,'_Full') AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USHU_Full_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(WSCV4VAL+WSCV5VAL+WSCV6VAL+WSCV7VAL) TotalReplacementValue
 		,SUM((WSCV4LIMIT+WSCV5LIMIT+WSCV6LIMIT+WSCV7LIMIT)) LocationLimit--+
@@ -216,7 +216,7 @@ Group by POLICYUSERTXT1
 Order by 1
 
 --US WF
-Select concat('USWF_',Product_group),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USWF_',Product_group) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(FRCV4VAL+FRCV5VAL+FRCV6VAL+FRCV7VAL) TotalReplacementValue
 		,Sum(FRCV4LIMIT+FRCV5LIMIT+FRCV6LIMIT+FRCV7LIMIT) LocationLimit
@@ -229,11 +229,11 @@ and c.Product_Group <> 'Vol. HO (HIP)'
 Group by Product_group
 
 union all
-Select concat('USWF_',a.ACCNTNAME),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USWF_',a.ACCNTNAME) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(FRCV4VAL+FRCV5VAL+FRCV6VAL+FRCV7VAL) TotalReplacementValue
 		,Sum(FRCV4LIMIT+FRCV5LIMIT+FRCV6LIMIT+FRCV7LIMIT) LocationLimit
-		,SUM(FRCV4DED +FRCV5DED +FRCV6DED +FRCV7DED+FRSITEDED) as LocationDeductible 
+		,SUM(FRCV4DED +FRCV5DED +FRCV6DED +FRCV7DED+FRSITEDED) as LocationDeductible
 From dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account a
 Full Outer Join dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location b on a.ACCNTNUM = b.ACCNTNUM
 join [dbo].[Just_Product_Group_Roe_Power_BI] c on a.ACCNTNAME = c.product_group_roe
@@ -242,7 +242,7 @@ and  c.Product_Group = 'Vol. HO (HIP)'
 Group by a.ACCNTNAME
 
 union all
-Select concat('USWF_',POLICYUSERTXT1),'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
+Select concat('USWF_',POLICYUSERTXT1) AS ExposureGroup,'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Account' as AccountTable, Count(*) PolicyCount, SUM(BLANPREAMT) PolicyPremium, SUM(BLANLIMAMT) PolicyLimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USWF_Location' as LocationTable, Count(distinct b.ACCNTNUM) LocationCountDistinct
 		,Sum(FRCV4VAL+FRCV5VAL+FRCV6VAL+FRCV7VAL) TotalReplacementValue
 		,Sum(FRCV4LIMIT+FRCV5LIMIT+FRCV6LIMIT+FRCV7LIMIT) LocationLimit
@@ -255,7 +255,7 @@ Group by POLICYUSERTXT1
 Order by 1
 
 --USFL Commercial
-SELECT 'Commercial_Flood',
+SELECT 'USFL_Commercial' AS ExposureGroup,
 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Account' AS AccountTable,
 (SELECT COUNT(DISTINCT ACCNTNUM) FROM dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Account) AS PolicyCount,
 (SELECT SUM(BLANPREAMT) FROM dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Account) AS PolicyPremium,
@@ -271,7 +271,7 @@ SELECT 'Commercial_Flood',
 (SELECT SUM(WSCV4DED + WSCV5DED + WSCV6DED + WSCV7DED + WSSITEDED) FROM dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Commercial_Location) AS LocationDeductible
 
 --USFL Excess
-SELECT 'Excess_Flood',
+SELECT 'USFL_Excess' AS ExposureGroup,
 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Account' AS AccountTable,
 (SELECT COUNT(DISTINCT ACCNTNUM) FROM dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Account) AS PolicyCount,
 (SELECT SUM(BLANPREAMT) FROM dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Account) AS PolicyPremium,
@@ -287,7 +287,7 @@ SELECT 'Excess_Flood',
 (SELECT SUM(WSCV4DED + WSCV6DED) FROM dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Excess_Location) AS LocationDeductible
 
 --USFL Other
-Select CONCAT('USFL_Other_',a.USERTXT1), 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account' as AccountTable,
+Select CONCAT('USFL_Other_',a.USERTXT1) AS ExposureGroup, 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account' as AccountTable,
 		Count(*) PolicyCount, Sum(BLANPREAMT) PolicyPremium, SUM(UNDCOVAMT) AttachmentPoint, 
 		SUM(BLANDEDAMT) PolicyDeductible, SUM(Blanlimamt) PolicyLimit, '0' AS PolicySublimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Location' as LocationTable,
@@ -298,8 +298,8 @@ LEFT JOIN dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Locat
 WHERE LOBNAME = 'FLD Other'
 GROUP BY a.USERTXT1
 UNION ALL
-Select CONCAT('USFL_Other_',a.USERTXT1), 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account' as AccountTable,
-		Count(*) PolicyCount, Sum(BLANPREAMT) PolicyPremium, SUM(UNDCOVAMT) AttachmentPoint, 
+Select CONCAT('USFL_Other_',a.USERTXT1) AS ExposureGroup, 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account' as AccountTable,
+		Count(*) PolicyCount, Sum(BLANPREAMT) PolicyPremium, SUM(UNDCOVAMT) AttachmentPoint,
 		SUM(BLANDEDAMT) PolicyDeductible, SUM(Blanlimamt) PolicyLimit, '0' AS PolicySublimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Location' as LocationTable,
 		Count(distinct LOCNUM) LocationCountDistinct, Count(*) LocationCountCampus, Sum(WSCV4VAL+WSCV5VAL+WSCV6VAL+WSCV7VAL) TotalReplacementValue,
@@ -309,7 +309,7 @@ LEFT JOIN dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Locat
 WHERE LOBNAME = 'FLD Other Clay'
 GROUP BY a.USERTXT1
 UNION ALL
-Select 'USFL_Other_CB', 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account' as AccountTable,
+Select 'USFL_Other_Other_CB' AS ExposureGroup, 'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Account' as AccountTable,
 		Count(*) PolicyCount, Sum(BLANPREAMT) PolicyPremium, SUM(UNDCOVAMT) AttachmentPoint, 
 		SUM(BLANDEDAMT) PolicyDeductible, SUM(Blanlimamt) PolicyLimit, '0' AS PolicySublimit,
 		'Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USFL_Other_Location' as LocationTable,
