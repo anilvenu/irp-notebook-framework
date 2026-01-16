@@ -42,6 +42,20 @@ def extract_peril_code(edm_name: str) -> str:
     return edm_name.rsplit('_', 1)[-1]
 
 
+def format_model_version(dlm_model_version: str) -> str:
+    """
+    Format DLM Model Version to "RM vXX" format.
+
+    Args:
+        dlm_model_version: Version string (e.g., "23.0.0")
+
+    Returns:
+        Formatted version string (e.g., "RM v23")
+    """
+    major_version = dlm_model_version.split('.')[0]
+    return f'RM v{major_version}'
+
+
 def build_post_processing_rows(
     configuration_data: Dict[str, Any],
     irp_client: IRPClient
@@ -116,6 +130,15 @@ def build_post_processing_rows(
         'variable_name': 'DB_USAP',
         'variable_value': rdm_full_name
     })
+
+    # Model version row
+    dlm_model_version = metadata.get('DLM Model Version')
+    if dlm_model_version:
+        rows.append({
+            'inforce_date': inforce_date,
+            'variable_name': 'model_version',
+            'variable_value': format_model_version(dlm_model_version)
+        })
 
     return rows
 
