@@ -14,6 +14,8 @@ workspace/workflows/_Tools/files/working_files/*.csv
 workspace/workflows/_Tools/IRP Integration/validation_outputs/
 workspace/workflows/_Tools/IRP Integration/analysis_results/
 workspace/workflows/_Template/files/configuration/*.xlsx
+workspace/workflows/_Tools/Bulk Delete/configuration/*.xlsx
+workspace/workflows/_Tools/Bulk Delete/configuration/*.xls
 
 # Jupyterlab files
 .ipython/
