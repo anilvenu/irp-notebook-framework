@@ -142,15 +142,15 @@ class JobManager:
             while True:
                 quoted = ", ".join(json.dumps(str(s)) for s in job_ids)
                 filter_statement = f"jobId IN ({quoted})"
-                analysis_response = self.search_risk_data_jobs(
+                job_response = self.search_risk_data_jobs(
                     filter=filter_statement,
                     limit=limit,
                     offset=offset
                 )
-                if len(analysis_response) == 0:
+                if len(job_response) == 0:
                     break
 
-                all_jobs.extend(analysis_response)
+                all_jobs.extend(job_response)
 
                 # Check if we've fetched all workflows
                 if len(all_jobs) >= len(job_ids):
