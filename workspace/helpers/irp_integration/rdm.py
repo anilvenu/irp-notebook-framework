@@ -160,10 +160,11 @@ class RDMManager:
                     f"the existing RDM first."
                 )
 
-        # Resolve analysis/group names to URIs, tracking skipped items
+        # Resolve analysis/group names to URIs, tracking skipped items and frameworks
         resource_uris = []
         skipped_items = []
         included_items = []
+        include_export_hd_losses = False  # Only set for PLT analyses/groups
 
         for name in analysis_names:
             # Determine if this is a group name or an analysis name
@@ -204,6 +205,12 @@ class RDMManager:
             try:
                 resource_uris.append(analysis_response[0]['uri'])
                 included_items.append(name)
+
+                # Check analysisFramework to determine if exportHdLossesAs is needed
+                # Groups in Moody's are stored as analyses, so they also have analysisFramework
+                analysis_framework = analysis_response[0].get('analysisFramework', 'ELT')
+                if analysis_framework == 'PLT':
+                    include_export_hd_losses = True
             except (KeyError, IndexError, TypeError) as e:
                 raise IRPAPIError(
                     f"Failed to extract URI for '{name}': {e}"
@@ -225,14 +232,16 @@ class RDMManager:
             settings = {
                 "databaseId": database_id,
                 "serverId": server_id,
-                "exportHdLossesAs": "PLT"
             }
         else:
             settings = {
                 "rdmName": rdm_name,
                 "serverId": server_id,
-                "exportHdLossesAs": "PLT"
             }
+
+        # Only include exportHdLossesAs for PLT analyses/groups
+        if include_export_hd_losses:
+            settings["exportHdLossesAs"] = "PLT"
 
         data = {
             "exportType": "RDM_DATABRIDGE",
