@@ -224,12 +224,14 @@ class RDMManager:
         if database_id:
             settings = {
                 "databaseId": database_id,
-                "serverId": server_id
+                "serverId": server_id,
+                "exportHdLossesAs": "PLT"
             }
         else:
             settings = {
                 "rdmName": rdm_name,
-                "serverId": server_id
+                "serverId": server_id,
+                "exportHdLossesAs": "PLT"
             }
 
         data = {
