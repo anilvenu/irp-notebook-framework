@@ -999,9 +999,10 @@ def _submit_export_to_rdm_job(
         job_config: Job configuration data containing:
             - rdm_name: Target RDM database name
             - server_name: Database server name (e.g., 'databridge-1')
-            - analysis_names: List of analysis and group names to export
-            - analysis_edm_map: Mapping of analysis names to EDM names (for lookup)
-            - group_names_set: List of known group names (to distinguish from analyses)
+            - analysis_names: Single-item list with the item to export
+            - is_group: Whether this item is a group (vs analysis)
+            - edm_name: EDM name for analysis lookup (None for groups)
+            - database_id: Optional database ID for appending to existing RDM
         client: IRPClient instance
 
     Returns:
@@ -1018,10 +1019,15 @@ def _submit_export_to_rdm_job(
     analysis_names = job_config.get('analysis_names', [])
     database_id = job_config.get('database_id')  # May be None for seed job
 
-    # Extract optional lookup fields for proper analysis/group resolution
-    analysis_edm_map = job_config.get('analysis_edm_map', {})
-    group_names_list = job_config.get('group_names_set', [])
-    group_names_set = set(group_names_list) if group_names_list else set()
+    # Build lookup structures from per-item fields (new minimal format)
+    # Each job now has is_group and edm_name for its single item
+    item_name = analysis_names[0] if analysis_names else None
+    is_group = job_config.get('is_group', False)
+    edm_name = job_config.get('edm_name')
+
+    # Build the maps expected by submit_rdm_export_job
+    analysis_edm_map = {item_name: edm_name} if item_name and edm_name else {}
+    group_names_set = {item_name} if item_name and is_group else set()
 
     # Validate required fields
     if not rdm_name:

@@ -561,9 +561,13 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     Analysis names come from the Analysis Table sheet.
     Group names come from the Groupings sheet.
 
-    Each job config includes:
-    - analysis_edm_map: Mapping of analysis names to EDM names (for API lookup)
-    - group_names_set: List of all group names (to distinguish groups from analyses)
+    Each job config includes only the minimal data needed for submission:
+    - rdm_name, server_name: Target RDM location
+    - analysis_names: Single-item list with the item to export
+    - is_seed_job: True for first job (creates RDM), False for others (append)
+    - database_id: None initially, populated after seed job completes
+    - is_group: Whether this item is a group (vs analysis)
+    - edm_name: EDM name for analysis lookup (None for groups)
 
     Args:
         config: Configuration dictionary
@@ -593,28 +597,25 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     rdm_name = metadata.get('Export RDM Name')
     server_name = DEFAULT_DATABASE_SERVER
 
-    # Build lookup maps for API calls
+    # Build lookup map for analysis EDM names
     analysis_edm_map = _build_analysis_edm_map(config)
-    group_names_set = list(_get_group_names(config))  # Convert to list for JSON serialization
+    group_names_set = set(group_names)
 
-    # Create ONE job per analysis/group
+    # Create ONE job per analysis/group with minimal config
     job_configs = []
 
     for idx, item_name in enumerate(all_export_names):
         is_first_job = (idx == 0)
-        is_analysis = item_name in analysis_names
+        is_group = item_name in group_names_set
 
         job_configs.append({
-            'Metadata': metadata,
             'rdm_name': rdm_name,
             'server_name': server_name,
             'analysis_names': [item_name],  # Single item per job
-            'analysis_count': 1 if is_analysis else 0,
-            'group_count': 0 if is_analysis else 1,
             'is_seed_job': is_first_job,
             'database_id': None,  # Will be populated after seed job completes (for non-seed jobs)
-            'analysis_edm_map': analysis_edm_map,
-            'group_names_set': group_names_set
+            'is_group': is_group,
+            'edm_name': None if is_group else analysis_edm_map.get(item_name)
         })
 
     return job_configs
