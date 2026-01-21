@@ -3104,13 +3104,23 @@ class TestValidateRdmExportBatch:
         # RDM doesn't exist
         validator._rdm_manager.search_databases.return_value = []
 
-        export_jobs = [{
-            'rdm_name': 'RM_RDM_Test',
-            'server_name': 'databridge-1',
-            'analysis_names': ['Group1', 'Analysis1'],
-            'analysis_edm_map': {'Analysis1': 'EDM1'},
-            'group_names_set': ['Group1']
-        }]
+        # New minimal format: one job per item with is_group and edm_name
+        export_jobs = [
+            {
+                'rdm_name': 'RM_RDM_Test',
+                'server_name': 'databridge-1',
+                'analysis_names': ['Group1'],
+                'is_group': True,
+                'edm_name': None
+            },
+            {
+                'rdm_name': 'RM_RDM_Test',
+                'server_name': 'databridge-1',
+                'analysis_names': ['Analysis1'],
+                'is_group': False,
+                'edm_name': 'EDM1'
+            }
+        ]
 
         errors = validator.validate_rdm_export_batch(export_jobs)
 
@@ -3123,19 +3133,17 @@ class TestValidateRdmExportBatch:
         validator._rdm_manager = Mock()
 
         # Group doesn't exist
-        validator._analysis_manager.search_analyses_paginated.side_effect = [
-            [],  # Group doesn't exist
-            []   # (no analyses to check)
-        ]
+        validator._analysis_manager.search_analyses_paginated.return_value = []
         # RDM doesn't exist
         validator._rdm_manager.search_databases.return_value = []
 
+        # New minimal format: one job per item with is_group flag
         export_jobs = [{
             'rdm_name': 'RM_RDM_Test',
             'server_name': 'databridge-1',
             'analysis_names': ['MissingGroup'],
-            'analysis_edm_map': {},
-            'group_names_set': ['MissingGroup']
+            'is_group': True,
+            'edm_name': None
         }]
 
         messages = validator.validate_rdm_export_batch(export_jobs)
@@ -3159,12 +3167,13 @@ class TestValidateRdmExportBatch:
         # RDM doesn't exist
         validator._rdm_manager.search_databases.return_value = []
 
+        # New minimal format: one job per item with is_group flag
         export_jobs = [{
             'rdm_name': 'RM_RDM_Test',
             'server_name': 'databridge-1',
             'analysis_names': ['MissingAnalysis'],
-            'analysis_edm_map': {'MissingAnalysis': 'EDM1'},
-            'group_names_set': []
+            'is_group': False,
+            'edm_name': 'EDM1'
         }]
 
         messages = validator.validate_rdm_export_batch(export_jobs)
@@ -3191,12 +3200,13 @@ class TestValidateRdmExportBatch:
             {'databaseName': 'RM_RDM_Test_123'}
         ]
 
+        # New minimal format: one job per item with is_group flag
         export_jobs = [{
             'rdm_name': 'RM_RDM_Test',
             'server_name': 'databridge-1',
             'analysis_names': ['Analysis1'],
-            'analysis_edm_map': {'Analysis1': 'EDM1'},
-            'group_names_set': []
+            'is_group': False,
+            'edm_name': 'EDM1'
         }]
 
         errors = validator.validate_rdm_export_batch(export_jobs)
@@ -3218,21 +3228,28 @@ class TestValidateRdmExportBatch:
         # RDM doesn't exist
         validator._rdm_manager.search_databases.return_value = []
 
-        # Multiple jobs (like chunked export)
+        # New minimal format: one job per item (3 jobs for Group1, A1, A2)
         export_jobs = [
             {
                 'rdm_name': 'RM_RDM_Test',
                 'server_name': 'databridge-1',
-                'analysis_names': ['Group1', 'A1'],
-                'analysis_edm_map': {'A1': 'EDM1'},
-                'group_names_set': ['Group1']
+                'analysis_names': ['Group1'],
+                'is_group': True,
+                'edm_name': None
+            },
+            {
+                'rdm_name': 'RM_RDM_Test',
+                'server_name': 'databridge-1',
+                'analysis_names': ['A1'],
+                'is_group': False,
+                'edm_name': 'EDM1'
             },
             {
                 'rdm_name': 'RM_RDM_Test',
                 'server_name': 'databridge-1',
                 'analysis_names': ['A2'],
-                'analysis_edm_map': {'A2': 'EDM1'},
-                'group_names_set': ['Group1']
+                'is_group': False,
+                'edm_name': 'EDM1'
             }
         ]
 
@@ -3256,13 +3273,23 @@ class TestValidateRdmExportBatch:
             {'databaseName': 'RM_RDM_Existing'}
         ]
 
-        export_jobs = [{
-            'rdm_name': 'RM_RDM_Existing',
-            'server_name': 'databridge-1',
-            'analysis_names': ['MissingGroup', 'MissingAnalysis'],
-            'analysis_edm_map': {'MissingAnalysis': 'EDM1'},
-            'group_names_set': ['MissingGroup']
-        }]
+        # New minimal format: one job per item
+        export_jobs = [
+            {
+                'rdm_name': 'RM_RDM_Existing',
+                'server_name': 'databridge-1',
+                'analysis_names': ['MissingGroup'],
+                'is_group': True,
+                'edm_name': None
+            },
+            {
+                'rdm_name': 'RM_RDM_Existing',
+                'server_name': 'databridge-1',
+                'analysis_names': ['MissingAnalysis'],
+                'is_group': False,
+                'edm_name': 'EDM1'
+            }
+        ]
 
         messages = validator.validate_rdm_export_batch(export_jobs)
 
@@ -3282,20 +3309,29 @@ class TestValidateRdmExportBatch:
         validator._rdm_manager = Mock()
 
         # First analysis exists, second doesn't
-        validator._analysis_manager.search_analyses_paginated.side_effect = [
-            [{'analysisName': 'Analysis1'}],  # Exists
-            []  # Missing
+        validator._analysis_manager.search_analyses_paginated.return_value = [
+            {'analysisName': 'Analysis1'}  # Only first exists
         ]
         # RDM doesn't exist
         validator._rdm_manager.search_databases.return_value = []
 
-        export_jobs = [{
-            'rdm_name': 'RM_RDM_Test',
-            'server_name': 'databridge-1',
-            'analysis_names': ['Analysis1', 'MissingAnalysis'],
-            'analysis_edm_map': {'Analysis1': 'EDM1', 'MissingAnalysis': 'EDM1'},
-            'group_names_set': []
-        }]
+        # New minimal format: one job per item
+        export_jobs = [
+            {
+                'rdm_name': 'RM_RDM_Test',
+                'server_name': 'databridge-1',
+                'analysis_names': ['Analysis1'],
+                'is_group': False,
+                'edm_name': 'EDM1'
+            },
+            {
+                'rdm_name': 'RM_RDM_Test',
+                'server_name': 'databridge-1',
+                'analysis_names': ['MissingAnalysis'],
+                'is_group': False,
+                'edm_name': 'EDM1'
+            }
+        ]
 
         messages = validator.validate_rdm_export_batch(export_jobs)
 
@@ -3319,12 +3355,13 @@ class TestValidateRdmExportBatch:
         # RDM doesn't exist
         validator._rdm_manager.search_databases.return_value = []
 
+        # New minimal format: one job per item with is_group flag
         export_jobs = [{
             'rdm_name': 'RM_RDM_Test',
             'server_name': 'databridge-1',
             'analysis_names': ['Group1'],
-            'analysis_edm_map': {},
-            'group_names_set': ['Group1']
+            'is_group': True,
+            'edm_name': None
         }]
 
         errors = validator.validate_rdm_export_batch(export_jobs)
@@ -3344,12 +3381,13 @@ class TestValidateRdmExportBatch:
         # RDM doesn't exist
         validator._rdm_manager.search_databases.return_value = []
 
+        # New minimal format: one job per item with is_group flag
         export_jobs = [{
             'rdm_name': 'RM_RDM_Test',
             'server_name': 'databridge-1',
             'analysis_names': ['Analysis1'],
-            'analysis_edm_map': {'Analysis1': 'EDM1'},
-            'group_names_set': []
+            'is_group': False,
+            'edm_name': 'EDM1'
         }]
 
         errors = validator.validate_rdm_export_batch(export_jobs)
@@ -3367,12 +3405,13 @@ class TestValidateRdmExportBatch:
             {'analysisName': 'Analysis1'}
         ]
 
+        # New minimal format: one job per item with is_group flag
         export_jobs = [{
             'rdm_name': None,  # No RDM name
             'server_name': 'databridge-1',
             'analysis_names': ['Analysis1'],
-            'analysis_edm_map': {'Analysis1': 'EDM1'},
-            'group_names_set': []
+            'is_group': False,
+            'edm_name': 'EDM1'
         }]
 
         errors = validator.validate_rdm_export_batch(export_jobs)
