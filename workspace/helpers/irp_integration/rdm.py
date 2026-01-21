@@ -170,7 +170,8 @@ class RDMManager:
             # Determine if this is a group name or an analysis name
             if name in group_names:
                 # Group names are globally unique - search by name only
-                analysis_response = self.analysis_manager.search_analyses(filter=f"analysisName = \"{name}\"")
+                # Must filter by engineType = "Group" to find groups specifically
+                analysis_response = self.analysis_manager.search_analyses(filter=f'analysisName = "{name}" AND engineType = "Group"')
                 if len(analysis_response) == 0:
                     if skip_missing:
                         skipped_items.append(name)

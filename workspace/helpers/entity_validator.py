@@ -13,7 +13,7 @@ from helpers.irp_integration.exceptions import IRPAPIError
 from helpers.irp_integration.portfolio import resolve_cycle_type_directory
 
 
-def _format_entity_list(entities: List[str], indent: str = "  - ") -> str:
+def _format_entity_list(entities: List[str], indent: str = "  \n- ") -> str:
     """Format a list of entities with one per line for readable error messages."""
     return "\n" + "\n".join(f"{indent}{e}" for e in entities)
 
@@ -825,6 +825,7 @@ class EntityValidator:
         Check that analysis groups exist (for rollup grouping validation).
 
         Group names are globally unique (not scoped to an EDM).
+        Groups are identified by engineType = "Group" in the Moody's API.
 
         Args:
             group_names: List of group names to check
@@ -847,7 +848,9 @@ class EntityValidator:
             for i in range(0, len(group_names), BATCH_SIZE):
                 batch = group_names[i:i + BATCH_SIZE]
                 quoted = ", ".join(f'"{name}"' for name in batch)
-                filter_str = f"analysisName IN ({quoted})"
+                # Must filter by engineType = "Group" to find groups specifically
+                # (groups are stored as analyses in Moody's but have engineType = "Group")
+                filter_str = f'analysisName IN ({quoted}) AND engineType = "Group"'
 
                 found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
                 found_names.update(g.get('analysisName') for g in found)
