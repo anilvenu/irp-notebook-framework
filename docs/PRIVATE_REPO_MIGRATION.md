@@ -6,15 +6,18 @@ This guide covers how to migrate the codebase to a private GitHub repository and
 
 When moving from a public repository to a client-owned private repository, personal credentials are not suitable for long-term VM access (they expire when consultants leave). Instead, we use **SSH Deploy Keys** which are tied to the machine, not individual users.
 
+The deploy key is configured system-wide so that any user who logs into the VM automatically has git access without additional setup.
+
 ## Migration Steps (What We Did)
 
 1. **Created the repository** in the Assurant GitHub system
 2. **Generated an SSH key** on the VM
 3. **Registered the SSH key** as a Deploy Key in the repo (repo-scoped, push/pull privileges, no expiration)
-4. **Renamed the original repo folder** on the VM
-5. **Cloned the new empty repo**
-6. **Copied all files** (excluding `.git` and `__pycache__`) to the new folder
-7. **Added and pushed** to the new repo
+4. **Configured system-wide SSH** so all users can use the key
+5. **Renamed the original repo folder** on the VM
+6. **Cloned the new empty repo**
+7. **Copied all files** (excluding `.git` and `__pycache__`) to the new folder
+8. **Added and pushed** to the new repo
 
 ## Detailed Setup Instructions
 
@@ -25,18 +28,19 @@ Create a new empty repository in the client's GitHub organization.
 ### Step 2: Generate SSH Key on the VM
 
 ```bash
-ssh-keygen -t ed25519 -C "irp-vm-deploy-key" -f ~/.ssh/irp_deploy_key -N ""
+sudo mkdir -p /etc/ssh/deploy_keys
+sudo ssh-keygen -t ed25519 -C "irp-vm-deploy-key" -f /etc/ssh/deploy_keys/irp_deploy_key -N ""
 ```
 
 - `-t ed25519`: Uses modern, secure key type
 - `-C "irp-vm-deploy-key"`: Comment to identify the key
-- `-f ~/.ssh/irp_deploy_key`: Output file path
+- `-f /etc/ssh/deploy_keys/irp_deploy_key`: System-wide location
 - `-N ""`: Empty passphrase (acceptable for deploy keys scoped to one repo)
 
 ### Step 3: Get the Public Key
 
 ```bash
-cat ~/.ssh/irp_deploy_key.pub
+sudo cat /etc/ssh/deploy_keys/irp_deploy_key.pub
 ```
 
 Copy the entire output (starts with `ssh-ed25519`). Note: ed25519 keys are short by design (~80-100 characters) but cryptographically strong.
@@ -50,15 +54,36 @@ Copy the entire output (starts with `ssh-ed25519`). Note: ed25519 keys are short
 5. Check **"Allow write access"** if push access is needed
 6. Click **Add key**
 
-### Step 5: Configure SSH on the VM
+### Step 5: Configure System-Wide SSH
 
-Create the SSH config file:
+Add the deploy key configuration to a dedicated config file (recommended approach per `/etc/ssh/ssh_config`):
 
 ```bash
-echo 'Host github.com
-    IdentityFile ~/.ssh/irp_deploy_key' > ~/.ssh/config
-chmod 600 ~/.ssh/config
+sudo sh -c 'echo "Host github.com
+    IdentityFile /etc/ssh/deploy_keys/irp_deploy_key" > /etc/ssh/ssh_config.d/github.conf'
 ```
+
+Set appropriate permissions so all users can access the config and key:
+
+```bash
+sudo chmod 644 /etc/ssh/ssh_config.d/github.conf
+sudo chmod 755 /etc/ssh/deploy_keys
+```
+
+Set permissions on the key files:
+
+```bash
+sudo chmod 644 /etc/ssh/deploy_keys/irp_deploy_key
+sudo chmod 644 /etc/ssh/deploy_keys/irp_deploy_key.pub
+```
+
+**Note:** If SSH rejects the key due to permissions being too open, use the `GIT_SSH_COMMAND` approach instead. Add to `/etc/environment`:
+
+```bash
+sudo sh -c 'echo "GIT_SSH_COMMAND=\"ssh -i /etc/ssh/deploy_keys/irp_deploy_key -o StrictHostKeyChecking=accept-new\"" >> /etc/environment'
+```
+
+Users will need to log out and back in for this to take effect.
 
 ### Step 6: Verify SSH Authentication
 
@@ -106,7 +131,7 @@ git push origin main
 
 ## Ongoing Usage
 
-Once configured, standard git commands work without any credentials:
+Once configured, any user on the VM can use standard git commands without additional setup:
 
 ```bash
 git pull origin main
@@ -128,10 +153,10 @@ Deploy keys are the recommended approach for this use case because:
 
 ### Permission denied (publickey)
 
-Verify the SSH config file exists and points to the correct key:
+Verify the SSH config file exists and has the correct content:
 
 ```bash
-cat ~/.ssh/config
+cat /etc/ssh/ssh_config.d/github.conf
 ```
 
 Test with verbose output:
@@ -140,15 +165,19 @@ Test with verbose output:
 ssh -vT git@github.com
 ```
 
+Look for lines showing which identity files are being tried.
+
 ### Key not found
 
-Ensure the key file exists and has correct permissions:
+Ensure the key file exists and is readable:
 
 ```bash
-ls -la ~/.ssh/irp_deploy_key
-chmod 600 ~/.ssh/irp_deploy_key
-chmod 644 ~/.ssh/irp_deploy_key.pub
+ls -la /etc/ssh/deploy_keys/irp_deploy_key
 ```
+
+### SSH rejects key due to permissions
+
+If you see "Permissions are too open" errors, use the `GIT_SSH_COMMAND` approach described in Step 5.
 
 ### Repository not found
 
@@ -168,9 +197,11 @@ The VM will immediately lose access to the repository.
 
 ## Git Author Configuration
 
-The deploy key handles authentication. To set the commit author identity (separate from auth):
+The deploy key handles authentication. To set a system-wide default commit author identity:
 
 ```bash
-git config --global user.name "IRP Deployment"
-git config --global user.email "irp-deploy@example.com"
+sudo git config --system user.name "IRP Deployment"
+sudo git config --system user.email "irp-deploy@example.com"
 ```
+
+Individual users can override this with their own `git config --global` settings if desired.

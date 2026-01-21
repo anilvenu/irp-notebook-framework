@@ -921,7 +921,7 @@ def test_transform_grouping_rollup_excludes_analysis_only():
 
 @pytest.mark.unit
 def test_transform_export_to_rdm():
-    """Test Export to RDM transformer - single job when <=100 items"""
+    """Test Export to RDM transformer - one job per analysis/group with minimal config"""
     config = {
         'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'TestRDM'},
         'Analysis Table': [
@@ -936,101 +936,113 @@ def test_transform_export_to_rdm():
 
     result = create_job_configurations('Export to RDM', config)
 
-    # Should create single job with all analyses + groups when <=100 items
-    assert len(result) == 1, "Should create single job when <=100 items"
-    assert result[0]['Metadata'] == config['Metadata']
+    # Should create one job per item (2 analyses + 2 groups = 4 jobs)
+    assert len(result) == 4, "Should create one job per analysis/group"
+
+    # First job is seed job (creates RDM) - analysis A1
     assert result[0]['rdm_name'] == 'TestRDM'
     assert result[0]['server_name'] == 'databridge-1'
-    assert result[0]['analysis_names'] == ['A1', 'A2', 'G1', 'G2']
-    assert result[0]['analysis_count'] == 2
-    assert result[0]['group_count'] == 2
-    assert result[0]['is_seed_job'] is False
+    assert result[0]['analysis_names'] == ['A1']
+    assert result[0]['is_seed_job'] is True
     assert result[0]['database_id'] is None
+    assert result[0]['is_group'] is False
+    assert result[0]['edm_name'] == 'EDM1'
 
-    # Verify analysis_edm_map is included
-    assert 'analysis_edm_map' in result[0], "Should include analysis_edm_map"
-    assert result[0]['analysis_edm_map'] == {'A1': 'EDM1', 'A2': 'EDM2'}
+    # Second job (analysis A2)
+    assert result[1]['analysis_names'] == ['A2']
+    assert result[1]['is_seed_job'] is False
+    assert result[1]['is_group'] is False
+    assert result[1]['edm_name'] == 'EDM2'
 
-    # Verify group_names_set is included (as list for JSON serialization)
-    assert 'group_names_set' in result[0], "Should include group_names_set"
-    assert set(result[0]['group_names_set']) == {'G1', 'G2'}
+    # Third job (group G1)
+    assert result[2]['analysis_names'] == ['G1']
+    assert result[2]['is_seed_job'] is False
+    assert result[2]['is_group'] is True
+    assert result[2]['edm_name'] is None
+
+    # Fourth job (group G2)
+    assert result[3]['analysis_names'] == ['G2']
+    assert result[3]['is_seed_job'] is False
+    assert result[3]['is_group'] is True
+    assert result[3]['edm_name'] is None
+
+    # Verify minimal config - no Metadata, no full maps
+    for job in result:
+        assert 'Metadata' not in job, "Should not include full Metadata"
+        assert 'analysis_edm_map' not in job, "Should not include full analysis_edm_map"
+        assert 'group_names_set' not in job, "Should not include full group_names_set"
+        assert 'analysis_count' not in job, "Should not include analysis_count"
+        assert 'group_count' not in job, "Should not include group_count"
 
 
 @pytest.mark.unit
-def test_transform_export_to_rdm_chunking():
-    """Test Export to RDM transformer - chunking when >100 items"""
-    # Create config with 150 analyses + 1 group = 151 total items (requires seed job + 2 chunks)
-    # seed (1) + remaining 150 split into [100, 50] = 3 jobs total
-    analysis_names = [{'Analysis Name': f'Analysis_{i}', 'Database': f'EDM_{i % 3}'} for i in range(150)]
+def test_transform_export_to_rdm_many_items():
+    """Test Export to RDM transformer - one job per item for many analyses/groups"""
+    # Create config with 5 analyses + 1 group = 6 total items = 6 jobs
+    analysis_rows = [{'Analysis Name': f'Analysis_{i}', 'Database': f'EDM_{i % 3}'} for i in range(5)]
     config = {
         'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'LargeRDM'},
-        'Analysis Table': analysis_names,
+        'Analysis Table': analysis_rows,
         'Groupings': [{'Group_Name': 'TestGroup'}]
     }
 
     result = create_job_configurations('Export to RDM', config)
 
-    # Should create seed job (1 item) + 2 chunks (100 + 50)
-    assert len(result) == 3, "Should create seed + 2 chunks for 151 items"
+    # Should create one job per item (5 analyses + 1 group = 6 jobs)
+    assert len(result) == 6, "Should create one job per item"
 
-    # First job is seed job with 1 analysis
+    # First job is seed job (creates RDM)
     assert result[0]['is_seed_job'] is True
-    assert len(result[0]['analysis_names']) == 1
-    assert result[0]['analysis_names'][0] == 'Analysis_0'
+    assert result[0]['analysis_names'] == ['Analysis_0']
+    assert result[0]['is_group'] is False
+    assert result[0]['edm_name'] == 'EDM_0'
     assert result[0]['database_id'] is None
 
-    # Second job has first 100 of remaining
-    assert result[1]['is_seed_job'] is False
-    assert len(result[1]['analysis_names']) == 100
-    assert result[1]['analysis_names'][0] == 'Analysis_1'
-    assert result[1]['database_id'] is None
+    # Remaining analysis jobs
+    for i in range(1, 5):
+        assert result[i]['is_seed_job'] is False
+        assert result[i]['analysis_names'] == [f'Analysis_{i}']
+        assert result[i]['is_group'] is False
+        assert result[i]['edm_name'] == f'EDM_{i % 3}'
 
-    # Third job has remaining 50 (49 analyses + 1 group)
-    assert result[2]['is_seed_job'] is False
-    assert len(result[2]['analysis_names']) == 50
-    assert result[2]['analysis_names'][0] == 'Analysis_101'
-    assert 'TestGroup' in result[2]['analysis_names']  # Group should be in last chunk
+    # Last job is the group
+    assert result[5]['is_seed_job'] is False
+    assert result[5]['analysis_names'] == ['TestGroup']
+    assert result[5]['is_group'] is True
+    assert result[5]['edm_name'] is None
 
-    # Verify analysis_edm_map and group_names_set are included in ALL chunks
+    # Verify minimal config - each job only has its own item's info
     for i, job in enumerate(result):
-        assert 'analysis_edm_map' in job, f"Job {i} should include analysis_edm_map"
-        assert 'group_names_set' in job, f"Job {i} should include group_names_set"
-        assert len(job['analysis_edm_map']) == 150, f"Job {i} should have full EDM map"
-        assert job['group_names_set'] == ['TestGroup'], f"Job {i} should have group names"
+        assert 'analysis_edm_map' not in job, f"Job {i} should not include full analysis_edm_map"
+        assert 'group_names_set' not in job, f"Job {i} should not include full group_names_set"
 
 
 @pytest.mark.unit
-def test_transform_export_to_rdm_large_chunking():
-    """Test Export to RDM transformer - multiple chunks for very large exports"""
-    # Create config with 250 analyses
-    # seed (1) + remaining 249 split into [100, 100, 49] = 4 jobs total
-    analysis_names = [{'Analysis Name': f'Analysis_{i}'} for i in range(250)]
+def test_transform_export_to_rdm_analyses_only():
+    """Test Export to RDM transformer - analyses only (no groups)"""
+    # Create config with 3 analyses, no groups
+    analysis_rows = [{'Analysis Name': f'Analysis_{i}'} for i in range(3)]
     config = {
-        'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'VeryLargeRDM'},
-        'Analysis Table': analysis_names,
+        'Metadata': {'Current Date Value': '202503', 'Export RDM Name': 'AnalysesOnlyRDM'},
+        'Analysis Table': analysis_rows,
         'Groupings': []
     }
 
     result = create_job_configurations('Export to RDM', config)
 
-    # Should create seed job + 3 chunks
-    assert len(result) == 4, "Should create seed + 3 chunks for 250 items"
+    # Should create one job per analysis (3 jobs)
+    assert len(result) == 3, "Should create one job per analysis"
 
-    # Seed job
+    # First job is seed job
     assert result[0]['is_seed_job'] is True
-    assert len(result[0]['analysis_names']) == 1
+    assert result[0]['analysis_names'] == ['Analysis_0']
+    assert result[0]['is_group'] is False
 
-    # First chunk (100 analyses)
-    assert result[1]['is_seed_job'] is False
-    assert len(result[1]['analysis_names']) == 100
-
-    # Second chunk (100 analyses)
-    assert result[2]['is_seed_job'] is False
-    assert len(result[2]['analysis_names']) == 100
-
-    # Third chunk (remaining 49)
-    assert result[3]['is_seed_job'] is False
-    assert len(result[3]['analysis_names']) == 49
+    # Remaining jobs
+    for i in range(1, 3):
+        assert result[i]['is_seed_job'] is False
+        assert result[i]['analysis_names'] == [f'Analysis_{i}']
+        assert result[i]['is_group'] is False
 
 
 @pytest.mark.unit

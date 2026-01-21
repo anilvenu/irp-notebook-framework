@@ -13,7 +13,7 @@ from helpers.irp_integration.exceptions import IRPAPIError
 from helpers.irp_integration.portfolio import resolve_cycle_type_directory
 
 
-def _format_entity_list(entities: List[str], indent: str = "  - ") -> str:
+def _format_entity_list(entities: List[str], indent: str = "  \n- ") -> str:
     """Format a list of entities with one per line for readable error messages."""
     return "\n" + "\n".join(f"{indent}{e}" for e in entities)
 
@@ -825,6 +825,7 @@ class EntityValidator:
         Check that analysis groups exist (for rollup grouping validation).
 
         Group names are globally unique (not scoped to an EDM).
+        Groups are identified by engineType = "Group" in the Moody's API.
 
         Args:
             group_names: List of group names to check
@@ -847,7 +848,9 @@ class EntityValidator:
             for i in range(0, len(group_names), BATCH_SIZE):
                 batch = group_names[i:i + BATCH_SIZE]
                 quoted = ", ".join(f'"{name}"' for name in batch)
-                filter_str = f"analysisName IN ({quoted})"
+                # Must filter by engineType = "Group" to find groups specifically
+                # (groups are stored as analyses in Moody's but have engineType = "Group")
+                filter_str = f'analysisName IN ({quoted}) AND engineType = "Group"'
 
                 found = self.analysis_manager.search_analyses_paginated(filter=filter_str)
                 found_names.update(g.get('analysisName') for g in found)
@@ -1640,8 +1643,11 @@ class EntityValidator:
         - RDM name must not already exist
 
         Args:
-            export_jobs: List of export job dicts with 'analysis_names', 'rdm_name',
-                        'server_name', 'analysis_edm_map', and 'group_names_set' keys
+            export_jobs: List of export job dicts with minimal config per job:
+                        - analysis_names: Single-item list with item to export
+                        - rdm_name, server_name: Target RDM location
+                        - is_group: Whether this item is a group
+                        - edm_name: EDM name for analysis lookup (None for groups)
 
         Returns:
             List of messages (errors and warnings).
@@ -1654,37 +1660,33 @@ class EntityValidator:
 
         all_messages = []
 
-        # Collect all items, analysis_edm_map, and group_names_set from all jobs
-        all_items = []
+        # Collect items from all jobs, building lookup structures from per-item fields
+        group_items = []
+        analysis_items = []
         analysis_edm_map = {}
-        group_names_set = set()
         rdm_name = None
         server_name = None
 
         for job in export_jobs:
             items = job.get('analysis_names', [])
-            all_items.extend(items)
+            item_name = items[0] if items else None
 
-            # Merge analysis_edm_map from each job
-            edm_map = job.get('analysis_edm_map', {})
-            analysis_edm_map.update(edm_map)
-
-            # Merge group_names_set from each job
-            groups = job.get('group_names_set', [])
-            group_names_set.update(groups)
+            if item_name:
+                # Use is_group flag to categorize (new minimal format)
+                if job.get('is_group', False):
+                    group_items.append(item_name)
+                else:
+                    analysis_items.append(item_name)
+                    # Build EDM map from per-item edm_name field
+                    edm_name = job.get('edm_name')
+                    if edm_name:
+                        analysis_edm_map[item_name] = edm_name
 
             # Get rdm_name and server_name (same across all jobs)
             if not rdm_name:
                 rdm_name = job.get('rdm_name')
             if not server_name:
                 server_name = job.get('server_name', DEFAULT_DATABASE_SERVER)
-
-        # Deduplicate items
-        unique_items = list(set(all_items))
-
-        # Separate items into groups vs analyses
-        group_items = [item for item in unique_items if item in group_names_set]
-        analysis_items = [item for item in unique_items if item not in group_names_set]
 
         # Track missing items for "all missing" check
         missing_groups = []
@@ -1711,7 +1713,7 @@ class EntityValidator:
                 )
 
         # Check if ALL items are missing - this is an error, not a warning
-        total_items = len(unique_items)
+        total_items = len(group_items) + len(analysis_items)
         total_missing = len(missing_groups) + len(missing_analyses)
         if total_items > 0 and total_missing == total_items:
             all_messages.append(

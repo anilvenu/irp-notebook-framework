@@ -1020,6 +1020,9 @@ def _submit_rdm_export_batch_with_seed(
     database_id = irp_client.rdm.get_rdm_database_id(rdm_name, server_name)
 
     # 4. Update remaining jobs with databaseId and submit them
+    total_remaining = len([j for j in remaining_jobs if j['status'] in JobStatus.ready_for_submit()])
+    print(f"Submitting {total_remaining} remaining job(s) to append to RDM...")
+
     for job_record in remaining_jobs:
         if job_record['status'] not in JobStatus.ready_for_submit():
             continue

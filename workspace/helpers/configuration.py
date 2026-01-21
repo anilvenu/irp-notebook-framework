@@ -553,27 +553,28 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Transform configuration for Export to RDM batch type.
 
-    The Moody's RDM export API has a limit of 100 analyses per request.
-    When there are more than 100 items to export, this creates:
-    - A "seed job" with 1 analysis (creates the RDM)
-    - Remaining jobs with up to 100 analyses each (append to RDM using database_id)
+    Creates ONE job per analysis/group. When there are multiple items:
+    - First job is a "seed job" (creates the RDM)
+    - Remaining jobs each contain ONE item (append to RDM using database_id)
 
     The job exports to the RDM specified in Metadata['Export RDM Name'].
     Analysis names come from the Analysis Table sheet.
     Group names come from the Groupings sheet.
 
-    Each job config includes:
-    - analysis_edm_map: Mapping of analysis names to EDM names (for API lookup)
-    - group_names_set: List of all group names (to distinguish groups from analyses)
+    Each job config includes only the minimal data needed for submission:
+    - rdm_name, server_name: Target RDM location
+    - analysis_names: Single-item list with the item to export
+    - is_seed_job: True for first job (creates RDM), False for others (append)
+    - database_id: None initially, populated after seed job completes
+    - is_group: Whether this item is a group (vs analysis)
+    - edm_name: EDM name for analysis lookup (None for groups)
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        List of job configurations (1 if <=100 items, multiple if >100)
+        List of job configurations (one per analysis/group)
     """
-    CHUNK_SIZE = 100
-
     metadata = _extract_metadata(config)
     analysis_table = config.get('Analysis Table', [])
     groupings = config.get('Groupings', [])
@@ -596,58 +597,25 @@ def transform_export_to_rdm(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     rdm_name = metadata.get('Export RDM Name')
     server_name = DEFAULT_DATABASE_SERVER
 
-    # Build lookup maps for API calls
+    # Build lookup map for analysis EDM names
     analysis_edm_map = _build_analysis_edm_map(config)
-    group_names_set = list(_get_group_names(config))  # Convert to list for JSON serialization
+    group_names_set = set(group_names)
 
-    # If within limit, create single job (no seed needed)
-    if len(all_export_names) <= CHUNK_SIZE:
-        return [{
-            'Metadata': metadata,
-            'rdm_name': rdm_name,
-            'server_name': server_name,
-            'analysis_names': all_export_names,
-            'analysis_count': len(analysis_names),
-            'group_count': len(group_names),
-            'is_seed_job': False,
-            'database_id': None,
-            'analysis_edm_map': analysis_edm_map,
-            'group_names_set': group_names_set
-        }]
-
-    # Chunking needed: seed job (1 analysis) + remaining chunks
+    # Create ONE job per analysis/group with minimal config
     job_configs = []
 
-    # Seed job: first analysis only (creates the RDM)
-    job_configs.append({
-        'Metadata': metadata,
-        'rdm_name': rdm_name,
-        'server_name': server_name,
-        'analysis_names': [all_export_names[0]],
-        'analysis_count': 1 if analysis_names else 0,
-        'group_count': 1 if not analysis_names and group_names else 0,
-        'is_seed_job': True,
-        'database_id': None,
-        'analysis_edm_map': analysis_edm_map,
-        'group_names_set': group_names_set
-    })
+    for idx, item_name in enumerate(all_export_names):
+        is_first_job = (idx == 0)
+        is_group = item_name in group_names_set
 
-    # Remaining items in chunks of up to 100
-    remaining = all_export_names[1:]
-    chunks = [remaining[i:i+CHUNK_SIZE] for i in range(0, len(remaining), CHUNK_SIZE)]
-
-    for chunk in chunks:
         job_configs.append({
-            'Metadata': metadata,
             'rdm_name': rdm_name,
             'server_name': server_name,
-            'analysis_names': chunk,
-            'analysis_count': len([n for n in chunk if n in analysis_names]),
-            'group_count': len([n for n in chunk if n in group_names]),
-            'is_seed_job': False,
-            'database_id': None,  # Will be populated after seed job completes
-            'analysis_edm_map': analysis_edm_map,
-            'group_names_set': group_names_set
+            'analysis_names': [item_name],  # Single item per job
+            'is_seed_job': is_first_job,
+            'database_id': None,  # Will be populated after seed job completes (for non-seed jobs)
+            'is_group': is_group,
+            'edm_name': None if is_group else analysis_edm_map.get(item_name)
         })
 
     return job_configs

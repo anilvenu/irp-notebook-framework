@@ -11,7 +11,7 @@ Two types of previews:
 """
 
 import json
-from typing import Any, Dict, List, Optional, Callable, Union
+from typing import Any, Dict, List, Callable, Union
 
 from helpers.database import execute_query
 from helpers.constants import BatchType
@@ -142,7 +142,7 @@ def preview_export_to_rdm(
     step=None
 ) -> None:
     """
-    Display preview for Export to RDM batch (special structure).
+    Display preview for Export to RDM batch (one job per analysis/group).
 
     Args:
         batch_type: BatchType.EXPORT_TO_RDM
@@ -161,29 +161,40 @@ def preview_export_to_rdm(
 
     analysis_names = [a.get('Analysis Name') for a in analyses if a.get('Analysis Name')]
     group_names = [g.get('Group_Name') for g in groupings if g.get('Group_Name')]
+    total_items = len(analysis_names) + len(group_names)
 
-    ux_module.info("This batch will create 1 job to export all analyses and groups to RDM.")
+    ux_module.info(f"This batch will create {total_items} job(s) - one per analysis/group.")
     ux_module.info(f"Target RDM: {rdm_name}")
     ux_module.info("Server: databridge-1")
+
+    if total_items > 1:
+        ux_module.info("")
+        ux_module.info("The first job (seed job) creates the RDM.")
+        ux_module.info("Subsequent jobs append to the same RDM.")
+
     ux_module.info("")
 
     ux_module.table(
         [["Analyses to export", len(analysis_names)],
          ["Groups to export", len(group_names)],
-         ["Total items", len(analysis_names) + len(group_names)]],
-        headers=["Item Type", "Count"]
+         ["Total jobs", total_items]],
+        headers=["Item Type", "Count / Jobs"]
     )
 
     ux_module.info("")
-    ux_module.info("Job configuration will contain:")
+    ux_module.info("Each job configuration will contain:")
     ux_module.info("  - Metadata from configuration file")
     ux_module.info("  - rdm_name: Target RDM database name")
     ux_module.info("  - server_name: databridge-1")
-    ux_module.info("  - analysis_names: Combined list of all analysis and group names")
+    ux_module.info("  - analysis_names: Single analysis or group name")
+    ux_module.info("")
+    ux_module.info("exportHdLossesAs setting (determined at submission time):")
+    ux_module.info("  - PLT items: 'exportHdLossesAs': 'PLT' included")
+    ux_module.info("  - ELT items: setting omitted")
     ux_module.warning("⚠ IMPORTANT: Export to RDM can only run AFTER all Grouping batches complete.")
 
     if step:
-        step.log(f"Previewed Export to RDM batch: {len(analysis_names)} analyses + {len(group_names)} groups")
+        step.log(f"Previewed Export to RDM batch: {len(analysis_names)} analyses + {len(group_names)} groups = {total_items} jobs")
 
 
 # ============================================================================
@@ -298,15 +309,16 @@ JOB_PREVIEW_CONFIG = {
     },
     BatchType.EXPORT_TO_RDM: {
         'display_name': 'Export to RDM',
-        'headers': ['Job ID', 'RDM Name', 'Server', '# Analyses', '# Groups', 'Total Items', 'Status'],
-        'fields': ['job_id', 'rdm_name', 'server_name', 'analysis_count', 'group_count', 'analysis_names:count', 'status'],
+        'headers': ['Job ID', 'RDM Name', 'Item Name', 'Seed?', 'Status'],
+        'fields': ['job_id', 'rdm_name', 'analysis_names:preview:1', 'is_seed_job', 'status'],
         'notes': [
             'Full metadata from configuration file',
             'rdm_name: Target RDM database name',
             'server_name: Database server (databridge-1)',
-            'analysis_names: Combined list of all analysis and group names to export'
+            'analysis_names: Single analysis or group name per job',
+            'exportHdLossesAs: Conditionally set based on analysisFramework (PLT only)'
         ],
-        'warning': 'This job requires all Grouping batches to complete first'
+        'warning': 'This batch requires all Grouping batches to complete first'
     },
     BatchType.DATA_EXTRACTION: {
         'display_name': 'Data Extraction',
