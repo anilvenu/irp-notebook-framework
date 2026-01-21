@@ -54,7 +54,7 @@ class TestValidateEdmsNotExist:
         assert existing == ['EDM1']
         assert len(errors) == 1
         assert 'ENT-EDM-001' in errors[0]
-        assert '  - EDM1' in errors[0]  # Multi-line format
+        assert '  \n- EDM1' in errors[0]  # Multi-line format
 
     def test_all_edms_exist(self):
         """When all EDMs exist, should return all with error message."""
