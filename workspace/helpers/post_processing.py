@@ -9,7 +9,7 @@ import json
 from datetime import date
 from typing import Any, Dict, List
 
-from helpers.sqlserver import execute_command, execute_query
+from helpers.sqlserver import execute_command, get_connection, _substitute_named_parameters
 from helpers.irp_integration import IRPClient
 
 
@@ -158,20 +158,22 @@ def get_existing_rows_for_inforce_date(
     Returns:
         List of dicts with VariableName and Status for each existing row
     """
-    df = execute_query(
+    query = _substitute_named_parameters(
         """
         SELECT VariableName, Status
         FROM Risk_Modeler_PremiumIQ_Variable
         WHERE InforceDate = {{ inforce_date }}
         """,
-        params={'inforce_date': inforce_date},
-        connection=connection,
-        database=database
+        {'inforce_date': inforce_date}
     )
-    return [
-        {'VariableName': row['VariableName'], 'Status': row['Status']}
-        for _, row in df.iterrows()
-    ]
+    with get_connection(connection, database=database) as conn:
+        cursor = conn.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        return [
+            {'VariableName': row[0], 'Status': row[1]}
+            for row in rows
+        ]
 
 
 def check_can_overwrite(
