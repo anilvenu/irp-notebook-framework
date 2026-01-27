@@ -19,6 +19,7 @@ Workflow:
 4. resubmit_job() - Creates new job, optionally with override, and skips original
 """
 
+import gc
 import os
 import json
 from typing import Dict, Any, List, Optional, Tuple
@@ -1143,19 +1144,25 @@ def _submit_data_extraction_job(
     client: IRPClient
 ) -> Tuple[str, Dict, Dict]:
     """
-    Execute Data Extraction SQL script and save results to CSV.
+    Execute Data Extraction SQL script(s) and save results to CSV.
 
     This is a synchronous operation that:
-    1. Resolves the SQL script path based on cycle type and import file
-    2. Executes the SQL script against SQL Server
+    1. Resolves the SQL script path(s) based on cycle type and import file
+    2. Executes the SQL script(s) against SQL Server
     3. Saves the resulting DataFrames to CSV files in the data folder
 
-    The SQL scripts follow a standard convention where they output:
-    - First SELECT: Account data (saved to {import_file}_Account.csv)
-    - Second SELECT: Location data (saved to {import_file}_Location.csv)
+    Script Resolution (in order of preference):
+    1. Split scripts (memory-optimized): Looks for separate Account and Location scripts
+       - {import_file}_Account.sql -> Account data
+       - {import_file}_Location.sql -> Location data
+       - Executes sequentially with gc.collect() between them
+       - Peak memory: ~8GB (one DataFrame at a time)
 
-    Note: Large result sets (millions of rows) are loaded into memory. For
-    production datasets, ensure adequate system memory is available.
+    2. Legacy single script (fallback): Uses combined script if split not found
+       - {import_file}.sql -> Both Account and Location data
+       - First SELECT: Account data
+       - Second SELECT: Location data
+       - Peak memory: ~16GB (both DataFrames in memory)
 
     Args:
         job_id: Job ID
@@ -1194,73 +1201,181 @@ def _submit_data_extraction_job(
     # Resolve cycle type directory
     cycle_type_dir = _resolve_import_files_directory(cycle_type)
 
-    # Build SQL script path
-    sql_script_name = f"2_Create_{import_file}_Moodys_ImportFile.sql"
-    sql_script_path = WORKSPACE_PATH / 'sql' / 'import_files' / cycle_type_dir / sql_script_name
+    # Build SQL script paths - check for split scripts first (memory-optimized)
+    import_files_dir = WORKSPACE_PATH / 'sql' / 'import_files' / cycle_type_dir
+    account_script_name = f"2_Create_{import_file}_Moodys_ImportFile_Account.sql"
+    location_script_name = f"2_Create_{import_file}_Moodys_ImportFile_Location.sql"
+    account_script_path = import_files_dir / account_script_name
+    location_script_path = import_files_dir / location_script_name
 
-    if not sql_script_path.exists():
-        raise ValueError(
-            f"SQL script not found: {sql_script_path}. "
-            f"Expected at workspace/sql/import_files/{cycle_type_dir}/{sql_script_name}"
-        )
+    # Check if split scripts exist (preferred for memory efficiency)
+    use_split_scripts = account_script_path.exists() and location_script_path.exists()
 
-    # Build request JSON for logging
-    request_json = {
-        'job_id': job_id,
-        'batch_type': BatchType.DATA_EXTRACTION,
-        'portfolio': portfolio_name,
-        'import_file': import_file,
-        'cycle_type': cycle_type,
-        'date_value': date_value,
-        'sql_script': str(sql_script_path),
-        'accounts_file': accounts_filename,
-        'locations_file': locations_filename,
-        'submitted_at': datetime.now().isoformat()
-    }
-
-    # Execute SQL script
-    # Hardcoded connection: ASSURANT, database: DW_EXP_MGMT_USER
-    print(f"Executing data extraction for {import_file}...")
-    dataframes = execute_query_from_file(
-        file_path=sql_script_path,
-        params={
-            'DATE_VALUE': date_value,
-            'CYCLE_TYPE': cycle_type
-        },
-        connection='ASSURANT',
-        database='DW_EXP_MGMT_USER'
-    )
-
-    # Validate we got expected number of DataFrames
-    # SQL scripts output Account first, then Location (by convention)
-    if len(dataframes) < 2:
-        raise ValueError(
-            f"SQL script returned {len(dataframes)} result set(s), expected at least 2. "
-            f"Check that the script ends with SELECT statements for Account and Location tables."
-        )
+    if not use_split_scripts:
+        # Fall back to legacy single-file format
+        legacy_script_name = f"2_Create_{import_file}_Moodys_ImportFile.sql"
+        legacy_script_path = import_files_dir / legacy_script_name
+        if not legacy_script_path.exists():
+            raise ValueError(
+                f"SQL script not found. Looked for split scripts:\n"
+                f"  - {account_script_path}\n"
+                f"  - {location_script_path}\n"
+                f"Or legacy script:\n"
+                f"  - {legacy_script_path}"
+            )
 
     # Get output directory - use active cycle's files/data folder
     context = WorkContext()
     data_path = context.cycle_directory / 'files' / 'data'
     data_path.mkdir(parents=True, exist_ok=True)
 
-    # Save DataFrames to CSV
-    # By SQL script convention: First result = Account, Second result = Location
-    account_df = dataframes[0]
-    location_df = dataframes[1]
-
     # Strip .csv extension if present for the filenames
     account_base = accounts_filename.replace('.csv', '')
     location_base = locations_filename.replace('.csv', '')
 
-    print(f"Saving {len(account_df):,} account rows to {accounts_filename}...")
-    print(f"Saving {len(location_df):,} location rows to {locations_filename}...")
+    csv_files = []
+    account_rows = 0
+    location_rows = 0
 
-    csv_files = save_dataframes_to_csv(
-        dataframes=[account_df, location_df],
-        filenames=[account_base, location_base],
-        output_dir=data_path
-    )
+    if use_split_scripts:
+        # Memory-optimized path: Execute scripts sequentially with cleanup between them
+        # This keeps peak memory at ~8GB instead of ~16GB for large datasets
+
+        # Build request JSON for logging (split scripts)
+        request_json = {
+            'job_id': job_id,
+            'batch_type': BatchType.DATA_EXTRACTION,
+            'portfolio': portfolio_name,
+            'import_file': import_file,
+            'cycle_type': cycle_type,
+            'date_value': date_value,
+            'sql_scripts': {
+                'account': str(account_script_path),
+                'location': str(location_script_path)
+            },
+            'accounts_file': accounts_filename,
+            'locations_file': locations_filename,
+            'submitted_at': datetime.now().isoformat()
+        }
+
+        # Execute Account script
+        print(f"Executing data extraction for {import_file} (Account)...")
+        account_dfs = execute_query_from_file(
+            file_path=account_script_path,
+            params={
+                'DATE_VALUE': date_value,
+                'CYCLE_TYPE': cycle_type
+            },
+            connection='ASSURANT',
+            database='DW_EXP_MGMT_USER'
+        )
+
+        if len(account_dfs) < 1:
+            raise ValueError(
+                f"Account script returned no result sets. "
+                f"Check that {account_script_name} ends with a SELECT statement."
+            )
+
+        account_df = account_dfs[0]
+        account_rows = len(account_df)
+        print(f"Saving {account_rows:,} account rows to {accounts_filename}...")
+
+        account_csv_files = save_dataframes_to_csv(
+            dataframes=[account_df],
+            filenames=[account_base],
+            output_dir=data_path
+        )
+        csv_files.extend(account_csv_files)
+
+        # Free Account memory before loading Location
+        del account_df, account_dfs
+        gc.collect()
+
+        # Execute Location script
+        print(f"Executing data extraction for {import_file} (Location)...")
+        location_dfs = execute_query_from_file(
+            file_path=location_script_path,
+            params={
+                'DATE_VALUE': date_value,
+                'CYCLE_TYPE': cycle_type
+            },
+            connection='ASSURANT',
+            database='DW_EXP_MGMT_USER'
+        )
+
+        if len(location_dfs) < 1:
+            raise ValueError(
+                f"Location script returned no result sets. "
+                f"Check that {location_script_name} ends with a SELECT statement."
+            )
+
+        location_df = location_dfs[0]
+        location_rows = len(location_df)
+        print(f"Saving {location_rows:,} location rows to {locations_filename}...")
+
+        location_csv_files = save_dataframes_to_csv(
+            dataframes=[location_df],
+            filenames=[location_base],
+            output_dir=data_path
+        )
+        csv_files.extend(location_csv_files)
+
+        # Free Location memory
+        del location_df, location_dfs
+        gc.collect()
+
+    else:
+        # Legacy path: Single script returning both result sets
+        # Note: This holds both DataFrames in memory simultaneously
+
+        # Build request JSON for logging (legacy script)
+        request_json = {
+            'job_id': job_id,
+            'batch_type': BatchType.DATA_EXTRACTION,
+            'portfolio': portfolio_name,
+            'import_file': import_file,
+            'cycle_type': cycle_type,
+            'date_value': date_value,
+            'sql_script': str(legacy_script_path),
+            'accounts_file': accounts_filename,
+            'locations_file': locations_filename,
+            'submitted_at': datetime.now().isoformat()
+        }
+
+        print(f"Executing data extraction for {import_file} (legacy mode)...")
+        dataframes = execute_query_from_file(
+            file_path=legacy_script_path,
+            params={
+                'DATE_VALUE': date_value,
+                'CYCLE_TYPE': cycle_type
+            },
+            connection='ASSURANT',
+            database='DW_EXP_MGMT_USER'
+        )
+
+        if len(dataframes) < 2:
+            raise ValueError(
+                f"SQL script returned {len(dataframes)} result set(s), expected at least 2. "
+                f"Check that the script ends with SELECT statements for Account and Location tables."
+            )
+
+        account_df = dataframes[0]
+        location_df = dataframes[1]
+        account_rows = len(account_df)
+        location_rows = len(location_df)
+
+        print(f"Saving {account_rows:,} account rows to {accounts_filename}...")
+        print(f"Saving {location_rows:,} location rows to {locations_filename}...")
+
+        csv_files = save_dataframes_to_csv(
+            dataframes=[account_df, location_df],
+            filenames=[account_base, location_base],
+            output_dir=data_path
+        )
+
+        # Free memory
+        del account_df, location_df, dataframes
+        gc.collect()
 
     # Build success response
     response_json = {
@@ -1268,13 +1383,14 @@ def _submit_data_extraction_job(
         'status': 'SUCCESS',
         'message': f'Data extraction completed for {import_file}',
         'csv_files': [str(f) for f in csv_files],
-        'account_rows': len(account_df),
-        'location_rows': len(location_df),
+        'account_rows': account_rows,
+        'location_rows': location_rows,
         'output_directory': str(data_path),
+        'split_scripts': use_split_scripts,
         'completed_at': datetime.now().isoformat()
     }
 
-    print(f"Data extraction completed: {len(account_df):,} accounts, {len(location_df):,} locations")
+    print(f"Data extraction completed: {account_rows:,} accounts, {location_rows:,} locations")
 
     # Return N/A for workflow_id since this is synchronous
     return 'N/A', request_json, response_json
