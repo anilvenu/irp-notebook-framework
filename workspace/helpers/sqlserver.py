@@ -114,6 +114,7 @@ Differences from PostgreSQL integration (database.py):
 - SQL Server specific features (SCOPE_IDENTITY(), etc.)
 """
 
+import gc
 import os
 import logging
 from pathlib import Path
@@ -1239,7 +1240,11 @@ def execute_query_from_file(
 
                 # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
                 data = [tuple(row) for row in rows]
+                del rows  # Free fetchall result to reduce peak memory
+
                 df = pd.DataFrame.from_records(data, columns=columns)
+                del data  # Free tuple list to reduce peak memory
+
                 dataframes.append(df)
                 logger.debug(f"Statement {stmt_num}: Retrieved {len(df)} rows")
                 stmt_num += 1
@@ -1251,10 +1256,17 @@ def execute_query_from_file(
 
                     # Convert to DataFrame (convert Row objects to tuples for pandas compatibility)
                     data = [tuple(row) for row in rows]
+                    del rows  # Free fetchall result to reduce peak memory
+
                     df = pd.DataFrame.from_records(data, columns=columns)
+                    del data  # Free tuple list to reduce peak memory
+
                     dataframes.append(df)
                     logger.debug(f"Statement {stmt_num}: Retrieved {len(df)} rows")
                     stmt_num += 1
+
+            # Force garbage collection after processing all result sets
+            gc.collect()
 
             conn.commit()
 
