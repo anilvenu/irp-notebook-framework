@@ -9,7 +9,7 @@ import json
 from datetime import date
 from typing import Any, Dict, List
 
-from helpers.sqlserver import execute_command
+from helpers.sqlserver import execute_command, get_connection, _substitute_named_parameters
 from helpers.irp_integration import IRPClient
 
 
@@ -142,13 +142,93 @@ def build_post_processing_rows(
     return rows
 
 
+def get_existing_rows_for_inforce_date(
+    inforce_date: str,
+    connection: str = 'ASSURANT',
+    database: str = 'DW_EXP_MGMT_USER'
+) -> List[Dict[str, Any]]:
+    """
+    Get existing rows for a given InforceDate.
+
+    Args:
+        inforce_date: The InforceDate value to check (e.g., "03/31/2025")
+        connection: SQL Server connection name
+        database: Database name
+
+    Returns:
+        List of dicts with VariableName and Status for each existing row
+    """
+    query = _substitute_named_parameters(
+        """
+        SELECT VariableName, Status
+        FROM Risk_Modeler_PremiumIQ_Variable
+        WHERE InforceDate = {{ inforce_date }}
+        """,
+        {'inforce_date': inforce_date}
+    )
+    with get_connection(connection, database=database) as conn:
+        cursor = conn.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        return [
+            {'VariableName': row[0], 'Status': row[1]}
+            for row in rows
+        ]
+
+
+def check_can_overwrite(
+    inforce_date: str,
+    connection: str = 'ASSURANT',
+    database: str = 'DW_EXP_MGMT_USER'
+) -> Dict[str, Any]:
+    """
+    Check if existing rows for an InforceDate can be overwritten.
+
+    Args:
+        inforce_date: The InforceDate value to check (e.g., "03/31/2025")
+        connection: SQL Server connection name
+        database: Database name
+
+    Returns:
+        Dict with keys:
+            - exists: bool - whether any rows exist for this InforceDate
+            - can_overwrite: bool - whether all existing rows can be overwritten
+            - rows: list - all existing rows with their status
+            - blocking_rows: list - rows that block overwriting (status not NULL/FINISHED)
+    """
+    existing_rows = get_existing_rows_for_inforce_date(inforce_date, connection, database)
+
+    if not existing_rows:
+        return {
+            'exists': False,
+            'can_overwrite': True,
+            'rows': [],
+            'blocking_rows': []
+        }
+
+    # Find rows with blocking status (not NULL and not FINISHED)
+    blocking_rows = [
+        row for row in existing_rows
+        if row['Status'] is not None and row['Status'] != 'FINISHED'
+    ]
+
+    return {
+        'exists': True,
+        'can_overwrite': len(blocking_rows) == 0,
+        'rows': existing_rows,
+        'blocking_rows': blocking_rows
+    }
+
+
 def delete_existing_rows_for_inforce_date(
     inforce_date: str,
     connection: str = 'ASSURANT',
     database: str = 'DW_EXP_MGMT_USER'
 ) -> int:
     """
-    Delete existing rows for a given InforceDate before inserting new data.
+    Delete all existing rows for a given InforceDate.
+
+    Note: Call check_can_overwrite() first to verify rows can be deleted.
 
     Args:
         inforce_date: The InforceDate value to delete (e.g., "03/31/2025")
@@ -194,13 +274,13 @@ def write_post_processing_data(
     inforce_date = rows[0]['inforce_date']
     delete_existing_rows_for_inforce_date(inforce_date, connection, database)
 
-    # Insert new rows
+    # Insert new rows with status = NULL
     inserted = 0
     for row in rows:
         execute_command(
             """
-            INSERT INTO Risk_Modeler_PremiumIQ_Variable (InforceDate, VariableName, VariableValue)
-            VALUES ({{ inforce_date }}, {{ var_name }}, {{ var_value }})
+            INSERT INTO Risk_Modeler_PremiumIQ_Variable (InforceDate, VariableName, VariableValue, Status)
+            VALUES ({{ inforce_date }}, {{ var_name }}, {{ var_value }}, NULL)
             """,
             params={
                 'inforce_date': row['inforce_date'],
