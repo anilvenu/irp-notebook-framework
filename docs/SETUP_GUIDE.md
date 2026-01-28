@@ -80,7 +80,20 @@ chmod +x start.sh stop.sh test.sh
 
 ### 5. Access the Application
 
-Open your browser to: **http://localhost:8888**
+Open your browser to:
+- JupyterLab: **http://localhost:8888**
+- IRP Dashboard: **http://localhost:8001**
+
+### 6. Initialize the Database (First-Time Setup Only)
+
+On first-time setup, you need to initialize the database schema:
+
+1. In JupyterLab, navigate to `workspace/workflows/_Tools/Database Management/`
+2. Open and run [Database Administration.ipynb](../workspace/workflows/_Tools/Database%20Management/Database%20Administration.ipynb)
+3. When prompted, select option 2: "Initialize. !!! WARNING - THIS WILL CLEAR ALL METADATA"
+4. The notebook will create all required database tables and structures
+
+**Note**: This step is only needed once. Running the initialization again will clear all existing data.
 
 ## Environment Configuration
 
