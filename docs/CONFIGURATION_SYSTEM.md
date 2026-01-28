@@ -185,7 +185,9 @@ job_configs = create_job_configurations(batch_type, config_data)
     'Import File': 'CBHU',
     'accounts_import_file': 'Modeling_202503_Moodys_CBHU_Account.csv',
     'locations_import_file': 'Modeling_202503_Moodys_CBHU_Location.csv',
-    'sql_script': 'scripts/quarterly/CBHU.sql'
+    # SQL scripts resolved by job.py based on Import File and Cycle Type:
+    # - 2_Create_CBHU_Moodys_ImportFile_Account.sql
+    # - 2_Create_CBHU_Moodys_ImportFile_Location.sql
 }
 ```
 
