@@ -91,7 +91,7 @@ workspace/sql/
 ├── data_export/               # Data export queries
 │   └── rdm_analysis_summary.sql
 ├── import_files/              # Moody's import file generation
-│   ├── adhoc/
+│   ├── adhoc/                 # Scripts split into *_Account.sql and *_Location.sql
 │   ├── annual/
 │   ├── quarterly/
 │   └── test/
@@ -109,6 +109,14 @@ The `import_files/` and `portfolio_mapping/` directories are organized by cycle 
 - **Import file queries** vary by cycle (different date filters, portfolio selections)
 - **Portfolio mapping SQL** has cycle-specific business logic
 - **Easy maintenance** of variations without complex conditional logic in scripts
+
+**Import File Script Naming Convention:**
+
+Import file scripts are split into separate Account and Location files for memory efficiency:
+- `2_Create_{PERIL}_Moodys_ImportFile_Account.sql` - Account data extraction
+- `2_Create_{PERIL}_Moodys_ImportFile_Location.sql` - Location data extraction
+
+This allows the framework to execute scripts sequentially, freeing memory between extractions (peak memory ~8GB instead of ~16GB).
 
 **The folder used is determined by the `Cycle Type` metadata value from the configuration file.** When a cycle is created, the `Cycle Type` field in the Excel configuration's Metadata sheet (e.g., `quarterly`, `annual`, `adhoc`, `test`) determines which subfolder to use for SQL scripts.
 
@@ -154,8 +162,11 @@ The framework automatically resolves paths for Data Extraction and Portfolio Map
 cycle_type = job_config['Cycle Type']  # e.g., 'Quarterly'
 cycle_type_dir = _resolve_import_files_directory(cycle_type)  # Returns 'quarterly'
 
-sql_script_path = f'import_files/{cycle_type_dir}/2_Create_{import_file}_Moodys_ImportFile.sql'
-# Result: 'import_files/quarterly/2_Create_CBHU_Moodys_ImportFile.sql'
+# Scripts are split into Account and Location for memory efficiency
+account_script = f'import_files/{cycle_type_dir}/2_Create_{import_file}_Moodys_ImportFile_Account.sql'
+location_script = f'import_files/{cycle_type_dir}/2_Create_{import_file}_Moodys_ImportFile_Location.sql'
+# Results: 'import_files/quarterly/2_Create_CBHU_Moodys_ImportFile_Account.sql'
+#          'import_files/quarterly/2_Create_CBHU_Moodys_ImportFile_Location.sql'
 ```
 
 ```python
@@ -401,8 +412,9 @@ success = init_kerberos()  # Uses environment variables
 ```python
 from helpers.sqlserver import execute_query_from_file
 
-df = execute_query_from_file(
-    'import_files/quarterly/2_Create_CBHU_Moodys_ImportFile.sql',
+# Import file scripts are split into Account and Location for memory efficiency
+account_dfs = execute_query_from_file(
+    'import_files/quarterly/2_Create_CBHU_Moodys_ImportFile_Account.sql',
     params={
         'DATE_VALUE': '202503',
         'CYCLE_TYPE': 'Quarterly'
@@ -411,7 +423,7 @@ df = execute_query_from_file(
     database='DW_EXP_MGMT_USER'
 )
 
-print(f"Extracted {len(df)} rows")
+print(f"Extracted {len(account_dfs[0])} account rows")
 ```
 
 ### Control Totals Validation
@@ -543,26 +555,35 @@ ensure_valid_kerberos_ticket()
 
 ### CSV Export
 
-The `csv_export` module works directly with SQL Server query results:
+The `csv_export` module works directly with SQL Server query results. Import file scripts are split into Account and Location for memory efficiency:
 
 ```python
+import gc
 from helpers.sqlserver import execute_query_from_file
-from helpers.csv_export import save_dataframes_to_csv, build_import_filenames
+from helpers.csv_export import save_dataframes_to_csv
 
-# Execute SQL and get DataFrames
-dataframes = execute_query_from_file(
-    'import_files/quarterly/2_Create_CBHU_Moodys_ImportFile.sql',
-    params={'DATE_VALUE': '202503'},
+# Execute Account script and save immediately
+account_dfs = execute_query_from_file(
+    'import_files/quarterly/2_Create_CBHU_Moodys_ImportFile_Account.sql',
+    params={'DATE_VALUE': '202503', 'CYCLE_TYPE': 'Quarterly'},
     connection='ASSURANT'
 )
+save_dataframes_to_csv([account_dfs[0]], ['Modeling_202503_Moodys_CBHU_Account'])
 
-# Generate standardized filenames
-filenames = build_import_filenames('CBHU', '202503')
-# Returns: ['Modeling_202503_Moodys_CBHU_Account.csv', 'Modeling_202503_Moodys_CBHU_Location.csv']
+# Free memory before loading Location
+del account_dfs
+gc.collect()
 
-# Save to working files directory
-save_dataframes_to_csv(dataframes, filenames)
+# Execute Location script and save
+location_dfs = execute_query_from_file(
+    'import_files/quarterly/2_Create_CBHU_Moodys_ImportFile_Location.sql',
+    params={'DATE_VALUE': '202503', 'CYCLE_TYPE': 'Quarterly'},
+    connection='ASSURANT'
+)
+save_dataframes_to_csv([location_dfs[0]], ['Modeling_202503_Moodys_CBHU_Location'])
 ```
+
+This sequential execution with memory cleanup reduces peak memory from ~16GB to ~8GB for large datasets.
 
 ### Control Totals
 

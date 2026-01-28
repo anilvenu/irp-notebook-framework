@@ -148,6 +148,7 @@ SELECT
 	,RMS_CladCode_EQ AS CLADDING
 	,CRIndicator AS USERTXT1
 	,ProductType AS USERTXT2
+	,RM_Chimney AS URMCHIMNEY		-- Added for Zesty
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
