@@ -1,0 +1,100 @@
+/**********************************************************************************************************************************************
+Purpose: This script creates the Risk Modeler Location import file for Other Flood exposures
+Author: Charlene Chia
+Edited by: Jillian Perkins
+Instructions:
+				1. Update all input and output tables names to the current quarter. Use replace all.
+				2. Execute the script
+
+SQL Server: vdbpdw-housing-secondary.database.cead.prd
+SQL Database: DW_EXP_MGMT_USER
+
+Input Table:	CombinedData_{{ DATE_VALUE }}_Working
+Output Tables:
+				Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USIF_Other_Location
+
+Runtime: 00:00:25
+**********************************************************************************************************************************************/
+
+-- US Other Flood Location File:
+DROP TABLE IF EXISTS dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USIF_Other_Location
+SELECT
+	LocationID AS ACCNTNUM
+	,LocationID AS LOCNUM
+	,PolicyNumber AS LOCNAME
+	,'' AS ADDRESSNUM
+	,Street AS STREETNAME
+	,'' AS DISTRICT
+	,'' AS DSTRCTCODE
+	,City AS CITY
+	,'' AS CITYCODE
+	,'' AS STATE
+	,State AS STATECODE
+	,ZIPCODE AS POSTALCODE
+	,County AS COUNTY
+	,CountyNBR AS COUNTYCODE
+	,'' AS CRESTA
+	,(Case when GeocodingLevel not in ('Zipcode Level','UW_Spectrum_Zipcode Level') then Latitude else '0' end)  AS LATITUDE
+	,(Case when GeocodingLevel not in ('Zipcode Level','UW_Spectrum_Zipcode Level') then Longitude else '0' end) AS LONGITUDE
+	,Model_SQF AS FLOORAREA
+	,'2' AS AREAUNIT
+	,'ISO3A' AS CNTRYSCHEME
+	,CASE WHEN State IN ('PR') THEN 'PRI' WHEN State IN ('VI') THEN 'VIR' ELSE 'USA' END AS CNTRYCODE
+	,1 AS NUMBLDGS
+	,'RMS' AS BLDGSCHEME
+	,RMS_ConstCode_HU AS BLDGCLASS
+	,'ATC' AS OCCSCHEME
+	,RMS_OccType_ATC AS OCCTYPE
+	,CASE WHEN Model_YearBuilt = '0' THEN '12/31/9999'
+		WHEN RTRIM(Model_YearBuilt) <= '1800' THEN '12/31/9999'
+		ELSE '12/31/'+Model_YearBuilt END AS YEARBUILT
+	,Model_NumberofStories AS NUMSTORIES
+	,CovAValue+FloodAttachmentPoint_CovA AS FLCV4VAL
+	,'USD' AS FLCV4VCUR
+	,CovBValue AS FLCV5VAL
+	,'USD' AS FLCV5VCUR
+	,CovCValue AS FLCV6VAL
+	,'USD' AS FLCV6VCUR
+	,CovDValue AS FLCV7VAL
+	,'USD' AS FLCV7VCUR
+	,CovALimit_Flood AS FLCV4LIMIT
+	,'USD' AS FLCV4LCUR
+	,CovBLimit_Flood AS FLCV5LIMIT
+	,'USD' AS FLCV5LCUR
+	,CovCLimit_Flood AS FLCV6LIMIT
+	,'USD' AS FLCV6LCUR
+	,CovDLimit_Flood AS FLCV7LIMIT
+	,'USD' AS FLCV7LCUR
+	,CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD = 0 THEN 0 ELSE FloodDed_CovA END AS FLCV4DED
+	,'USD' AS FLCV4DCUR
+	,CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD = 0 THEN 0 ELSE FloodDed_CovB END AS FLCV5DED
+	,'USD' AS FLCV5DCUR
+	,CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD = 0 THEN 0 ELSE FloodDed_CovC END AS FLCV6DED
+	,'USD' AS FLCV6DCUR
+	,CASE WHEN FloodDed_CovA+FloodDed_CovB+FloodDed_CovC+FloodDed_CovD = 0 THEN 0 ELSE FloodDed_CovD END AS FLCV7DED
+	,'USD' AS FLCV7DCUR
+	,0 AS FLSITELIM
+	,'USD' AS FLSITELCUR
+	,0 AS FLSITEDED
+	,'USD' AS FLSITEDCUR
+	,0 AS FLCOMBINEDLIM
+	,'USD' AS FLCOMBINEDLCUR
+	,0 AS FLCOMBINEDDED
+	,'USD' AS FLCOMBINEDDCUR
+	,0 AS RESISTOPEN
+	,RMS_RoofAge_Code AS ROOFAGE
+	,0 AS ROOFANCH
+	,RMS_RoofCovering_Code AS ROOFSYS
+	,0 AS CLADRATE
+	,RMS_RoofShape_Code AS ROOFGEOM
+	,RMS_CladCode_HU AS CLADSYS
+	,CRIndicator AS USERTXT1
+	,ProductType AS USERTXT2
+	,'' AS USERID1
+	,'' AS USERID2
+	,'' AS PRIMARYBLDG
+INTO dbo.Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USIF_Other_Location
+FROM CombinedData_{{ DATE_VALUE }}_Working
+WHERE OTHER_FLOOD_IND = 'Y'
+
+SELECT * FROM Modeling_{{ DATE_VALUE }}_Moodys_{{ CYCLE_TYPE }}_USIF_Other_Location
