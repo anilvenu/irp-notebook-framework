@@ -153,6 +153,7 @@ SELECT
 	,RMS_CladCode_HU AS CLADSYS
 	,CRIndicator AS USERTXT1
 	,ProductType AS USERTXT2
+	,RM_Skylights as ARCHITECT		-- Added for Zesty
 	,'' AS USERID1
 	,'' AS USERID2
 	,'' AS PRIMARYBLDG
