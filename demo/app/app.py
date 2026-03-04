@@ -183,8 +183,8 @@ def query_batch_data(batch_id: int, schema: str) -> Optional[Dict[str, Any]]:
             vb.total_jobs,
             vb.finished_jobs,
             vb.skipped_jobs,
-            (vb.total_jobs - COALESCE(vb.skipped_jobs, 0)) as active_jobs,
-            (vb.total_jobs - COALESCE(vb.finished_jobs, 0) - COALESCE(vb.skipped_jobs, 0)) as unfinished_jobs
+            vb.total_jobs as active_jobs,
+            (vb.total_jobs - COALESCE(vb.finished_jobs, 0)) as unfinished_jobs
         FROM {schema}.v_irp_batch vb
         JOIN {schema}.irp_configuration cfg ON vb.configuration_id = cfg.id
         JOIN {schema}.irp_cycle c ON cfg.cycle_id = c.id
