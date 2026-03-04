@@ -37,6 +37,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from helpers.irp_integration import IRPClient
+from helpers.irp_integration.exceptions import IRPAPIError
 from helpers.database import (
     execute_query, execute_command, execute_insert, bulk_insert, DatabaseError
 )
@@ -932,18 +933,24 @@ def _submit_rdm_export_batch_with_seed(
     schema: str = 'public'
 ) -> Dict[str, Any]:
     """
-    Submit RDM export batch using seed job pattern.
+    Submit RDM export batch using seed job pattern (idempotent).
 
-    When exporting more than 100 analyses to RDM, the Moody's API requires
-    multiple requests. To ensure all exports go to the same RDM, we:
-    1. Submit seed job (first job with is_seed_job=True, contains 1 analysis)
-    2. Wait for seed job to complete (creates the RDM)
-    3. Get databaseId from created RDM
-    4. Update remaining jobs with databaseId
-    5. Submit remaining jobs (they append to the existing RDM)
+    Handles first-time submission and re-runs by checking RDM existence:
 
-    This introduces a blocking wait for the seed job (~1-5 minutes) but
-    allows the remaining jobs to be tracked asynchronously.
+    If RDM exists:
+    - Skip seed job (RDM already created)
+    - Get database_id from existing RDM
+    - Resubmit only FAILED/ERROR remaining jobs (they already have correct database_id)
+    - Submit any INITIATED remaining jobs with database_id
+    - Skip FINISHED/CANCELLED remaining jobs (already exported)
+
+    If RDM does not exist:
+    - Submit seed job (INITIATED) or resubmit it (FINISHED/FAILED/etc.) to create RDM
+    - Poll seed job to completion
+    - Get database_id from newly created RDM
+    - Submit/resubmit ALL remaining jobs with new database_id
+
+    Uses resubmit_job pattern (new child job, skip original) to preserve audit history.
 
     Args:
         batch_id: Batch ID
@@ -959,7 +966,7 @@ def _submit_rdm_export_batch_with_seed(
     Raises:
         BatchError: If seed job not found or submission fails
     """
-    # Separate seed job from remaining jobs
+    # 1. Separate seed job from remaining jobs
     seed_job = None
     remaining_jobs = []
 
@@ -967,7 +974,6 @@ def _submit_rdm_export_batch_with_seed(
         if job_record['skipped']:
             continue
 
-        # Read job configuration to check is_seed_job flag
         job_config = job_module.get_job_config(job_record['id'], schema=schema)
         config_data = job_config.get('job_configuration_data', {})
 
@@ -979,78 +985,96 @@ def _submit_rdm_export_batch_with_seed(
     if not seed_job:
         raise BatchError("RDM export batch with multiple jobs must have a seed job")
 
-    submitted_jobs = []
-
-    # 1. Submit seed job
-    try:
-        job_module.submit_job(seed_job['id'], BatchType.EXPORT_TO_RDM, irp_client, schema=schema)
-        submitted_jobs.append({
-            'job_id': seed_job['id'],
-            'status': 'SUBMITTED',
-            'is_seed': True
-        })
-    except Exception as e:
-        raise BatchError(f"Failed to submit seed job {seed_job['id']}: {str(e)}")
-
-    # 2. Wait for seed job to complete
-    # Re-read job to get moodys_workflow_id after submission
-    seed_job_record = job_module.read_job(seed_job['id'], schema=schema)
-    moodys_job_id = seed_job_record['moodys_workflow_id']
-
-    if not moodys_job_id:
-        raise BatchError(f"Seed job {seed_job['id']} has no moodys_workflow_id after submission")
-
-    # Poll until complete (blocking wait ~1-5 minutes for single analysis)
-    job_result = irp_client.rdm.poll_rdm_export_job_to_completion(int(moodys_job_id))
-
-    # Update seed job status based on result
-    final_status = job_result.get('status', 'FINISHED')
-    if final_status == 'FINISHED':
-        job_module.update_job_status(seed_job['id'], JobStatus.FINISHED, schema=schema)
-        submitted_jobs[0]['status'] = 'FINISHED'
-    else:
-        job_module.update_job_status(seed_job['id'], JobStatus.FAILED, schema=schema)
-        raise BatchError(f"Seed job failed with status: {final_status}")
-
-    # 3. Get databaseId from created RDM
+    # 2. Check if RDM already exists
     seed_config = job_module.get_job_config(seed_job['id'], schema=schema)
     rdm_name = seed_config['job_configuration_data'].get('rdm_name')
     server_name = seed_config['job_configuration_data'].get('server_name', DEFAULT_DATABASE_SERVER)
 
-    database_id = irp_client.rdm.get_rdm_database_id(rdm_name, server_name)
+    rdm_exists = False
+    database_id = None
+    try:
+        database_id = irp_client.rdm.get_rdm_database_id(rdm_name, server_name)
+        rdm_exists = True
+        print(f"RDM '{rdm_name}' exists (database_id={database_id})")
+    except IRPAPIError:
+        print(f"RDM '{rdm_name}' does not exist - will create via seed job")
 
-    # 4. Update remaining jobs with databaseId and submit them
-    total_remaining = len([j for j in remaining_jobs if j['status'] in JobStatus.ready_for_submit()])
-    print(f"Submitting {total_remaining} remaining job(s) to append to RDM...")
+    submitted_jobs = []
 
-    for job_record in remaining_jobs:
-        if job_record['status'] not in JobStatus.ready_for_submit():
-            continue
+    # 3. Handle based on RDM existence
+    if rdm_exists:
+        # RDM exists: skip seed, handle remaining jobs
+        print(f"Skipping seed job {seed_job['id']} - RDM already exists")
+        submitted_jobs.append({
+            'job_id': seed_job['id'],
+            'status': 'SKIPPED_RDM_EXISTS',
+            'is_seed': True
+        })
 
-        try:
-            # Update job configuration with database_id
-            job_module.update_job_configuration_data(
-                job_record['job_configuration_id'],
-                {'database_id': database_id},
-                schema=schema
-            )
+        # Handle remaining jobs: resubmit FAILED/ERROR, submit INITIATED, skip FINISHED
+        for job_record in remaining_jobs:
+            if job_record['status'] in (JobStatus.FAILED, JobStatus.ERROR):
+                # Resubmit without config override - existing config has correct database_id
+                try:
+                    new_job_id = job_module.resubmit_job(
+                        job_record['id'],
+                        irp_client,
+                        BatchType.EXPORT_TO_RDM,
+                        schema=schema
+                    )
+                    submitted_jobs.append({
+                        'job_id': new_job_id,
+                        'original_job_id': job_record['id'],
+                        'status': 'RESUBMITTED',
+                        'is_seed': False
+                    })
+                except Exception as e:
+                    submitted_jobs.append({
+                        'job_id': job_record['id'],
+                        'status': 'FAILED',
+                        'error': str(e),
+                        'is_seed': False
+                    })
 
-            # Submit job
-            job_module.submit_job(job_record['id'], BatchType.EXPORT_TO_RDM, irp_client, schema=schema)
-            submitted_jobs.append({
-                'job_id': job_record['id'],
-                'status': 'SUBMITTED',
-                'is_seed': False
-            })
-        except Exception as e:
-            submitted_jobs.append({
-                'job_id': job_record['id'],
-                'status': 'FAILED',
-                'error': str(e),
-                'is_seed': False
-            })
+            elif job_record['status'] == JobStatus.INITIATED:
+                # First-time submission: update config with database_id, then submit
+                try:
+                    job_module.update_job_configuration_data(
+                        job_record['job_configuration_id'],
+                        {'database_id': database_id},
+                        schema=schema
+                    )
+                    job_module.submit_job(
+                        job_record['id'], BatchType.EXPORT_TO_RDM, irp_client, schema=schema
+                    )
+                    submitted_jobs.append({
+                        'job_id': job_record['id'],
+                        'status': 'SUBMITTED',
+                        'is_seed': False
+                    })
+                except Exception as e:
+                    submitted_jobs.append({
+                        'job_id': job_record['id'],
+                        'status': 'FAILED',
+                        'error': str(e),
+                        'is_seed': False
+                    })
 
-    # 5. Update batch status to ACTIVE
+            # FINISHED/CANCELLED: skip (already exported to existing RDM)
+
+    else:
+        # RDM does not exist: create via seed job, then handle all remaining
+        database_id = _handle_seed_job_for_creation(
+            seed_job, irp_client, job_module, submitted_jobs,
+            rdm_name, server_name, schema
+        )
+
+        _handle_remaining_jobs_after_creation(
+            remaining_jobs, database_id, irp_client,
+            job_module, submitted_jobs, schema
+        )
+
+    # 4. Update batch status to ACTIVE
     query = """
         UPDATE irp_batch
         SET status = %s, submitted_ts = NOW()
@@ -1068,6 +1092,172 @@ def _submit_rdm_export_batch_with_seed(
         'jobs': submitted_jobs,
         'database_id': database_id
     }
+
+
+def _handle_seed_job_for_creation(
+    seed_job: Dict[str, Any],
+    irp_client: IRPClient,
+    job_module,
+    submitted_jobs: List[Dict[str, Any]],
+    rdm_name: str,
+    server_name: str,
+    schema: str = 'public'
+) -> int:
+    """
+    Handle seed job when RDM does not exist and needs to be created.
+
+    - INITIATED seed: submit directly (first-time path)
+    - Any other status: resubmit via resubmit_job() without config override
+      (seed config has database_id=None which triggers CREATE mode in Moody's API)
+
+    Polls seed job to completion, then retrieves database_id from created RDM.
+
+    Args:
+        seed_job: Seed job record dict
+        irp_client: IRP client for Moody's API
+        job_module: The helpers.job module
+        submitted_jobs: List to append submission results to (mutated in place)
+        rdm_name: RDM name for database_id lookup after creation
+        server_name: Server name for database_id lookup after creation
+        schema: Database schema
+
+    Returns:
+        database_id of the newly created RDM
+
+    Raises:
+        BatchError: If seed job submission or polling fails
+    """
+    active_seed_job_id = seed_job['id']
+
+    if seed_job['status'] == JobStatus.INITIATED:
+        # First-time submission
+        try:
+            job_module.submit_job(
+                seed_job['id'], BatchType.EXPORT_TO_RDM, irp_client, schema=schema
+            )
+            submitted_jobs.append({
+                'job_id': seed_job['id'],
+                'status': 'SUBMITTED',
+                'is_seed': True
+            })
+        except Exception as e:
+            raise BatchError(f"Failed to submit seed job {seed_job['id']}: {str(e)}")
+    else:
+        # Seed already ran - resubmit to create new RDM
+        # No config override: seed config has database_id=None → CREATE mode
+        print(f"Resubmitting seed job {seed_job['id']} (status: {seed_job['status']})")
+        try:
+            new_seed_id = job_module.resubmit_job(
+                seed_job['id'],
+                irp_client,
+                BatchType.EXPORT_TO_RDM,
+                schema=schema
+            )
+            active_seed_job_id = new_seed_id
+            submitted_jobs.append({
+                'job_id': new_seed_id,
+                'original_job_id': seed_job['id'],
+                'status': 'RESUBMITTED',
+                'is_seed': True
+            })
+        except Exception as e:
+            raise BatchError(
+                f"Failed to resubmit seed job {seed_job['id']}: {str(e)}"
+            )
+
+    # Poll seed job to completion (blocking wait ~1-5 minutes)
+    seed_job_record = job_module.read_job(active_seed_job_id, schema=schema)
+    moodys_job_id = seed_job_record['moodys_workflow_id']
+
+    if not moodys_job_id:
+        raise BatchError(
+            f"Seed job {active_seed_job_id} has no moodys_workflow_id after submission"
+        )
+
+    job_result = irp_client.rdm.poll_rdm_export_job_to_completion(int(moodys_job_id))
+
+    final_status = job_result.get('status', 'FINISHED')
+    if final_status == 'FINISHED':
+        job_module.update_job_status(active_seed_job_id, JobStatus.FINISHED, schema=schema)
+    else:
+        job_module.update_job_status(active_seed_job_id, JobStatus.FAILED, schema=schema)
+        raise BatchError(f"Seed job failed with status: {final_status}")
+
+    # Get database_id from newly created RDM
+    database_id = irp_client.rdm.get_rdm_database_id(rdm_name, server_name)
+    return database_id
+
+
+def _handle_remaining_jobs_after_creation(
+    remaining_jobs: List[Dict[str, Any]],
+    database_id: int,
+    irp_client: IRPClient,
+    job_module,
+    submitted_jobs: List[Dict[str, Any]],
+    schema: str = 'public'
+) -> None:
+    """
+    Handle remaining jobs after seed job has created the RDM.
+
+    Since the RDM was just (re)created, ALL remaining jobs need to be submitted:
+    - INITIATED: update config with database_id, then submit directly
+    - FINISHED/FAILED/ERROR/CANCELLED: resubmit with full config containing new database_id
+
+    Args:
+        remaining_jobs: List of non-seed, non-skipped job records
+        database_id: Database ID of the newly created RDM
+        irp_client: IRP client for Moody's API
+        job_module: The helpers.job module
+        submitted_jobs: List to append submission results to (mutated in place)
+        schema: Database schema
+    """
+    total_to_submit = len(remaining_jobs)
+    print(f"Submitting {total_to_submit} remaining job(s) to append to RDM...")
+
+    for job_record in remaining_jobs:
+        try:
+            if job_record['status'] == JobStatus.INITIATED:
+                # First-time: update config with database_id, then submit
+                job_module.update_job_configuration_data(
+                    job_record['job_configuration_id'],
+                    {'database_id': database_id},
+                    schema=schema
+                )
+                job_module.submit_job(
+                    job_record['id'], BatchType.EXPORT_TO_RDM, irp_client, schema=schema
+                )
+                submitted_jobs.append({
+                    'job_id': job_record['id'],
+                    'status': 'SUBMITTED',
+                    'is_seed': False
+                })
+            else:
+                # Already ran: resubmit with full config containing new database_id
+                job_config = job_module.get_job_config(job_record['id'], schema=schema)
+                config_data = job_config.get('job_configuration_data', {}).copy()
+                config_data['database_id'] = database_id
+
+                new_job_id = job_module.resubmit_job(
+                    job_record['id'],
+                    irp_client,
+                    BatchType.EXPORT_TO_RDM,
+                    job_configuration_data=config_data,
+                    override_reason="RDM recreated - resubmitting with new database_id",
+                    schema=schema
+                )
+                submitted_jobs.append({
+                    'job_id': new_job_id,
+                    'original_job_id': job_record['id'],
+                    'status': 'RESUBMITTED',
+                    'is_seed': False
+                })
+        except Exception as e:
+            submitted_jobs.append({
+                'job_id': job_record['id'],
+                'status': 'FAILED',
+                'error': str(e),
+                'is_seed': False
+            })
 
 
 # ============================================================================
@@ -1310,7 +1500,7 @@ def recon_batch(batch_id: int, schema: str = 'public') -> str:
         else:
             # This shouldn't happen if all jobs are terminal and none failed
             # But keep as safety fallback
-            recon_result = BatchStatus.ACTIVE
+            recon_result = BatchStatus.FAILED
 
     # Build recon summary
     cancelled_job_ids = [j['id'] for j in non_skipped_jobs if j['status'] == JobStatus.CANCELLED]
